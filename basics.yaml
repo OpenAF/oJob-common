@@ -36,6 +36,27 @@ jobs:
   # Sleep for 5 seconds
   - name        : oJob Sleep 5s
     exec        : sleep(5000); 
+    
+  ## ------------
+  ## oJob shell
+  ## ------------
+  
+  # Run a shell command
+  # - args.visible
+  # - args.stdin
+  # - args.exitcode
+  # - args.stdout
+  # - args.stderr
+  # - args.directory
+  # - args.cmd
+  - name        : oJob sh
+    exec        : >
+      if (isUnDef(args.visible)) args.visible = true;
+      if (isUnDef(args.stdin)) args.stdin = true;
+      if (isUnDef(args.exitcode)) args.exitcode = 0;
+      args.stdout = sh(args.cmd, args.stdin, args.timeout, args.visible, args.directory);
+      args.stderr = __stderr;
+      if (__exitcode != args.exitcode) throw "Exit code: " + __exitcode;
 
   ## ------------
   ## oJob Logging
