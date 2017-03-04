@@ -1,0 +1,12 @@
+# Define the jobs
+#
+jobs:
+  ## ----------------------
+  ## Job debug
+  ## ----------------------
+
+  # Start processing
+  - name        : oJob Debug Args
+    exec        : >
+      log(stringify(args));
+    

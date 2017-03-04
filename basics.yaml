@@ -1,0 +1,68 @@
+# Define the jobs
+#
+jobs:
+  ## ----------------------
+  ## oJob Start/Stop basics
+  ## ----------------------
+
+  # Start processing
+  - name        : oJob Start
+    exec        : >
+      log("init");
+    
+  # Stop processing on shutdown
+  - name        : oJob Shutdown
+    deps        :
+       - oJob Start
+    type        : shutdown
+    exec        : >
+      log("done");
+
+  # Stop processing
+  - name        : oJob Stop
+    deps        :
+       - oJob Start
+    exec        : >
+      log("done");
+
+  # Exit the current script (include openaf-console)
+  - name        : oJob Exit
+    exec        : exit(0);
+
+  ## -----
+  ## Utils
+  ## -----
+  
+  # Sleep for 5 seconds
+  - name        : oJob Sleep 5s
+    exec        : sleep(5000); 
+
+  ## ------------
+  ## oJob Logging
+  ## ------------
+  
+  # Display oJob Log
+  - name        : oJob Show Log
+    exec        : >
+      log(stringify(
+        (isUnDef(args.name) ? 
+         ow.oJob.getLogCh().getAll() 
+         : 
+         $from(ow.oJob.getLogCh().getAll()).equals("name", args.name).select()
+        )
+      ));
+
+  - name        : oJob Log
+    exec        : >
+      try{ 
+        $ch("oJob::log").subscribe(function(aCh, aOp, aK, aV) {
+          try {
+             var msg = "[" + aV.name + "] | ";
+             if (aV.start && (!aV.error && !aV.success)) log(msg + "STARTED");
+             if (aV.start && aV.error)                   logErr(msg + "Ended in ERROR. (" + stringify(aV) + ")");
+             if (aV.start && aV.success)                 log(msg + "Ended with SUCCESS.");
+             if (aV.start && !aV.deps)                   logWarn(msg + "Deps not ready.");
+          } catch(e) { logErr(e);}
+        });
+      } catch(e) { logErr(e); }
+

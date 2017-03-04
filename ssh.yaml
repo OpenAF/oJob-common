@@ -1,0 +1,52 @@
+# Define the jobs
+#
+jobs:
+  ## -----------------
+  ## SSH functionality
+  ## -----------------
+
+  # Exec commands over SSH
+  - name        : SSH Exec
+    exec        : >
+      plugin("SSH");
+      if (isDef(args.chHosts)) {
+         $from($ch(args.chHosts).getAll()).select(function(r) {
+            if (isUnDef(r.port)) r.port = 22;
+            if (isUnDef(r.stdin)) r.stdin = "";
+
+            var s = new SSH(r.host, r.port, r.login, r.pass, r.key, true);
+            log("[" + r.host + ":" + r.port + "]\n" + s.exec(args.cmd, args.stdin));
+            s.close();
+         })
+      } else {
+        if (isUnDef(args.port)) args.port = 22;
+        if (isUnDef(args.stdin)) args.stdin = "";
+
+        var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
+        log("[" + args.host + ":" + args.port + "]\n" + s.exec(args.cmd, args.stdin));
+        s.close();
+      }
+
+  # Copies files over SSH
+  - name        : SSH Send
+    exec        : >
+      plugin("SSH");
+      if (isDef(args.chHosts)) {
+         $from($ch(args.chHosts).getAll()).select(function(r) {
+            if (isUnDef(r.port)) r.port = 22;
+            if (isUnDef(r.stdin)) r.stdin = "";
+
+            var s = new SSH(r.host, r.port, r.login, r.pass, r.key, true);
+            log("[" + r.host + ":" + r.port + "] Copying " + args.source + " to " + args.target);
+            s.put(args.source, args.target);
+            s.close();
+         })
+      } else {
+        if (isUnDef(args.port)) args.port = 22;
+        if (isUnDef(args.stdin)) args.stdin = "";
+
+        var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
+        log("[" + args.host + ":" + args.port + "] Copying " + args.source + " to " + args.target);
+        s.put(args.source, args.target);
+        s.close();
+      }
