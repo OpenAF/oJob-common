@@ -29,11 +29,13 @@
     ".package.json",
     "oJobBasics.yaml",
     "oJobDebug.yaml",
-    "oJobSSH.yaml"
+    "oJobSSH.yaml",
+    "sample.yaml"
   ],
   "filesHash": {
-    "oJobBasics.yaml": "f7129bf99ff83731454a86718dc91f801972d8fb",
+    "oJobBasics.yaml": "aaf3a3f26bcdc1b1ad2c2668eda857b87b0824d0",
     "oJobDebug.yaml": "a90f08d44c1f86e7c1a31b548d8eeb6d901828eb",
-    "oJobSSH.yaml": "365b71bfa7de8a8498ab1a8858dc8ebe8b4346a6"
+    "oJobSSH.yaml": "64584e213c63cad8f265a429dd0d198a1f861805",
+    "sample.yaml": "ca524dbb04e60cb59351ab3b2bdf8c9d2d129d47"
   }
 }

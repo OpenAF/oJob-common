@@ -36,6 +36,10 @@ jobs:
   # Sleep for 5 seconds
   - name        : oJob Sleep 5s
     exec        : sleep(5000); 
+ 
+  # Sleep for 1 second
+  - name        : oJob Sleep 1s
+    exec        : sleep(1000);
     
   ## ------------
   ## oJob shell
@@ -50,6 +54,16 @@ jobs:
   # - args.directory
   # - args.cmd
   - name        : oJob sh
+    help        : >
+      This job runs a local shell command and accepts the following args:
+        - args.cmd       (string)  The command to execute
+        - args.visible   (boolean) Determines if the stdout should be visible or not (default is true)
+        - args.directory (string)  Sets the working directory for the command
+        - args.stdin     (string)  Provide any stdin needed
+        - args.exitcode  (number)  Determines what exitcode should be consider success (default is 0)
+        - args.stderr    (string)  Get's set to the stderr
+        - args.stdout    (string)  Get's set to the stdout 
+        
     exec        : >
       if (isUnDef(args.visible)) args.visible = true;
       if (isUnDef(args.stdin)) args.stdin = true;
@@ -72,55 +86,3 @@ jobs:
          $from(ow.oJob.getLogCh().getAll()).equals("name", args.name).select()
         )
       ));
-
-  - name        : oJob Log
-    exec        : >
-      try {
-        plugin("Console"); var con = (new Console()).getConsoleReader();
-        var w = con.getTerminal().getWidth();
-        var ansis = con.getTerminal().isAnsiSupported() && (java.lang.System.console() != null);
-        var jansi = JavaImporter(Packages.org.fusesource.jansi);
-        
-        var s = "", ss = "";
-        if (ansis) {
-           jansi.AnsiConsole.systemInstall();
-           s  = repeat(w, '-');
-           ss = repeat(w, '=');
-        } else {
-           s  = repeat(80, '-');
-           ss = repeat(80, '=');
-        }
-     
-        var _c = function(m) { 
-           return ansis ? 
-                  jansi.Ansi.ansi().boldOff().fg(jansi.Ansi.Color.GREEN).a(m).a(jansi.Ansi.Attribute.RESET) 
-                : m; 
-        }
-  
-        var _b = function(m) { 
-           return ansis ? 
-                  jansi.Ansi.ansi().bold().a(m).a(jansi.Ansi.Attribute.RESET) 
-                : m; 
-        }
-        
-        var _e = function(m) { 
-           return ansis ? 
-                  jansi.Ansi.ansi().bold().fg(jansi.Ansi.Color.RED).a(m).a(jansi.Ansi.Attribute.RESET) 
-                : m; 
-        }
-  
-        $ch("oJob::log").subscribe(function(aCh, aOp, aK, aV) {
-          try {
-             if (aV.name != 'oJob Log') {
-               var msg = "[" + aV.name + "] | ";
-               if (aV.start && (!aV.error && !aV.success)) { print(_b(msg + "STARTED | " + new Date()) + "\n" + _c(s)); }
-               if (aV.start && aV.error)                   { printErr("\n" + _e(ss) + _b(msg + "Ended in ERROR  | " + new Date()) + "\n" + stringify(aV) + "\n" + _e(ss)); }
-               if (aV.start && aV.success)                 { print("\n" + _c(ss)); print(_b(msg + "Ended with SUCCESS | " + new Date()) + "\n"); }
-               if (!aV.deps)                               { }
-             }
-          } catch(e) { logErr(e);}
-        });
-      } catch(e) { logErr(e); } finally { if (ansis) jansi.AnsiConsole.systemUninstall(); }
-
-todo:
-   - oJob Log
