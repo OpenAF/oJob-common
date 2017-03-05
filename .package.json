@@ -1,10 +1,10 @@
 {
   "author": "Nuno Aguiar <nmaguiar@gmail.com",
   "scripts": {
-    "preerase": "",
     "posterase": "",
-    "preinstall": "",
-    "postinstall": ""
+    "postinstall": "",
+    "preerase": "",
+    "preinstall": ""
   },
   "keywords": [
     "openaf",
@@ -26,14 +26,14 @@
     "openaf": ">=20170301"
   },
   "files": [
-    "basics.yaml",
-    "debug.yaml",
-    "ssh.yaml",
-    ".package.json"
+    ".package.json",
+    "oJobBasics.yaml",
+    "oJobDebug.yaml",
+    "oJobSSH.yaml"
   ],
   "filesHash": {
-    "basics.yaml": "16e82800d4e4a99afef34699e622bc66723341ba",
-    "debug.yaml": "a90f08d44c1f86e7c1a31b548d8eeb6d901828eb",
-    "ssh.yaml": "365b71bfa7de8a8498ab1a8858dc8ebe8b4346a6"
+    "oJobBasics.yaml": "f7129bf99ff83731454a86718dc91f801972d8fb",
+    "oJobDebug.yaml": "a90f08d44c1f86e7c1a31b548d8eeb6d901828eb",
+    "oJobSSH.yaml": "365b71bfa7de8a8498ab1a8858dc8ebe8b4346a6"
   }
 }

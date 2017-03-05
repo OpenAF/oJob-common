@@ -2,9 +2,9 @@
 #
 include:
   - hello.js   # Some nice hello function
-  - jobs/basics.yaml  # Include basic jobs
-  - jobs/debug.yaml
-  - jobs/ssh.yaml
+  - oJobBasics.yaml  # Include basic jobs
+  - oJobDebug.yaml
+  - oJobSSH.yaml
 
 # Define the jobs
 #
