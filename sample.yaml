@@ -1,8 +1,8 @@
 # Name your includes
 #
 include:
-  - hello.js   # Some nice hello function
-  - oJobBasics.yaml  # Include basic jobs
+  - hello.js   
+  - oJobBasics.yaml  
   - oJobDebug.yaml
   - oJobSSH.yaml
 

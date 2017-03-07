@@ -1,5 +1,6 @@
 # Define the jobs
-#
+# Author: nuno.aguiar@wedotechnologies.com
+
 jobs:
   ## ----------------------
   ## oJob Start/Stop basics
@@ -56,8 +57,8 @@ jobs:
   - name        : oJob sh
     help        : >
       This job runs a local shell command and accepts the following args:
-        - args.cmd       (string)  The command to execute
-        - args.visible   (boolean) Determines if the stdout should be visible or not (default is true)
+        - args.cmd       (string)  The command to execute (or an array of commands)
+        - args.quiet     (boolean) Determines if the stdout should be visible or not (default is false)
         - args.directory (string)  Sets the working directory for the command
         - args.stdin     (string)  Provide any stdin needed
         - args.exitcode  (number)  Determines what exitcode should be consider success (default is 0)
@@ -65,12 +66,21 @@ jobs:
         - args.stdout    (string)  Get's set to the stdout 
         
     exec        : >
-      if (isUnDef(args.visible)) args.visible = true;
       if (isUnDef(args.stdin)) args.stdin = true;
       if (isUnDef(args.exitcode)) args.exitcode = 0;
-      args.stdout = sh(args.cmd, args.stdin, args.timeout, args.visible, args.directory);
-      args.stderr = __stderr;
-      if (__exitcode != args.exitcode) throw "Exit code: " + __exitcode;
+      if (isArray(args.cmd)) {
+        args.stdout = "";
+        args.stderr = "";
+        for(var i in args.cmd) {
+          args.stdout += sh(args.cmd[i], args.stdin, args.timeout, !args.quiet, args.directory);
+          args.stderr += __stderr;
+          if (__exitcode != args.exitcode) throw "Exit code (for command '" + args.cmd[i] + "': " + __exitcode;
+        }
+      } else {
+        args.stdout = sh(args.cmd, args.stdin, args.timeout, !args.quiet, args.directory);
+        args.stderr = __stderr;
+        if (__exitcode != args.exitcode) throw "Exit code: " + __exitcode;
+      }
 
   ## ------------
   ## oJob Logging

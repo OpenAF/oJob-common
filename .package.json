@@ -21,21 +21,25 @@
   "name": "oJobs-common",
   "main": "",
   "license": "Apache 2.0",
-  "version": "20170301",
+  "version": "20170302",
   "dependencies": {
-    "openaf": ">=20170301"
+    "openaf": ">=20170306"
   },
   "files": [
     ".package.json",
+    "LICENSE",
     "oJobBasics.yaml",
     "oJobDebug.yaml",
     "oJobSSH.yaml",
+    "README.md",
     "sample.yaml"
   ],
   "filesHash": {
-    "oJobBasics.yaml": "aaf3a3f26bcdc1b1ad2c2668eda857b87b0824d0",
-    "oJobDebug.yaml": "a90f08d44c1f86e7c1a31b548d8eeb6d901828eb",
-    "oJobSSH.yaml": "64584e213c63cad8f265a429dd0d198a1f861805",
-    "sample.yaml": "ca524dbb04e60cb59351ab3b2bdf8c9d2d129d47"
+    "LICENSE": "ff426822972c8972e3e4e782baac6f5304fd458c",
+    "oJobBasics.yaml": "9ad331248d25969a8378249ec47e7672e837c040",
+    "oJobDebug.yaml": "705a2a7b7f0a82aec514450903348d79692339cc",
+    "oJobSSH.yaml": "3c7e7eddd186c92e14e6b8d3b6b51d415256e501",
+    "README.md": "de73d008f4e91bdd79afa859a00f6a3484129cb0",
+    "sample.yaml": "697c2f3e46f64b20e49b12ec73ae8c0ed0963c9d"
   }
 }

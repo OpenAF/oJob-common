@@ -1,31 +1,67 @@
 # Define the jobs
-#
+# Author: nuno.aguiar@wedotechnologies.com
+
 jobs:
   ## -----------------
   ## SSH functionality
   ## -----------------
 
+  # Load a hosts yaml file into a channel
+  - name        : SSH Load hosts
+    help        : >
+      Loads a list of hosts (in YAML) to a channel. The expected arguments are:
+        - args.chHosts  (String)   A channel to contain the hosts data (will be created if it doesn't exist)
+        - args.file     (String)   The YAML file containing the hosts definition
+        - args.hosts    (Array)    If you don't want to provide a file you can configure the Array
+
+      The YAML file or array should contain:
+        - host          (String)   The SSH host
+        - port          (Number)   The SSH port (defaults to 22)
+        - login         (String)   The SSH login
+        - pass          (String)   The SSH password
+        - key           (String)   The path to a SSH key file (optional)
+    exec        : >
+      if (isUnDef(args.chHosts)) args.chHosts = "hosts";
+
+      $ch(args.chHosts).create();
+      if (isDef(args.file)) {
+         $ch(args.chHosts).setAll(['host', 'port', 'login'], io.readFileYAML(args.file));
+      } 
+      if (isArray(args.hosts)) {
+         $ch(args.chHosts).setAll(['host', 'port', 'login'], args.hosts);
+      }
+
   # Exec commands over SSH
   - name        : SSH Exec
     help        : >
       Executes commands on a SSH connection. The expected arguments are:
-        - args.cmd      (String)   A SSH command-line to execute
+        - args.cmd      (String)   A SSH command-line to execute or and array of it (keep in mind that this isn't bash)
         - args.stdin    (String)   An optional SSH stdin for the command-line to execute
-        - args.chHosts  (Channel)  A channel with hosts configurations to use instead of individual config
+        - args.chHosts  (String)   A channel with hosts configurations to use instead of individual config
         - args.host     (String)   The SSH host
         - args.port     (Number)   The SSH port (defaults to 22)
         - args.login    (String)   The SSH login
         - args.pass     (String)   The SSH pass
-        - args.key      (String)   The path to a SSH key file
+        - args.key      (String)   The path to a SSH key file (optional)
+        - args.quiet    (Boolean)  Determines if no output of the command(s) execution should be provided (default to false)
     exec        : >
       plugin("SSH");
+      if (isUnDef(args.host) && isUnDef(args.chHosts) && $ch().list().indexOf("hosts")) args.chHosts = "hosts";
+
       if (isDef(args.chHosts)) {
          $from($ch(args.chHosts).getAll()).select(function(r) {
             if (isUnDef(r.port)) r.port = 22;
             if (isUnDef(r.stdin)) r.stdin = "";
 
             var s = new SSH(r.host, r.port, r.login, r.pass, r.key, true);
-            log("[" + r.host + ":" + r.port + "]\n" + s.exec(args.cmd, args.stdin));
+            log("[" + r.host + ":" + r.port + "]");
+            if (isArray(args.cmd)) {
+               for(var i in args.cmd) {
+                 s.exec(args.cmd[i], args.stdin, !args.quiet);
+               }
+            } else {
+               s.exec(args.cmd, args.stdin, !args.quiet);
+            }
             s.close();
          })
       } else {
@@ -33,17 +69,18 @@ jobs:
         if (isUnDef(args.stdin)) args.stdin = "";
 
         var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
-        log("[" + args.host + ":" + args.port + "]\n" + s.exec(args.cmd, args.stdin));
+        log("[" + args.host + ":" + args.port + "]");
+        s.exec(args.cmd, args.stdin, !args.quiet);
         s.close();
       }
 
   # Copies files over SSH
-  - name        : SSH Send
+  - name        : SSH Send file
     help        : >
-      Executes commands on a SSH connection. The expected arguments are:
+      Sends a file over a SSH connection. The expected arguments are:
         - args.source   (String)   The source file to copy 
         - args.target   (String)   The target filepath 
-        - args.chHosts  (Channel)  A channel with hosts configurations to use instead of individual config
+        - args.chHosts  (String)   A channel with hosts configurations to use instead of individual config
         - args.host     (String)   The SSH host
         - args.port     (Number)   The SSH port (defaults to 22)
         - args.login    (String)   The SSH login
@@ -51,12 +88,14 @@ jobs:
         - args.key      (String)   The path to a SSH key file
     exec        : >
       plugin("SSH");
+      if (isUnDef(args.host) && isUnDef(args.chHosts) && $ch().list().indexOf("hosts")) args.chHosts = "hosts";
+
       if (isDef(args.chHosts)) {
          $from($ch(args.chHosts).getAll()).select(function(r) {
             if (isUnDef(r.port)) r.port = 22;
 
             var s = new SSH(r.host, r.port, r.login, r.pass, r.key, true);
-            log("[" + r.host + ":" + r.port + "] Copying " + args.source + " to " + args.target);
+            log("[" + r.host + ":" + r.port + "] Copying '" + args.source + "' to '" + args.target + "'");
             s.put(args.source, args.target);
             s.close();
          })
@@ -64,7 +103,41 @@ jobs:
         if (isUnDef(args.port)) args.port = 22;
 
         var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
-        log("[" + args.host + ":" + args.port + "] Copying " + args.source + " to " + args.target);
+        log("[" + args.host + ":" + args.port + "] Copying '" + args.source + "'' to '" + args.target + "'");
         s.put(args.source, args.target);
         s.close();
       }
+
+  # Retrieves remote files over SSH
+  - name        : SSH Get file
+    help        : >
+      Gets a file over a SSH connection. The expected arguments are:
+        - args.source   (String)   The remote source file to copy 
+        - args.target   (String)   The local target filepath 
+        - args.chHosts  (String)   A channel with hosts configurations to use instead of individual config
+        - args.host     (String)   The SSH host
+        - args.port     (Number)   The SSH port (defaults to 22)
+        - args.login    (String)   The SSH login
+        - args.pass     (String)   The SSH pass
+        - args.key      (String)   The path to a SSH key file
+    exec        : >
+      plugin("SSH");
+      if (isUnDef(args.host) && isUnDef(args.chHosts) && $ch().list().indexOf("hosts")) args.chHosts = "hosts";
+
+      if (isDef(args.chHosts)) {
+         $from($ch(args.chHosts).getAll()).select(function(r) {
+            if (isUnDef(r.port)) r.port = 22;
+
+            var s = new SSH(r.host, r.port, r.login, r.pass, r.key, true);
+            log("[" + r.host + ":" + r.port + "] Getting '" + args.source + "' to '" + args.target + "'");
+            s.get(args.source, args.target);
+            s.close();
+         })
+      } else {
+        if (isUnDef(args.port)) args.port = 22;
+
+        var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
+        log("[" + args.host + ":" + args.port + "] Getting '" + args.source + "'' to '" + args.target + "'");
+        s.get(args.source, args.target);
+        s.close();
+      }      
