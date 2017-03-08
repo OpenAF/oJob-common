@@ -1,0 +1,5 @@
+include:
+   - oJobBasics.yaml
+   - oJobDebug.yaml
+   - oJobSSH.yaml
+   - oJobTest.yaml

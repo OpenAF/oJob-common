@@ -1,0 +1,40 @@
+# Test oJob functionality
+# Author: nuno.aguiar@wedotechnologies.com
+
+jobs:
+ - name: oJob Assert
+   help: >
+     This job will assert that args.a and args.b provided are equal. Otherwise it will 
+     display the args.msg message.
+   exec: >
+     if(isUnDef(args.a) || isUnDef(args.b)) throw "Please define args.a and args.b.";
+     if(isUnDef(args.msg)) args.msg = "A is different from B";
+
+     ow.loadTest().assert(args.a, args.b, args.msg); 
+
+ - name: oJob Test
+   help: >
+     This job will test a args.func (function) provided. The test will use the current
+     oJob job name.
+   exec: >
+     if (isUnDef(args.func)) throw "Please define args.func.";
+     if (!(isFunction(args.func))) args.func = new Function(args.func);
+     ow.loadTest().test(job.name, args.func);   
+
+ - name: oJob Test sh
+   help: >
+     This job will test a args.cmd (shell command) provided. The test will use the current
+     oJob job name.
+   exec: >
+     if (isUnDef(args.cmd)) throw "Please define args.cmd.";
+     ow.loadTest().test(job.name, args.cmd); 
+
+ - name: oJob Test Results
+   exec: >
+     args.results = {
+        count: ow.loadTest().getCountTest(),
+        pass: ow.loadTest().getCountPass(),
+        fail: ow.loadTest().getCountFail(),
+        profile: ow.loadTest().__profile
+     };
+     if ((isDef(args.quite) && !args.quite) || isUnDef(args.quite)) print(af.toYAML(args.results));
