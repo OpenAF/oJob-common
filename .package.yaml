@@ -1,0 +1,163 @@
+author: The author(s) name(s)
+scripts:
+  preerase: ''
+  posterase: ''
+  preinstall: ''
+  postinstall: ''
+keywords:
+  - Keyword1
+  - keyword2
+bugs:
+  url: URL to track bugs
+repository:
+  type: http
+  url: URL to main repository
+description: A nice description
+name: A_nice_name
+main: ''
+license: The licence description
+version: '20010101'
+dependencies:
+  packa: '20100101'
+  packb: '20120101'
+files:
+  - .git/COMMIT_EDITMSG
+  - .git/config
+  - .git/description
+  - .git/FETCH_HEAD
+  - .git/HEAD
+  - .git/hooks/applypatch-msg.sample
+  - .git/hooks/commit-msg.sample
+  - .git/hooks/post-update.sample
+  - .git/hooks/pre-applypatch.sample
+  - .git/hooks/pre-commit.sample
+  - .git/hooks/pre-push.sample
+  - .git/hooks/pre-rebase.sample
+  - .git/hooks/pre-receive.sample
+  - .git/hooks/prepare-commit-msg.sample
+  - .git/hooks/update.sample
+  - .git/index
+  - .git/info/exclude
+  - .git/logs/HEAD
+  - .git/logs/refs/heads/master
+  - .git/logs/refs/remotes/origin/HEAD
+  - .git/logs/refs/remotes/origin/master
+  - .git/objects/00/5dae5fc5cdfe0c1f53a7cea75f452d91d4e0ac
+  - .git/objects/0d/0fc8159a02ddbf6645b30c174e6559ac677d9d
+  - .git/objects/13/ede07ffb3e0d7cfa12f493244bce175614ac51
+  - .git/objects/17/0cb616e095a1349264a211ee78697fada42deb
+  - .git/objects/1a/71c2c60da17481396ea0c382bab9a274c156ab
+  - .git/objects/26/480aecad93d06a6966f15b319810933a94b923
+  - .git/objects/28/03cc4c2f2e0773a810354d4e4a7b36766c832d
+  - .git/objects/2b/76955c0d23d2b9e30a5210b2749cd08fe41e61
+  - .git/objects/30/de099ee11d00f51d232362af275bdbffe2e4e9
+  - .git/objects/32/a2ef1f2794f42d13daee0245495786cea59214
+  - .git/objects/3d/f6c721344b1b2e5ff2b9cb86df54ae65a23d5a
+  - .git/objects/3e/f8172939b4d938aad3b6a2706789dd0f078d3a
+  - .git/objects/41/e9a176f2001f08c99f55c74dd1fbb3e85478c3
+  - .git/objects/4e/2431e47061672b7c374873f910a6ec81b4d074
+  - .git/objects/54/34949155c7a7d72c88e223bc61509af124bbd5
+  - .git/objects/57/85af9c08539b518192a93e49d672217e57ed51
+  - .git/objects/59/30710cc9e6da345b8d84f72285b65d2fb9216c
+  - .git/objects/62/bef44f250c072123129370b5eeb9b8a0e4a8ad
+  - .git/objects/72/c7ffd3da8384cf831cdc908c2b0bcbbc91d8e8
+  - .git/objects/7a/6c9fc1bf624d4874fe5d103554df3393893014
+  - .git/objects/81/635f932a593f38ba8de298fddb5fa4a7ddcc74
+  - .git/objects/86/3a06eff634af053dee9cf1a3feb399adf8176b
+  - .git/objects/87/e28932f8765255f152738beabeb498bd423f51
+  - .git/objects/89/cce64725ebc90214d06225cefc119afd61668b
+  - .git/objects/8d/ada3edaf50dbc082c9a125058f25def75e625a
+  - .git/objects/97/081cba86f5aa7fc3187ce813d80523e50e6ef3
+  - .git/objects/99/8dbf49bc384e82a1e54c62342a7fc3df264bcc
+  - .git/objects/9f/06ea2f4b295fa8271532e6ada4b5e263af0071
+  - .git/objects/a0/070ee9e75b6f4130cac83541ca02278f016a62
+  - .git/objects/a1/ad54a2b08cc53bbad9d92ab2295fd534f96c10
+  - .git/objects/ac/3c32dbd22324d8e92ec95896e01e7a490375c2
+  - .git/objects/c8/462c09545f2548b3d797e81bbbd0eebf0d14a0
+  - .git/objects/c8/eb2d55ea1ea9026dc8bdd439d5a99cb0d96a58
+  - .git/objects/e2/54c97e4e26903589f71ad74efb0be638e6e170
+  - .git/objects/e8/df2b944fe1bf64b633c80c82143d30618682a4
+  - .git/objects/f8/44a0ea469069bf103918fb911c908b8f712f71
+  - .git/ORIG_HEAD
+  - .git/packed-refs
+  - .git/refs/heads/master
+  - .git/refs/remotes/origin/HEAD
+  - .git/refs/remotes/origin/master
+  - LICENSE
+  - oJobBasics.yaml
+  - oJobDebug.yaml
+  - oJobs.yaml
+  - oJobSSH.yaml
+  - oJobTest.yaml
+  - README.md
+  - .package.yaml
+filesHash:
+  .git/COMMIT_EDITMSG: 0c05c7f6d072fc9dd2b990089158b1573e5771d1
+  .git/config: a9db986487958af602895e50e377c0df70c96d2b
+  .git/description: 9635f1b7e12c045212819dd934d809ef07efa2f4
+  .git/FETCH_HEAD: 4a77c981cc0764c8d9496236ea3b9ce67aaac941
+  .git/HEAD: acbaef275e46a7f14c1ef456fff2c8bbe8c84724
+  .git/hooks/applypatch-msg.sample: 4de88eb95a5e93fd27e78b5fb3b5231a8d8917dd
+  .git/hooks/commit-msg.sample: ee1ed5aad98a435f2020b6de35c173b75d9affac
+  .git/hooks/post-update.sample: b614c2f63da7dca9f1db2e7ade61ef30448fc96c
+  .git/hooks/pre-applypatch.sample: f208287c1a92525de9f5462e905a9d31de1e2d75
+  .git/hooks/pre-commit.sample: 36aed8976dcc08b5076844f0ec645b18bc37758f
+  .git/hooks/pre-push.sample: 5c8518bfd1d1d3d2c1a7194994c0a16d8a313a41
+  .git/hooks/pre-rebase.sample: 5885a56ab4fca8075a05a562d005e922cde9853b
+  .git/hooks/pre-receive.sample: 705a17d259e7896f0082fe2e9f2c0c3b127be5ac
+  .git/hooks/prepare-commit-msg.sample: 2b6275eda365cad50d167fe3a387c9bc9fedd54f
+  .git/hooks/update.sample: e729cd61b27c128951d139de8e7c63d1a3758dde
+  .git/index: fb67c4837348955cad916092a1656003bb3cc280
+  .git/info/exclude: c879df015d97615050afa7b9641e3352a1e701ac
+  .git/logs/HEAD: 37081c7e41baa4cd7569743d6441ff8d50649e9d
+  .git/logs/refs/heads/master: 132d5277a06920ce867195282750dc8a1fec060b
+  .git/logs/refs/remotes/origin/HEAD: c1c04c0a13057c3f631fb45de0c10137374aae90
+  .git/logs/refs/remotes/origin/master: 72784372bc54d787421a0c71511b33017cb4d486
+  .git/objects/00/5dae5fc5cdfe0c1f53a7cea75f452d91d4e0ac: d5378d77199593c30e4586bbd1c0a6fc439ba976
+  .git/objects/0d/0fc8159a02ddbf6645b30c174e6559ac677d9d: 6df6a889d651bf1452ac1bd5dd9d0e334976a6e7
+  .git/objects/13/ede07ffb3e0d7cfa12f493244bce175614ac51: eecbf5884082de727af8c1ce0c1c2b7233336684
+  .git/objects/17/0cb616e095a1349264a211ee78697fada42deb: 463da2d22ba49e7566059b99a801b395dc82b277
+  .git/objects/1a/71c2c60da17481396ea0c382bab9a274c156ab: f2ba6f0f8fc4be5c9d62dbf6f9b28ff6788d420a
+  .git/objects/26/480aecad93d06a6966f15b319810933a94b923: 54ab1d8882662f71e4248471d541e5e28e0d62f6
+  .git/objects/28/03cc4c2f2e0773a810354d4e4a7b36766c832d: 739c4a6001253ead748d41b2ae74ab7d44730b11
+  .git/objects/2b/76955c0d23d2b9e30a5210b2749cd08fe41e61: e3e82994b68cdf883905db4246a5ff7dc837b111
+  .git/objects/30/de099ee11d00f51d232362af275bdbffe2e4e9: fe81b519020944e4eb0445b8d9912cdcf7ec201b
+  .git/objects/32/a2ef1f2794f42d13daee0245495786cea59214: 8c4a043e559f44e77d5deb2d9ff633a1ba6fd7a9
+  .git/objects/3d/f6c721344b1b2e5ff2b9cb86df54ae65a23d5a: 868bf347c1957620722b938ea9c3b518279f91e3
+  .git/objects/3e/f8172939b4d938aad3b6a2706789dd0f078d3a: f8847d51a79fad85ac6d26a57d9d1e8f397d6107
+  .git/objects/41/e9a176f2001f08c99f55c74dd1fbb3e85478c3: f7d0fc21062c18ee76fb2f978eb060d1cc2852e7
+  .git/objects/4e/2431e47061672b7c374873f910a6ec81b4d074: 1850ad12c42e0fe372533dc76df68e680d34375a
+  .git/objects/54/34949155c7a7d72c88e223bc61509af124bbd5: c81b0bc8a63f36d49eb0d9a13393fb2532d2bb83
+  .git/objects/57/85af9c08539b518192a93e49d672217e57ed51: 34e7dacb522bcdc6653a785ae74f2b28225e982e
+  .git/objects/59/30710cc9e6da345b8d84f72285b65d2fb9216c: 8403b787e0068fe481e02ab62fde610e530805f7
+  .git/objects/62/bef44f250c072123129370b5eeb9b8a0e4a8ad: 587c96afb4420e9cce3364c3c6c1aa7102e2cd72
+  .git/objects/72/c7ffd3da8384cf831cdc908c2b0bcbbc91d8e8: cb3fdd9f6e8de6709a85c24cc5ddcd0b2cbb4389
+  .git/objects/7a/6c9fc1bf624d4874fe5d103554df3393893014: 7f0a37427716967d07376724b6bba5a0c3a6520b
+  .git/objects/81/635f932a593f38ba8de298fddb5fa4a7ddcc74: 1397b013755c1f579c2bbab72f7a25c2305567cf
+  .git/objects/86/3a06eff634af053dee9cf1a3feb399adf8176b: 93cb94a25e0cc032ae672ab87e2de8e1f33a5aea
+  .git/objects/87/e28932f8765255f152738beabeb498bd423f51: e3f57b56691fb11e2493c51263dcff1f765206e1
+  .git/objects/89/cce64725ebc90214d06225cefc119afd61668b: 2a5d28af5c67b7252df99f66727f886e743c38a3
+  .git/objects/8d/ada3edaf50dbc082c9a125058f25def75e625a: 9ea3261b4bebfc03faee0bdcfa02214b9e376756
+  .git/objects/97/081cba86f5aa7fc3187ce813d80523e50e6ef3: 73d5558b9119f5495c355c3d9b57c18f946b366c
+  .git/objects/99/8dbf49bc384e82a1e54c62342a7fc3df264bcc: 73318fd4ea495ef1cc7fb82b638a8c19a9ec1a01
+  .git/objects/9f/06ea2f4b295fa8271532e6ada4b5e263af0071: 5d6f79d9c622978fe7944245e089fe31ea3423e7
+  .git/objects/a0/070ee9e75b6f4130cac83541ca02278f016a62: 96fe376c3a258e6ce870184a23b3a4266e661a19
+  .git/objects/a1/ad54a2b08cc53bbad9d92ab2295fd534f96c10: 18bed93f45e798785685e898eb88a10b11d288e9
+  .git/objects/ac/3c32dbd22324d8e92ec95896e01e7a490375c2: 2a736094c4e4dc58f75b1e800715463a1adbfae0
+  .git/objects/c8/462c09545f2548b3d797e81bbbd0eebf0d14a0: 1a4819f0ea5f713d3daedc16e7a4950752d2b95a
+  .git/objects/c8/eb2d55ea1ea9026dc8bdd439d5a99cb0d96a58: 57380bf920f396e4ba224244ed372503bf2f8492
+  .git/objects/e2/54c97e4e26903589f71ad74efb0be638e6e170: f4ae4886552bbaa7bca6faa7596f3e6261c0dc7f
+  .git/objects/e8/df2b944fe1bf64b633c80c82143d30618682a4: 049bc876c6ae5bbf355bbd500bb7ccd1f39a4244
+  .git/objects/f8/44a0ea469069bf103918fb911c908b8f712f71: a3e0a575d4319cfa3b530eb80b14b663fa242b43
+  .git/ORIG_HEAD: 8482ba706be0fa2ec48a21f700d237b2639cb8e5
+  .git/packed-refs: f51a2988ce3d42c36cf048753754eefa9544f65f
+  .git/refs/heads/master: 52c28c54322ffd99cc494239a4c166076bea1b7a
+  .git/refs/remotes/origin/HEAD: d9427cda09aba1cdde5c69c2b13c905bddb0bc51
+  .git/refs/remotes/origin/master: 52c28c54322ffd99cc494239a4c166076bea1b7a
+  LICENSE: ff426822972c8972e3e4e782baac6f5304fd458c
+  oJobBasics.yaml: 9ad331248d25969a8378249ec47e7672e837c040
+  oJobDebug.yaml: 705a2a7b7f0a82aec514450903348d79692339cc
+  oJobs.yaml: a4a2616042cadef5e7b3b9b166503c09a3dd2370
+  oJobSSH.yaml: 3c7e7eddd186c92e14e6b8d3b6b51d415256e501
+  oJobTest.yaml: fb971e84600addd664b55ea43955cfa3895629c5
+  README.md: de73d008f4e91bdd79afa859a00f6a3484129cb0
