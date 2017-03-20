@@ -38,3 +38,12 @@ jobs:
         profile: ow.loadTest().__profile
      };
      if ((isDef(args.quite) && !args.quite) || isUnDef(args.quite)) print(af.toYAML(args.results));
+ 
+ - name: oJob Test Todo results
+   exec: >
+     args.results = {
+        count: $ch("oJob::logs").size(),
+        pass: $from($ch("oJob::logs").getAll()).equals("success", true).count(),
+        fail: $from($ch("oJob::logs").getAll()).equals("error", true).count()
+     };
+     if ((isDef(args.quite) && !args.quite) || isUnDef(args.quite)) print(af.toYAML(args.results));

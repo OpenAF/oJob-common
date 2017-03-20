@@ -3,3 +3,4 @@ include:
    - oJobDebug.yaml
    - oJobSSH.yaml
    - oJobTest.yaml
+   - oJobHBS.yaml
