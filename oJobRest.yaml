@@ -1,0 +1,64 @@
+jobs:
+   # Prepares a REST server
+   #
+   - name: REST Start Server 
+     help: >
+        Provides a REST server. The expected arguments are:
+           - args.port   (Number)     The port where the server should be made available (default is 8091)
+           - args.hs     (HTTPServer) A HTTPServer to use (is not provided one will be created)
+     exec: >
+        ow.loadServer();
+        if (isUnDef(__pmIn.__ojobRest)) __pmIn.__ojobRest = {};
+        if (isUnDef(__pmIn.__ojobRoutes)) __pmIn.__ojobRoutes = {};
+        if (isUnDef(args.port)) args.port = 8091;
+        if (isUnDef(__pmIn.__ojobRest[args.port])) __pmIn.__ojobRest[args.port] = (isDef(args.hs) ? hs : ow.server.httpd.start(args.port));
+        __pmIn.__ojobRoutes[args.port] = {};
+
+   # Applies a REST service definition
+   #
+   - name: REST Apply Service 
+     exec: >
+        if (isUnDef(args.port)) args.port = 8091;
+
+        ow.server.httpd.route(__pmIn.__ojobRest[args.port], __pmIn.__ojobRoutes[args.port], function(r) { return hs.reply("", "", 401, {}); });
+        log("READY [" + args.port + "]");
+
+   # Stopping the REST server
+   #
+   - name: REST Stop Server
+     type: shutdown
+     deps:
+        - REST Start Server
+     exec: >
+        if (isUnDef(args.port)) args.port = 8091;
+        ow.server.httpd.stop(__pmIn.__ojobRest[args.port]);
+        delete __pmIn.__ojobRest[args.port];
+        delete __pmIn.__ojobRoutes[args.port];
+        log("STOPPED [" + args.port + "]");
+
+   # Defines a REST service
+   #
+   - name: REST Service
+     deps: 
+        - REST Start Server
+     to  : REST Apply Service
+     help: >
+        Provides a REST service definition. The expected arguments are:
+           - args.uri        (String)   The URI where the REST service will be available.
+           - args.execGET    (Function) The GET function. Receives a map of idxs.
+           - args.execPOST   (Function) The POST function. Receives a map of idxs and a data map.
+           - args.execPUT    (Function) The PUT function. Receives a map of idxs and a data map.
+           - args.execDELETE (Function) The DELETE function. Receives a map of idxs.
+
+        Do ensure that the job 'REST Start Server' gets executed first.
+     exec: >
+        if (isUnDef(args.port)) args.port = 8091;
+        if (isUnDef(args.uri))  args.uri = "/rest";
+        __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
+           return ow.server.rest.reply(args.uri, r, 
+              new Function("var idxs = arguments[0]; var data = arguments[1]; " + args.execPOST),
+              new Function("var idxs = arguments[0]; " + args.execGET),
+              new Function("var idxs = arguments[0]; var data = arguments[1]; " + args.execPUT),
+              new Function("var idxs = arguments[0]; " + args.execDELETE)
+           );
+        };
