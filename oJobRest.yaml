@@ -4,14 +4,21 @@ jobs:
    - name: REST Start Server 
      help: >
         Provides a REST server. The expected arguments are:
-           - args.port   (Number)     The port where the server should be made available (default is 8091)
-           - args.hs     (HTTPServer) A HTTPServer to use (is not provided one will be created)
+           - args.port     (Number)     The port where the server should be made available (default is 8091)
+           - args.hs       (HTTPServer) A HTTPServer to use (is not provided one will be created)
+           - args.keystore (String)     Optionally to create a https server provide a keystore file
+           - args.pass     (String)     The password for the keystore of a https server
+           - args.host     (String)     Optionally the interface where the server should be listening (default is all)
+           - args.cp       (String)     Optionally providing the classpath URL to include the keystore file
      exec: >
         ow.loadServer();
+        var ks;
         if (isUnDef(__pmIn.__ojobRest)) __pmIn.__ojobRest = {};
         if (isUnDef(__pmIn.__ojobRoutes)) __pmIn.__ojobRoutes = {};
         if (isUnDef(args.port)) args.port = 8091;
-        if (isUnDef(__pmIn.__ojobRest[args.port])) __pmIn.__ojobRest[args.port] = (isDef(args.hs) ? hs : ow.server.httpd.start(args.port));
+        if (isDef(args.cp)) af.externalAddClasspath(args.cp);
+        if (isDef(args.keystore)) ks = "/" + args.keystore;
+        if (isUnDef(__pmIn.__ojobRest[args.port])) __pmIn.__ojobRest[args.port] = (isDef(args.hs) ? hs : ow.server.httpd.start(args.port, args.host, ks, args.pass));
         __pmIn.__ojobRoutes[args.port] = {};
 
    # Applies a REST service definition
