@@ -1,0 +1,89 @@
+jobs:
+  - name: SQL Result
+    help: 
+      Use internally by oJobSQL
+    exec: >
+      if (isUnDef(args.sql))     throw "Please specify a query to run with sql=select\ user\ from\ dual";
+      if (isUnDef(args.format))  args.format = "json";
+
+      var _res;
+      if (args.execute) {
+         _res = args._db.u(args.sql);
+         args.format = "execute";
+      } else {
+         _res = args._db.q(args.sql).results;
+      }
+
+      switch(args.format) {
+      case 'table':
+         args.output = printTable(_res, undefined, true);
+         break;   
+      default     :
+         args.output = _res;
+      }
+
+      if (!args.quiet) {
+         switch(args.format) {
+         case 'table'  : print(args.output); break;
+         case 'execute': print(args.output); break;
+         default       : sprint(args.output);
+         }
+      }
+
+  - name: SQL 
+    to  : SQL Result
+    help: > 
+      Executes a DB SQL query. Expects:
+       
+        DBDriver    (String)  The JDBC driver to use (defaults to Oracle)
+        DBURL       (String)  A JDBC URL to access the database
+        DBUser      (String)  The database user login
+        DBPass      (String)  The database user password
+        sql         (String)  The SQL to execute/query 
+        format      (String)  If 'table' the output will be provided in a tabular format (screen size permitting)
+                              otherwise the default format is a JSON array.
+        quiet       (Boolean) If true no output will be displayed on the logs.
+
+      Provides:
+
+        output      (Object)  In the default format it will be the resulting array. 
+                              In tabular format it will return a string.
+    exec: >
+      if (isUnDef(args.raidURL)) throw "Please specify a raidURL=http://user:pass@1.2.3.4:8080";
+      if (isUnDef(args.raidDB))  throw "Please specify a raidDB=Adm";
+      if (isUnDef(args.sql))     throw "Please specify a query to run with sql=select\ user\ from\ dual";
+      if (isUnDef(args.format))  args.format = "json";
+
+      if (isDef(args.DBDriver)) 
+        args._db = new DB(args.DBDriver, args.DBURL, args.DBUser, args.DBPass);
+      else
+        args._db = new DB(args.DBURL, args.DBUser, args.DBPass);
+
+
+  - name: SQL RAID
+    to  : SQL Result
+    help: > 
+      Executes a RAID SQL query. Expects:
+
+        raidURL     (String)  A RAID AF connection URL 
+        raidDB      (String)  A RAID connection name (e.g. Adm, App, Dat)
+        raidDBURL   (String)  A JDBC URL for customization of the access to a raid database
+        raidDBPass  (String)  Using a specific RAID database password if one can't be determined
+        raidUseCIR  (Boolean) Determines if the use of CIR should be forced for database parameters detection
+        sql         (String)  The SQL to execute/query
+        format      (String)  If 'table' the output will be provided in a tabular format (screen size permitting)
+                              otherwise the default format is a JSON array.
+        quiet       (Boolean) If true no output will be displayed on the logs.
+        execute     (Boolean) If true if will execute the sql statement instead of querying (e.g. update, truncate, ...)
+
+      Provides:
+
+        output      (Object)  In the default format it will be the resulting array. 
+                              In tabular format it will return a string.
+    exec: >
+      if (isUnDef(args.raidURL)) throw "Please specify a raidURL=http://user:pass@1.2.3.4:8080";
+      if (isUnDef(args.raidDB))  throw "Please specify a raidDB=Adm";
+      
+      var _s = new AF(args.raidURL);
+      args._db = getRAIDDB(_s, args.raidDB, args.raidDBURL, args.raidDBPass, args.raidUseCIR);
+

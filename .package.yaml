@@ -15,29 +15,32 @@ repository:
 description: A set of base oJobs as common building blocks for custom oJobs.
 name: oJob-commons
 main: ''
+mainJob: ''
 license: Apache 2.0
 version: '20170321'
 dependencies:
   openaf: '>=20170309'
 files:
-  - oJobs.yaml
-  - oJobRest.yaml
-  - oJobBasics.yaml
-  - oJobSSH.yaml
-  - oJobDebug.yaml
-  - LICENSE
   - .package.yaml
+  - LICENSE
+  - oJobBasics.yaml
+  - oJobDebug.yaml
   - oJobHBS.yaml
+  - oJobRest.yaml
+  - oJobs.yaml
+  - oJobSQL.yaml
+  - oJobSSH.yaml
   - oJobTest.yaml
   - README.md
 filesHash:
-  oJobs.yaml: 6427479589a15784382a86eedef8a6d3cb3182cd
-  oJobRest.yaml: 648c3e6e385b49218cb6c6479c1b1cfd43d66e3d
-  oJobBasics.yaml: 1addaeb99679f8b63f0a1236752bfbb3d033e64e
-  oJobSSH.yaml: 9f4250d8e67fc63b11e51ecdd7d1998c00caa4f7
-  oJobDebug.yaml: fd432680ca91620fb2e0d584f30bd6b3e78d1ae8
-  LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
-  .package.yaml: 0da670e08a8f83639a94a21dc5ecd4ce930b005a
-  oJobHBS.yaml: 317e37b525a714012534f34bceed6d77ca44b04a
-  oJobTest.yaml: 73be2e0f2fe5d4263c4d9b26099e9f3da2da9d13
-  README.md: 626497dd1e492c621be6fa973a56373290708a2b
+  .package.yaml: f90c1ec2f02272ed5f5b19da9b5908b4f0e868be
+  LICENSE: ff426822972c8972e3e4e782baac6f5304fd458c
+  oJobBasics.yaml: 9ad331248d25969a8378249ec47e7672e837c040
+  oJobDebug.yaml: 705a2a7b7f0a82aec514450903348d79692339cc
+  oJobHBS.yaml: 60e6e6b765d913953fe8e421821b570b7d3cddb8
+  oJobRest.yaml: 29c114576ce9ebf3a83b0a3bba9b7e7a7b29b88c
+  oJobs.yaml: 1b5ac59fb16b34cbae0ae5ba5589e1b93bfbde99
+  oJobSQL.yaml: 0baac5444973e263de74be27494f75acd66dab62
+  oJobSSH.yaml: f19beddc554c0b7d5ca27ad9144bfa5ff5fc6a21
+  oJobTest.yaml: 2be740a957fe3474861910c544f6345b64b06382
+  README.md: de73d008f4e91bdd79afa859a00f6a3484129cb0
