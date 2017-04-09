@@ -1,3 +1,6 @@
+# Database oJob functionality
+# Author: nmaguiar@gmail.com
+
 jobs:
   - name: SQL Result
     help: 
