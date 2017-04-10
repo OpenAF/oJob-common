@@ -1,0 +1,58 @@
+# SVN oJob functionality
+# Author: nmaguiar@gmail.com
+
+jobs:
+  - name: SVN checkout
+    help: >
+      Will checkout a SVN repository. Expects:
+         - url    (String)  The SVN URL to access the repository.
+         - user   (String)  If necessary the SVN username to login into the repository.
+         - pass   (String)  If necessary the SVN password to login into the repository (can be encrypted).
+         - target (String)  The checkout path (if not provided will default to ".").
+         - rev    (String)  Optionally the revision to checkout (e.g. number of revision, HEAD, WORKING, PREVIOUS, BASE or COMMITED).
+         - quite  (Boolean) Should not output (if true) the revision that was checkout.
+    exec: >
+      if (isUnDef(args.url)) throw "Please provide a SVN url in args.url";
+      plugin("SVN");
+      var svn = new SVN(args.url, args.user, args.pass);
+      
+      if (isUnDef(args.target)) args.target = ".";
+      var args.checkoutRev = svn.checkout(args.target, args.rev);
+      if (!quite) log("Revision " + args.checkoutRev + " checkout (" + args.url + ")");
+  
+  - name: SVN update
+    help: >
+      Will update a SVN repository. Expects:
+         - url    (String)  The SVN URL to access the repository
+         - user   (String)  If necessary the SVN username to login into the repository
+         - pass   (String)  If necessary the SVN password to login into the repository (can be encrypted)
+         - froms  (Array)   An array of filepaths to update (if not provided will default to ".").
+         - rev    (String)  Optionally the revision to update (e.g. number of revision, HEAD, WORKING, PREVIOUS, BASE or COMMITED)
+         - quite  (Boolean) Should not output (if true) the revision that was checkout.
+    exec: >
+      if (isUnDef(args.url)) throw "Please provide a SVN url in args.url";
+      plugin("SVN");
+      var svn = new SVN(args.url, args.user, args.pass);
+      
+      if (isUnDef(args.froms)) args.froms = ["."];
+      var args.updateRev = svn.update(args.froms, args.rev);
+      if (!quite) log("Result of update: " + stringify(args.updateRev));
+      
+  - name: SVN commit
+    help: >
+      Will add and commit to SVN repository. Expects:
+         - url     (String)  The SVN URL to access the repository
+         - user    (String)  If necessary the SVN username to login into the repository
+         - pass    (String)  If necessary the SVN password to login into the repository (can be encrypted)
+         - froms   (Array)   An array of filepaths to update (if not provided will default to ".").
+         - comment (String)  Comment to use for commit.
+         - quite   (Boolean) Should not output (if true) the revision that was checkout.
+    exec: >
+      /*if (isUnDef(args.url)) throw "Please provide a SVN url in args.url";
+      plugin("SVN");
+      var svn = new SVN(args.url, args.user, args.pass);
+      
+      if (isUnDef(args.froms)) args.froms = ["."];
+      var filepaths = $stream($from(args.from).select(
+      var args.updateRev = svn.update(args.froms, args.rev);
+      if (!quite) log("Result of update: " + stringify(args.updateRev));*/
