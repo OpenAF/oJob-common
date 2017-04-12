@@ -76,8 +76,14 @@ jobs:
         if (isUnDef(args.stdin)) args.stdin = "";
 
         var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
-        log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "]");
-        s.exec(args.cmd, args.stdin, !args.quiet);
+        log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "]");
+        if (isArray(args.cmd)) {
+          for (var i in args.cmd) {
+             s.exec(args.cmd[i], args.stdin, !args.quiet);
+          }
+        } else {
+          s.exec(args.cmd, args.stdin, !args.quiet);  
+        }
         s.close();
       }
 
@@ -110,7 +116,7 @@ jobs:
         if (isUnDef(args.port)) args.port = 22;
 
         var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
-        log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "] Copying '" + args.source + "'' to '" + args.target + "'");
+        log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "] Copying '" + args.source + "'' to '" + args.target + "'");
         s.put(args.source, args.target);
         s.close();
       }
@@ -144,7 +150,7 @@ jobs:
         if (isUnDef(args.port)) args.port = 22;
 
         var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
-        log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "] Getting '" + args.source + "'' to '" + args.target + "'");
+        log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "] Getting '" + args.source + "'' to '" + args.target + "'");
         s.get(args.source, args.target);
         s.close();
       }      

@@ -3,6 +3,7 @@ include:
    - oJobDebug.yaml
    - oJobSSH.yaml
    - oJobTest.yaml
+   - oJobWAF.yaml
    - oJobHBS.yaml
    - oJobRest.yaml
-   - oJobSQL.yaml
+   - oJobSVN.yaml
