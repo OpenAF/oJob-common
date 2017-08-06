@@ -8,10 +8,10 @@ keywords:
   - openaf
   - ojob
 bugs:
-  url: URL to track bugs
+  url: https://github.com/nmaguiar/oJob-common
 repository:
   type: http
-  url: URL
+  url: https://raw.githubusercontent.com/nmaguiar/oJob-common/master
 description: A set of base oJobs as common building blocks for custom oJobs.
 name: oJob-commons
 main: ''
