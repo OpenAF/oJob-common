@@ -5,19 +5,27 @@ scripts:
   preinstall: ''
   postinstall: ''
 keywords:
-  - openaf
   - ojob
+  - common
+  - SQL
+  - SSH
+  - SVN
+  - Test
+  - Debug
+  - HBS
+  - Basics
+  - Rest
 bugs:
   url: 'https://github.com/OpenAF/oJob-common/issues'
 repository:
   type: http
   url: 'https://raw.githubusercontent.com/OpenAF/oJob-common/master'
 description: A set of base oJobs as common building blocks for custom oJobs.
-name: oJob-commons
+name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20170411'
+version: '20170811'
 dependencies:
   openaf: '>=20170309'
 files:
@@ -34,7 +42,7 @@ files:
   - oJobTest.yaml
   - README.md
 filesHash:
-  .package.yaml: 07bb47cbd114c8b363f2b275e52643bc2b17fe8f
+  .package.yaml: 8774d5247dfd3e33bd049e8fc169dcbda5bb346b
   LICENSE: ff426822972c8972e3e4e782baac6f5304fd458c
   oJobBasics.yaml: d94c9f5e4df71100110d314f63e4944eea7652ad
   oJobDebug.yaml: 32c8c37b82cb9741cb34ffc1118b5df4498a63d7
@@ -44,5 +52,5 @@ filesHash:
   oJobSQL.yaml: 0974b81f2b253b9c68897d611820e5b60b632a18
   oJobSSH.yaml: 1dce0acada74ca40d61df40ec37f2e62a2d39c25
   oJobSVN.yaml: c6dd797079a5fe01bfd92dbe4682ac0ebfb115c4
-  oJobTest.yaml: 9321d5a005bf5b077ebee0754ea7795df151c83b
+  oJobTest.yaml: fd77c30ea466b18c326d1428993eb80146ee6efd
   README.md: de73d008f4e91bdd79afa859a00f6a3484129cb0
