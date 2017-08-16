@@ -8,10 +8,10 @@ keywords:
   - openaf
   - ojob
 bugs:
-  url: URL to track bugs
+  url: 'https://github.com/OpenAF/oJob-common/issues'
 repository:
   type: http
-  url: URL
+  url: 'https://raw.githubusercontent.com/OpenAF/oJob-common/master'
 description: A set of base oJobs as common building blocks for custom oJobs.
 name: oJob-commons
 main: ''
@@ -34,7 +34,7 @@ files:
   - oJobTest.yaml
   - README.md
 filesHash:
-  .package.yaml: 8c4b95d0cd6a9fba8cccf07f5c5d1e675743bc9f
+  .package.yaml: 07bb47cbd114c8b363f2b275e52643bc2b17fe8f
   LICENSE: ff426822972c8972e3e4e782baac6f5304fd458c
   oJobBasics.yaml: d94c9f5e4df71100110d314f63e4944eea7652ad
   oJobDebug.yaml: 32c8c37b82cb9741cb34ffc1118b5df4498a63d7
