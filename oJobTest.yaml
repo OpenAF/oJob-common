@@ -74,4 +74,4 @@ jobs:
      if (isUnDef(args.suitesId)) args.suitesId = "test";
      if (isUnDef(args.suitesName)) args.suitesName = "test";
      if (isUnDef(args.resultsFile)) args.resultsFile = "testResults.xml";
-     io.writeFileString(ow.loadTest().toJUnitXML(args.suitesId, args.suitesName), args.resultsFile); 
+     io.writeFileString(args.resultsFile, ow.loadTest().toJUnitXML(args.suitesId, args.suitesName)); 
