@@ -40,7 +40,7 @@ jobs:
 
  - name: oJob Test Results
    help: |
-     Prints or outputs (if args.quite = true) a args.results with: count of tests, tests passed, tests failed and all profile information.
+     Prints or outputs (if args.quiet = true) a args.results with: count of tests, tests passed, tests failed and all profile information.
    exec: >
      args.results = {
         count: ow.loadTest().getCountTest(),
@@ -48,18 +48,18 @@ jobs:
         fail: ow.loadTest().getCountFail(),
         profile: ow.loadTest().__profile
      };
-     if ((isDef(args.quite) && !args.quite) || isUnDef(args.quite)) print(af.toYAML(args.results));
+     if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) print(af.toYAML(args.results));
 
  - name: oJob Test Todo results
    help: |
-     Prints or outputs (if args.quite = true) a args.results with: count of tests, tests passed and tests failed.
+     Prints or outputs (if args.quiet = true) a args.results with: count of tests, tests passed and tests failed.
    exec: >
      args.results = {
         count: $ch("oJob::logs").size(),
         pass: $from($ch("oJob::logs").getAll()).equals("success", true).count(),
         fail: $from($ch("oJob::logs").getAll()).equals("error", true).count()
      };
-     if ((isDef(args.quite) && !args.quite) || isUnDef(args.quite)) print(af.toYAML(args.results));
+     if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) print(af.toYAML(args.results));
 
 # JUnit results
 #

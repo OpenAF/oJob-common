@@ -13,7 +13,7 @@ jobs:
      if(isUnDef(args.target)) throw "Need to define a args.target filename to write the output to";
 
      io.writeFileString(args.target, ow.loadTemplate().parseHBS(args.template, args.data)); 
-     if (isUnDef(args.quite) || !args.quite) log("Wrote '" + args.target + "'' based on '" + args.template + "'");
+     if (isUnDef(args.quiet) || !args.quiet) log("Wrote '" + args.target + "'' based on '" + args.template + "'");
 
  # oJob HBS
  #
