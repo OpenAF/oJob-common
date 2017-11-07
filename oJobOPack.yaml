@@ -1,0 +1,39 @@
+# oPack oJob functionality
+# Author: nmaguiar@gmail.com
+
+jobs:
+   # oPack Pack external
+   #
+   - name: oPack Pack external
+     help: > 
+        Packs an external opack given an url or opack name:
+         
+          name        (String)  The url or opack name to pack
+          tmpDir      (String)  Temporary folder to use (defaults to "./tmp")
+          outputDir   (String)  Output folder where the opack will be placed (defaults to ".")
+     exec: >
+       if (isUnDef(args.tmpDir))    args.tmpDir    = "./tmp";
+       if (isUnDef(args.outputDir)) args.outputDir = ".";
+       if (isUnDef(args.name))      throw "You need to define a opack args.name.";
+
+       if (getVersion() < 20171106) logWarn("It's advisable to use an OpenAF version equal or greater than 20171106.");
+
+       af.rm(args.tmpDir);
+       af.mkdir(args.tmpDir);
+       af.mkdir(args.outputDir);
+
+       oPack("install " + args.name + " -d " + args.tmpDir + " -justcopy");
+       oPack("pack " + args.tmpDir);
+
+       var pack;
+       try {
+          pack = io.readFile(args.tmpDir + "/.package.json");
+       } catch(e) {
+          pack = io.readFileYAML(args.tmpDir + "/.package.yaml");
+       }
+
+       af.mv(pack.name + "-" + pack.version + ".opack", args.outputDir + "/" + pack.name + "-" + pack.version + ".opack");
+       for(var file in pack.files) {
+         af.rm(args.tmpDir + "/" + pack.files[file]);
+       }
+       af.rm(args.tmpDir);
