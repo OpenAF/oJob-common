@@ -25,7 +25,7 @@ name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20171106'
+version: '20171107'
 dependencies:
   openaf: '>=20170309'
 files:
@@ -43,15 +43,15 @@ files:
   - oJobTest.yaml
   - README.md
 filesHash:
-  LICENSE: ff426822972c8972e3e4e782baac6f5304fd458c
-  oJobBasics.yaml: d94c9f5e4df71100110d314f63e4944eea7652ad
-  oJobDebug.yaml: 32c8c37b82cb9741cb34ffc1118b5df4498a63d7
-  oJobHBS.yaml: b50587d772e2300cb3a0fd780a827601c8124e88
-  oJobOPack.yaml: 288d5fe3efe667c4c6b6ff6e4440af86ee935490
-  oJobRest.yaml: 69de46a614d8382b3702aa0ee8ec484b36bc2e3c
-  oJobs.yaml: 26b881af6d2a0c36e26e3d428781cdde54e4ae23
-  oJobSQL.yaml: 0974b81f2b253b9c68897d611820e5b60b632a18
-  oJobSSH.yaml: 1dce0acada74ca40d61df40ec37f2e62a2d39c25
-  oJobSVN.yaml: bf6942c5e78ff1a3b6422fdcb6d3f0a7796ed467
-  oJobTest.yaml: 41d3a2e5865537c6040ede6ca78eb5bb063350dc
-  README.md: de73d008f4e91bdd79afa859a00f6a3484129cb0
+  LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
+  oJobBasics.yaml: e67a906655a4bf1b315de07360f8449449efd187
+  oJobDebug.yaml: e48ee42df640aba62925d513aad6a4831d924cd9
+  oJobHBS.yaml: ca018d16fcbdf3a9fc7450cab0d0325eed5e127f
+  oJobOPack.yaml: d7ce712ee0a226a61330fdacfac6d043c28b66cf
+  oJobRest.yaml: e1a5f8d1809fffe51c285179f377f76300399eb0
+  oJobs.yaml: b6fa547806a46b5551cc96b06f2d6ff63ba1f16c
+  oJobSQL.yaml: e491518238ffddb798fdad756dbdfafd2495d8f0
+  oJobSSH.yaml: 61927c6d08212c187fe60f78555b2b14c7b9cd72
+  oJobSVN.yaml: a6809d7993087b0fbe53e4e03678910db52b5fb3
+  oJobTest.yaml: 9efaecac15234ef65b22d25a8fc990cd678e4470
+  README.md: 626497dd1e492c621be6fa973a56373290708a2b
