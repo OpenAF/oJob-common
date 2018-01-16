@@ -7,3 +7,4 @@ include:
    - oJobHBS.yaml
    - oJobRest.yaml
    - oJobSVN.yaml
+   - oJobES.yaml
