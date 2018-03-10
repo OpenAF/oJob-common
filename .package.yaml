@@ -33,6 +33,7 @@ dependencies:
   openaf: '>=20171101'
 files:
   - oJobSQL.yaml
+  - oJobHTTPd.yaml
   - oJobDebug.yaml
   - oJobOPack.yaml
   - oJobBasics.yaml
@@ -48,6 +49,7 @@ files:
   - oJobRest.yaml
 filesHash:
   oJobSQL.yaml: e491518238ffddb798fdad756dbdfafd2495d8f0
+  oJobHTTPd.yaml: 25458942843ba8320a8d020f2b30b97bc9f05b3d
   oJobDebug.yaml: e48ee42df640aba62925d513aad6a4831d924cd9
   oJobOPack.yaml: d7ce712ee0a226a61330fdacfac6d043c28b66cf
   oJobBasics.yaml: e67a906655a4bf1b315de07360f8449449efd187
@@ -59,4 +61,4 @@ filesHash:
   oJobSSH.yaml: 61927c6d08212c187fe60f78555b2b14c7b9cd72
   oJobs.yaml: 1331cb43b4808bfd47621eb0cf9e626f6986ceec
   oJobSVN.yaml: a6809d7993087b0fbe53e4e03678910db52b5fb3
-  oJobRest.yaml: e1a5f8d1809fffe51c285179f377f76300399eb0
+  oJobRest.yaml: a6c06feea5277714683004331fccb3c03a230cef
