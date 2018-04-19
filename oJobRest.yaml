@@ -1,4 +1,4 @@
-# Author: nmaguiar@gmail.com
+# Author: Nuno Aguiar
 
 jobs:
    # Prepares a REST server
@@ -53,21 +53,24 @@ jobs:
      to  : REST Apply Service
      help: >
         Provides a REST service definition. The expected arguments are:
-           - args.uri        (String)   The URI where the REST service will be available.
-           - args.execGET    (Function) The GET function. Receives a map of idxs.
-           - args.execPOST   (Function) The POST function. Receives a map of idxs and a data map.
-           - args.execPUT    (Function) The PUT function. Receives a map of idxs and a data map.
-           - args.execDELETE (Function) The DELETE function. Receives a map of idxs.
+           - args.uri              (String)   The URI where the REST service will be available.
+           - args.execGET          (Function) The GET function. Receives a map of idxs.
+           - args.execPOST         (Function) The POST function. Receives a map of idxs and a data map.
+           - args.execPUT          (Function) The PUT function. Receives a map of idxs and a data map.
+           - args.execDELETE       (Function) The DELETE function. Receives a map of idxs.
+           - args.returnWithParams (Boolean)  Use a more detailed return map.
 
         Do ensure that the job 'REST Start Server' gets executed first.
-     exec: >
+     exec: |
         if (isUnDef(args.port)) args.port = 8091;
         if (isUnDef(args.uri))  args.uri = "/rest";
+  
         __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
-           return ow.server.rest.reply(args.uri, r, 
-              new Function("var idxs = arguments[0]; var data = arguments[1]; " + args.execPOST),
-              new Function("var idxs = arguments[0]; " + args.execGET),
-              new Function("var idxs = arguments[0]; var data = arguments[1]; " + args.execPUT),
-              new Function("var idxs = arguments[0]; " + args.execDELETE)
+          return ress = ow.server.rest.reply(args.uri, r, 
+            af.eval("(function(idxs, data) { " + args.execPOST + " })"),
+            af.eval("(function(idxs) { " + args.execGET + " })"),
+            af.eval("(function(idxs, data) { " + args.execPUT + " })"),
+            af.eval("(function(idxs) { " + args.execDELETE + " })"),
+            args.returnWithParams
            );
         };
