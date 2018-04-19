@@ -12,7 +12,7 @@ jobs:
            - args.pass     (String)     The password for the keystore of a https server
            - args.host     (String)     Optionally the interface where the server should be listening (default is all)
            - args.cp       (String)     Optionally providing the classpath URL to include the keystore file
-     exec: >
+     exec: |
         ow.loadServer();
         var ks;
         if (isUnDef(__pmIn.__ojobRest)) __pmIn.__ojobRest = {};
@@ -26,7 +26,7 @@ jobs:
    # Applies a REST service definition
    #
    - name: REST Apply Service 
-     exec: >
+     exec: |
         if (isUnDef(args.port)) args.port = 8091;
 
         ow.server.httpd.route(__pmIn.__ojobRest[args.port], __pmIn.__ojobRoutes[args.port], function(r) { return hs.reply("", "", 401, {}); });
@@ -38,7 +38,7 @@ jobs:
      type: shutdown
      deps:
         - REST Start Server
-     exec: >
+     exec: |
         if (isUnDef(args.port)) args.port = 8091;
         ow.server.httpd.stop(__pmIn.__ojobRest[args.port]);
         delete __pmIn.__ojobRest[args.port];

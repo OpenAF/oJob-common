@@ -1,0 +1,65 @@
+# Author: Nuno Aguiar
+
+jobs:
+   # Prepares a HTTP server
+   #
+   - name: HTTP Start Server 
+     help: >
+        Provides a HTTP server. The expected arguments are:
+           - args.port     (Number)     The port where the server should be made available (default is 8091)
+           - args.hs       (HTTPServer) A HTTPServer to use (is not provided one will be created)
+           - args.keystore (String)     Optionally to create a https server provide a keystore file
+           - args.pass     (String)     The password for the keystore of a https server
+           - args.host     (String)     Optionally the interface where the server should be listening (default is all)
+           - args.cp       (String)     Optionally providing the classpath URL to include the keystore file
+     exec: |
+        ow.loadServer();
+        var ks;
+        if (isUnDef(__pmIn.__ojobHttp)) __pmIn.__ojobHttp = {};
+        if (isUnDef(__pmIn.__ojobRoutes)) __pmIn.__ojobRoutes = {};
+        if (isUnDef(args.port)) args.port = 8091;
+        if (isDef(args.cp)) af.externalAddClasspath(args.cp);
+        if (isDef(args.keystore)) ks = "/" + args.keystore;
+        if (isUnDef(__pmIn.__ojobHttp[args.port])) __pmIn.__ojobHttp[args.port] = (isDef(args.hs) ? hs : ow.server.httpd.start(args.port, args.host, ks, args.pass));
+        __pmIn.__ojobRoutes[args.port] = {};
+
+   # Applies a HTTP service definition
+   #
+   - name: HTTP Apply Service 
+     exec: |
+        if (isUnDef(args.port)) args.port = 8091;
+
+        ow.server.httpd.route(__pmIn.__ojobHttp[args.port], __pmIn.__ojobRoutes[args.port], function(r) { return hs.reply("", "", 401, {}); });
+        log("READY [" + args.port + "]");
+
+   # Stopping the HTTP server
+   #
+   - name: HTTP Stop Server
+     type: shutdown
+     deps:
+        - HTTP Start Server
+     exec: |
+        if (isUnDef(args.port)) args.port = 8091;
+        ow.server.httpd.stop(__pmIn.__ojobHttp[args.port]);
+        delete __pmIn.__ojobHttp[args.port];
+        delete __pmIn.__ojobRoutes[args.port];
+        log("STOPPED [" + args.port + "]");
+
+   # Defines a HTTP service
+   #
+   - name: HTTP Service
+     deps: 
+        - HTTP Start Server
+     to  : HTTP Apply Service
+     help: >
+        Provides a HTTP service definition. The expected arguments are:
+           - args.uri        (String)   The URI where the HTTP service will be available.
+           - args.execURI    (Function) The GET function. Receives a request map and a server object.
+
+        Do ensure that the job 'HTTP Start Server' gets executed first.
+     exec: |
+        if (isUnDef(args.port)) args.port = 8091;
+        if (isUnDef(args.uri))  args.uri = "/";
+        __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
+           return (new Function("var request = arguments[0]; var server = __pmIn.__ojobHttp[" + args.port + "]; " + args.execURI))(r);
+        };
