@@ -1,0 +1,20 @@
+jobs:
+   ##################
+   # Tests a TCP port
+   #
+   - name: NET Port test
+     help: >
+        Tests access to TCP port (the result will be available as a boolean in args.__netPortTest[host][port]:
+           - args.host     (String)     The host or ip address to test with.
+           - args.port     (Number)     The port to test.
+           - args.timeout  (Number)     A timeout (in ms). Defaults to 1,5 seconds.
+     exec: |
+        ow.loadFormat();
+        _$(args.host).isString().$_("A host or ip address is needed to test connectivity to a port");
+        _$(args.port).isNumber().$_("A port is needed to test connectivity to a port");
+        _$(args.timeout).isNumber().default();
+
+        args.__netPortTest            = _$(args.__netPortTest).isMap().default({});
+        args.__netPortTest[args.host] = _$(args.__netPortTest[args.host]).isMap().default({});
+        
+        args.__netPortTest[args.host][args.port] = ow.format.testPort(args.host, args.port, args.timeout);
