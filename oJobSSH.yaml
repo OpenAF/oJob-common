@@ -1,5 +1,5 @@
 # Define the jobs
-# Author: nmaguiar@gmail.com
+# Author: Nuno Aguiar
 
 jobs:
   ## -----------------
@@ -50,39 +50,76 @@ jobs:
         - args.login    (String)   The SSH login
         - args.pass     (String)   The SSH pass
         - args.key      (String)   The path to a SSH key file (optional)
+        - args.exitcode (number)   Determines what exitcode should be consider success (default is 0)
+        - args.sudo     (String)   Sudo's to the corresponding user to executing the command-line
         - args.quiet    (Boolean)  Determines if no output of the command(s) execution should be provided (default to false)
     exec        : >
       plugin("SSH");
       if (isUnDef(args.host) && isUnDef(args.chHosts) && $ch().list().indexOf("hosts")) args.chHosts = "hosts";
 
       if (isDef(args.chHosts)) {
+         args.stdout = "";
+         args.stderr = "";
          $from($ch(args.chHosts).getAll()).select(function(r) {
             if (isUnDef(r.port)) r.port = 22;
             if (isUnDef(r.stdin)) r.stdin = "";
+            if (isUnDef(args.exitcode)) args.exitcode = 0;
 
             var s = new SSH(r.host, r.port, r.login, r.pass, r.key, true);
-            log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "]");
+            if (!args.quiet) log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "]");
             if (isArray(args.cmd)) {
                for(var i in args.cmd) {
-                 s.exec(args.cmd[i], args.stdin, !args.quiet);
+                 var res;
+                 if (!args.sudo) 
+                    res = s.exec(args.cmd[i], args.stdin, !args.quiet, void 0, true);
+                 else
+                    res = s.execSudo(args.cmd[i], args.sudo, args.stdin, !args.quiet, void 0, true);
+                 args.stdout += res.stdout;
+                 args.stderr += res.stderr;
+                 if (res.exitcode != args.exitcode) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
                }
             } else {
-               s.exec(args.cmd, args.stdin, !args.quiet);
+               var res;
+               if (!args.sudo)
+                  res = s.exec(args.cmd, args.stdin, !args.quiet, void 0, true);
+               else
+                  res = s.execSudo(args.cmd, args.sudo, args.stdin, !args.quiet, void 0, true);
+               args.stdout += res.stdout;
+               args.stderr += res.stderr;
+               if (res.exitcode != args.exitcode) throw "Exit code (for command '" + args.cmd + "'): " + res.exitcode;               
             }
             s.close();
          })
       } else {
         if (isUnDef(args.port)) args.port = 22;
         if (isUnDef(args.stdin)) args.stdin = "";
+        if (isUnDef(args.exitcode)) args.exitcode = 0;
 
         var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
-        log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "]");
+        if (!args.quiet) log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "]");
+        args.stdout = "";
+        args.stderr = "";
+
         if (isArray(args.cmd)) {
           for (var i in args.cmd) {
-             s.exec(args.cmd[i], args.stdin, !args.quiet);
+            var res;
+            if (!args.sudo) 
+              res = s.exec(args.cmd[i], args.stdin, !args.quiet, void 0, true);
+            else
+              res = s.execSudo(args.cmd[i], args.sudo, args.stdin, !args.quiet, void 0, true);
+            args.stdout += res.stdout;
+            args.stderr += res.stderr;
+            if (res.exitcode != args.exitcode) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
           }
         } else {
-          s.exec(args.cmd, args.stdin, !args.quiet);  
+          var res;
+          if (!args.sudo)
+            res = s.exec(args.cmd, args.stdin, !args.quiet, void 0, true);
+          else
+            res = s.execSudo(args.cmd, args.sudo, args.stdin, !args.quiet, void 0, true); 
+          args.stdout += res.stdout;
+          args.stderr += res.stderr;
+          if (res.exitcode != args.exitcode) throw "Exit code (for command '" + args.cmd + "'): " + res.exitcode;
         }
         s.close();
       }
