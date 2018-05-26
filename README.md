@@ -180,6 +180,46 @@ todo:
 
 ````
 
+## oJobSQL.yaml
+
+````yaml
+consts:
+  raidURL: &raidurl http://user:pass@1.2.3.4:1234/xdt
+  raidDB : &raiddb  Dat
+
+include:
+  - ojobSQL.yaml
+
+jobs:
+  ########################
+  - name: Get current date
+    from: SQL RAID
+    args:
+      raidURL: *raidurl
+      raidDB : *raiddb
+      quiet  : true
+      sql    : select current_date cd, sysdate sd from dual
+    exec: |
+      tprint("Current date = {{CD}}", args.output[0]);
+      tprint("System date  = {{SD}}", args.output[0]);
+
+  ##########################
+  - name: Get generated data
+    from: SQL RAID
+    args:
+      raidURL: *raidurl
+      raidDB : *raiddb
+      format : table
+      sql    : |
+        SELECT level, current_date, sysdate
+        FROM   dual
+        CONNECT BY level <= 10
+
+todo:
+  - Get current date
+  - Get generated data
+````
+
 ## oJobES.yaml
 
 ### Start Log to ES
