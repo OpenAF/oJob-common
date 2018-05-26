@@ -31,7 +31,7 @@ mainJob: ''
 license: Apache 2.0
 version: '20180526'
 dependencies:
-  openaf: '>=20180525'
+  openaf: '>=20180526'
 files:
   - .package.yaml
   - LICENSE
