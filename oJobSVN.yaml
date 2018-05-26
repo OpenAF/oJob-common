@@ -1,5 +1,5 @@
 # SVN oJob functionality
-# Author: nmaguiar@gmail.com
+# Author: Nuno Aguiar
 
 jobs:
   - name: SVN checkout

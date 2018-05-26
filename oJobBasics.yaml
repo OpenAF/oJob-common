@@ -1,5 +1,5 @@
 # Define the jobs
-# Author: nmaguiar@gmail.com
+# Author: Nuno Aguiar
 
 jobs:
   ## ----------------------
@@ -47,15 +47,8 @@ jobs:
   ## ------------
   
   # Run a shell command
-  # - args.visible
-  # - args.stdin
-  # - args.exitcode
-  # - args.stdout
-  # - args.stderr
-  # - args.directory
-  # - args.cmd
   - name        : oJob sh
-    help        : >
+    help        : |
       This job runs a local shell command and accepts the following args:
         - args.cmd       (string)  The command to execute (or an array of commands)
         - args.quiet     (boolean) Determines if the stdout should be visible or not (default is false)
@@ -65,21 +58,23 @@ jobs:
         - args.stderr    (string)  Get's set to the stderr
         - args.stdout    (string)  Get's set to the stdout 
         
-    exec        : >
+    exec        : |
       if (isUnDef(args.stdin)) args.stdin = true;
       if (isUnDef(args.exitcode)) args.exitcode = 0;
       if (isArray(args.cmd)) {
         args.stdout = "";
         args.stderr = "";
         for(var i in args.cmd) {
-          args.stdout += sh(args.cmd[i], args.stdin, args.timeout, !args.quiet, args.directory);
-          args.stderr += __stderr;
-          if (__exitcode != args.exitcode) throw "Exit code (for command '" + args.cmd[i] + "': " + __exitcode;
+          var res = sh(args.cmd[i], args.stdin, args.timeout, !args.quiet, args.directory, true);
+          args.stdout += res.stdout
+          args.stderr += res.stderr;
+          if (res.exitcode != args.exitcode) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
         }
       } else {
-        args.stdout = sh(args.cmd, args.stdin, args.timeout, !args.quiet, args.directory);
-        args.stderr = __stderr;
-        if (__exitcode != args.exitcode) throw "Exit code: " + __exitcode;
+        var res = sh(args.cmd, args.stdin, args.timeout, !args.quiet, args.directory, true);
+        args.stdout = res.stdout;
+        args.stderr = res.stderr;
+        if (res.exitcode != args.exitcode) throw "Exit code: " + res.exitcode;
       }
 
   ## ------------
