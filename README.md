@@ -230,11 +230,13 @@ Starts logging to ElasticSearch. Expects:
 |----------|------|-------------|
 | url | String | The ElasticSearch cluster URL |
 | index | String | An ElasticSearch index name (it will be suffixed automatically with the current date) |
+| format | String | The format of the date if different from day |
 | host | String | A LogStash like host to identify in each entry |
 | user | String | A user name |
 | pass | String | A password (encrypted or not) |
 
 Example:
+
 ````yaml
 include:
   - oJobES.yaml
@@ -248,6 +250,24 @@ todo:
       url  : http://my.es.cluster
       index: mylogs
       host : myjob
+````
+
+Example by week:
+
+````yaml
+include:
+  - oJobES.yaml
+
+# [...]
+
+# Log to ElasticSearch
+todo:
+  - name: Start Log to ES
+    args:
+      url   : http://my.es.cluster
+      index : mylogs
+      format: yyyy.ww
+      host  : myjob
 ````
 
 ### Stop ES Logging
