@@ -4,11 +4,12 @@ jobs:
   - name: Start Log to ES
     help: >
       Starts logging to ElasticSearch. Expects:
-         url   (String) The ElasticSearch cluster URL
-         index (String) An ElasticSearch index name (it will be suffixed automatically with the current date)
-         host  (String) A LogStash like host to identify in each entry
-         user  (String) A user name.
-         pass  (String) A password (encrypted or not).
+         url    (String) The ElasticSearch cluster URL
+         index  (String) An ElasticSearch index name (it will be suffixed automatically with the current date)
+         format (String) The format of the date if different from day.
+         host   (String) A LogStash like host to identify in each entry
+         user   (String) A user name.
+         pass   (String) A password (encrypted or not).
     exec: |
       if (isUnDef(args.url)) throw "Please provide URL to ElasticSearch";
       if (isUnDef(args.index)) throw "Please provide an ElasticSearch index name";
@@ -18,7 +19,7 @@ jobs:
       $ch("__es").create(void 0, "elasticsearch", {
          url  : args.url,
          idKey: "id",
-         index: ow.ch.utils.getElasticIndex(args.index),
+         index: ow.ch.utils.getElasticIndex(args.index, args.format),
          user : args.user,
          pass : args.password
       });
