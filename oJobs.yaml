@@ -8,3 +8,7 @@ include:
    - oJobRest.yaml
    - oJobSVN.yaml
    - oJobES.yaml
+   - oJobSQL.yaml
+   - oJobOPack.yaml
+   - oJobNet.yaml
+   - oJobHTTPd.yaml

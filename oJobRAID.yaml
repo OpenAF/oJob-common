@@ -1,0 +1,39 @@
+# Author: Nuno Aguiar
+
+jobs:
+  - name: RAID AF
+    help: > 
+      Executes a RAID AF operation. Expects:
+       
+        raidURL     (String)  A RAID AF connection URL.
+        operation   (String)  The RAID AF operation to execute.
+        input       (Map)     The RAID AF operation input map.
+        format      (String)  If not quiet it displays the result on a format you can choose between "prettyprint" (default), "pmap", "parametermap", "yaml" or "json"
+        quiet       (Boolean) If true no output will be displayed.
+
+      Provides:
+
+        output      (Object)  The result of executing the RAID AF operation.
+      
+    exec: |
+      _$(getOPackPath("OpenCli")).$_("This job requires OpenCli");
+      _$(args.raidURL).isString().$_("A raidURL is needed to execute an AF operation.");
+      _$(args.operation).isString().$_("An operation is neededd to execute an AF operation.");
+      args.input  = _$(args.input).isMap().default(void 0);
+      args.format = _$(args.format).oneOf([ "json", "pmap", "parametermap", "yaml", "prettyprint" ]).default("json");
+      args.quiet  = _$(args.quiet).isBoolean().default(false);
+
+      var server = new AF(args.raidURL);
+      args.output = server.exec(args.operation, args.input);
+      server.close();
+
+      if (!args.quiet) {
+        switch(args.format) {
+        case "pmap"        : print(af.toPMap(args.output)); break;
+        case "parametermap": print(af.toParameterMap(args.output)); break;
+        case "yaml"        : print(af.toYAML(args.output)); break;
+        case "prettyprint" : print(af.toPrettyPrint(args.output)); break;
+        case "json"        : sprint(args.output); break;
+        default            : print(af.toPrettyPrint(args.output)); 
+        }
+      }
