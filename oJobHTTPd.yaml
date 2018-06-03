@@ -12,6 +12,7 @@ jobs:
            - args.pass     (String)     The password for the keystore of a https server
            - args.host     (String)     Optionally the interface where the server should be listening (default is all)
            - args.cp       (String)     Optionally providing the classpath URL to include the keystore file
+           - args.mapLibs  (boolean)    Map also internal libs (e.g. jquery, css, etc...)
      exec: |
         ow.loadServer();
         var ks;
@@ -20,8 +21,15 @@ jobs:
         if (isUnDef(args.port)) args.port = 8091;
         if (isDef(args.cp)) af.externalAddClasspath(args.cp);
         if (isDef(args.keystore)) ks = "/" + args.keystore;
+        args.mapLibs = _$(args.mapLibs).isBoolean().default(false);
+
         if (isUnDef(__pmIn.__ojobHttp[args.port])) __pmIn.__ojobHttp[args.port] = (isDef(args.hs) ? hs : ow.server.httpd.start(args.port, args.host, ks, args.pass));
-        __pmIn.__ojobRoutes[args.port] = {};
+      
+        if (args.mapLibs) {
+          __pmIn.__ojobRoutes[args.port] = ow.server.httpd.mapRoutesWithLibs(__pmIn.__ojobHttp[args.port], {});
+        } else {
+          __pmIn.__ojobRoutes[args.port] = {};
+        }
 
    # Applies a HTTP service definition
    #
@@ -36,6 +44,11 @@ jobs:
    #
    - name: HTTP Stop Server
      type: shutdown
+     help: >
+        Sets a shutdown job for the server. Expects:
+           - args.port       (Number)   The port where the server was made available (default is 8091)
+
+        If using sequential do ensure that the job 'HTTP Start Server' gets executed first.
      deps:
         - HTTP Start Server
      exec: |
@@ -53,13 +66,15 @@ jobs:
      to  : HTTP Apply Service
      help: >
         Provides a HTTP service definition. The expected arguments are:
+           - args.port       (Number)   The port where the server was made available (default is 8091)
            - args.uri        (String)   The URI where the HTTP service will be available.
            - args.execURI    (Function) The GET function. Receives a request map and a server object.
 
-        Do ensure that the job 'HTTP Start Server' gets executed first.
+        If using sequential jobs do ensure that the job 'HTTP Start Server' gets executed first.
      exec: |
-        if (isUnDef(args.port)) args.port = 8091;
-        if (isUnDef(args.uri))  args.uri = "/";
+        args.port    = _$(args.port).isNumber().default(8091);
+        args.uri     = _$(args.uri).isString().default("/");
+
         __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
            return (new Function("var request = arguments[0]; var server = __pmIn.__ojobHttp[" + args.port + "]; " + args.execURI))(r);
         };
