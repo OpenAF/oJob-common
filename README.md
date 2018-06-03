@@ -1,7 +1,20 @@
 # oJob-common
 A set of base oJobs as common building blocks for custom oJobs.
 
-## oJobBasics.yaml
+Check the documentation for each:
+
+| oJob-common | Description |
+| ----------- | ----------- |
+| [oJobBasics](#ojobbasics) | Basic init/done logging, sh command execution, etc. |
+| [oJobSSH](#ojobssh) | SSH to execute commands and upload/download files. |
+| [oJobSQL](#ojobsql) | Query or execute SQL to a JDBC database. |
+| [oJobES](#ojobes) | Logging to ElasticSearch |
+| [oJobNet](#ojobnet) | Testing network connectivity | 
+| [oJobHTTPd](#ojobhttpd) | Building a simple HTTP(s) server |
+| [oJobRest](#ojobrest) | Building a simple REST server |
+| [oJobOPack](#ojobopack) | Simplified OPack creation |
+
+## oJobBasics
 
 ### oJob sh
 
@@ -67,7 +80,7 @@ todo:
   - Example to parse output
 ````
 
-## oJobSSH.yaml
+## oJobSSH
 
 ### oJob sh
 
@@ -180,7 +193,53 @@ todo:
 
 ````
 
-## oJobSQL.yaml
+## oJobSQL
+
+Allows for easy SQL query or executiong in any JDBC database. 
+
+Basic example:
+````yaml
+consts:
+  dbJDBC: &jdbcurl  jdbc:oracle:thin:@1.2.3.4:1521:ORCL
+  dbUser: &jdbcuser scott
+  dbPass: &jdbcpass tiger
+
+include:
+  - ojobSQL.yaml
+
+jobs:
+  ########################
+  - name: Get current date
+    from: SQL
+    args:
+      DBURL : *jdbcurl
+      DBUser: *jdbcuser
+      DBPass: *jdbcpass
+      quiet : true
+      sql   : select current_date cd, sysdate sd from dual
+    exec: |
+      tprint("Current date = {{CD}}", args.output[0]);
+      tprint("System date  = {{SD}}", args.output[0]);
+
+  ##########################
+  - name: Get generated data
+    from: SQL RAID
+    args:
+      DBURL : *jdbcurl
+      DBUser: *jdbcuser
+      DBPass: *jdbcpass
+      format : table
+      sql    : |
+        SELECT level, current_date, sysdate
+        FROM   dual
+        CONNECT BY level <= 10
+
+todo:
+  - Get current date
+  - Get generated data
+````
+
+Example using RAID:
 
 ````yaml
 consts:
@@ -220,7 +279,7 @@ todo:
   - Get generated data
 ````
 
-## oJobES.yaml
+## oJobES
 
 ### Start Log to ES
 
@@ -279,4 +338,78 @@ Example:
 # Stop logging to ElasticSearch
 todo:
   - Stop ES logging
+````
+
+## oJobHTTPd
+
+Simplifies the creation of one or more HTTP(s) server where you just provide which functions to run for each URI on a http(s) server. The function will receive all the requests parameters and return the content for the browser. If you wish to return JSON please check [oJobRest](#oJobRest).
+
+It's composed of 3 jobs:
+* HTTP Start Server
+* HTTP Stop Server
+* HTTP Service
+
+The job "HTTP Start Server" expects: 
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| port | Number | No | The port number where to assign the HTTP(s) server (defaults to 8091) |
+| keystore | String | No | The keystore for the SSL certificates to create a HTTPS server | 
+| pass | String | No | The password for the keystore to create a HTTPS server |
+| host | String | No | The ip address of the local network interface to which to bind this HTTP server (defaults to 0.0.0.0) |
+| cp | String | No | Provide a folder where the keystore file is to include it on the current classpath (Java requires for keystores to be on the execution classpath) |
+| hs | HTTPServer object | No | An already created HTTPServer to which to bind the HTTP services |
+| mapLibs | Boolean | No | Map internal OpenAF libs like JQuery, highlight css, etc. |
+
+Example:
+````yaml
+include:
+  - oJobHTTPd.yaml
+
+ojob:
+  daemon: true
+
+jobs:
+  - name: Hello world
+    to  : HTTP Service
+    args:
+      port   : 8080
+      uri    : /
+      execURI: return server.replyOKText("Hello world!");
+
+  - name: Echo
+    to  : HTTP Service
+    args:
+      port   : 8080
+      uri    : /echo
+      execURI: return server.replyOKJSON(stringify(request));
+ 
+  - name: README
+    to  : HTTP Service
+    args:
+      port   : 8080
+      uri    : /README
+      execURI: return ow.server.httpd.replyFileMD(server, ".", "/README", request.uri, void 0, [ "README.md" ]); 
+
+todo: 
+
+  # Starts the server
+  - name: HTTP Start Server
+    args:
+      port   : 8080
+      mapLibs: true
+
+  # Sets a shutdown job once the everything is stopped.
+  - name: HTTP Stop Server 
+    args:
+      port: 8080
+    
+  # Sets for every URI to return Hello world
+  - Hello world
+
+  # Sets that /echo will return the actual request map
+  - Echo
+
+  # Sets that /README shows this README.md file
+  - README
 ````
