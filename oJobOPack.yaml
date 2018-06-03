@@ -22,8 +22,10 @@ jobs:
        af.mkdir(args.tmpDir);
        af.mkdir(args.outputDir);
 
-       oPack("install " + args.name + " -d " + args.tmpDir + " -justcopy");
-       oPack("pack " + args.tmpDir);
+       sync(() => {
+          oPack("install " + args.name + " -d " + args.tmpDir + " -justcopy");
+          oPack("pack " + args.tmpDir);
+       }, oPack);
 
        var pack;
        try {

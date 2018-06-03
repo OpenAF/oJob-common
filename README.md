@@ -13,6 +13,7 @@ Check the documentation for each:
 | [oJobHTTPd](#ojobhttpd) | Building a simple HTTP(s) server |
 | [oJobRest](#ojobrest) | Building a simple REST server |
 | [oJobOPack](#ojobopack) | Simplified OPack creation |
+| [oJobRAID](#ojobraid) | Simplified RAID AF operation execution. |
 
 ## oJobBasics
 
@@ -340,6 +341,10 @@ todo:
   - Stop ES logging
 ````
 
+## oJobNet
+
+_tbc_
+
 ## oJobHTTPd
 
 Simplifies the creation of one or more HTTP(s) server where you just provide which functions to run for each URI on a http(s) server. The function will receive all the requests parameters and return the content for the browser. If you wish to return JSON please check [oJobRest](#oJobRest).
@@ -360,6 +365,20 @@ The job "HTTP Start Server" expects:
 | cp | String | No | Provide a folder where the keystore file is to include it on the current classpath (Java requires for keystores to be on the execution classpath) |
 | hs | HTTPServer object | No | An already created HTTPServer to which to bind the HTTP services |
 | mapLibs | Boolean | No | Map internal OpenAF libs like JQuery, highlight css, etc. |
+
+The job "HTTP Stop Server" expects:
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| port | Number | No | The port number where to assign the HTTP(s) server (defaults to 8091) |
+
+The job "HTTP service" expects:
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| port | Number | No | The port number where to assign the HTTP(s) server (defaults to 8091) |
+| uri | String | No | The URI where the HTTP(s) service will be available. |
+| execURI | String | Yes | The code to execute whenever the uri is requested. The code is inclused into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
 
 Example:
 ````yaml
@@ -412,4 +431,105 @@ todo:
 
   # Sets that /README shows this README.md file
   - README
+````
+
+## oJobREST
+
+In the same line as oJobHTTPd simplifies the specific creation of REST HTTP(s) servers.
+
+It's composed of 3 jobs:
+* REST Start Server
+* REST Stop Server
+* REST Service
+
+The job "REST Start Server" expects: 
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| port | Number | No | The port number where to assign the HTTP(s) server (defaults to 8091) |
+| keystore | String | No | The keystore for the SSL certificates to create a HTTPS server | 
+| pass | String | No | The password for the keystore to create a HTTPS server |
+| host | String | No | The ip address of the local network interface to which to bind this HTTP server (defaults to 0.0.0.0) |
+| cp | String | No | Provide a folder where the keystore file is to include it on the current classpath (Java requires for keystores to be on the execution classpath) |
+| hs | HTTPServer object | No | An already created HTTPServer to which to bind the HTTP services |
+| mapLibs | Boolean | No | Map internal OpenAF libs like JQuery, highlight css, etc. |
+
+The job "REST Stop Server" expects:
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| port | Number | No | The port number where to assign the HTTP(s) server (defaults to 8091) |
+
+The job "REST service" expects:
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| port | Number | No | The port number where to assign the HTTP(s) server (defaults to 8091) |
+| uri | String | No | The URI where the HTTP(s) service will be available. |
+| execGET | String | Yes | The code to execute whenever the uri is requested with a GET verb. The code is inclused into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
+| execPOST | String | Yes | The code to execute whenever the uri is requested with a POST verb. The code is inclused into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
+| execPUT | String | Yes | The code to execute whenever the uri is requested with a PUT verb. The code is inclused into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
+| execDELETE | String | Yes | The code to execute whenever the uri is requested with a DELETE verb. The code is inclused into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
+| returnWithParams | Boolean | No | Changes the behaviour of the return of each exec* function to use a map to force mimetype, http code, etc. (see help ow.server.rest.reply for more details) |
+
+## oJobOPack
+
+Simplifies the creation of oPack files based on an url or oPack name.
+
+The job "oPack Pack external" expects: 
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| name | String | Yes | The name or URL to an oPack |
+| tmpDir | String | No | The temporary folder to use during the process (defaults to ./tmp) |
+| outputDir | String | No | Output folder where the oPack will be placed (defaults to .) |
+
+Example:
+
+````yaml
+include:
+  - oJobOPack.yaml
+
+todo:
+  - name: oPack Pack external
+    args:
+      - name  : https://raw.githubusercontent.com/OpenAF/nAttrMon/master
+        tmpDir: nAttrMon
+
+      - name  : APIs
+        tmpDir: APIs
+
+      - name  : GoogleCompiler
+        tmpDir: GoogleCompiler
+        
+      - name  : GooglePhoneNumber
+        tmpDir: GooglePhoneNumber
+````
+
+## oJobRAID
+
+Simplified RAID AF operation execution.
+
+Expects:
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| raidURL | String | Yes | A RAID AF connection URL. |
+| operation | String | Yes | The RAID AF operation to execute. |
+| input | Map | No | The RAID AF operation input map. |
+| format | String | No | If not quiet it displays the result on a format you can choose between "prettyprint" (default), "pmap", "parametermap", "yaml" or "json" |
+| quiet | Boolean | No | If true no output will be displayed. |
+
+````yaml
+include:
+  - oJobRAID.yaml
+
+todo:
+  - name: RAID AF
+    args:
+      raidURL  : http://user:pass@127.0.0.1:8090/#/web/guest/home
+      operation: Ping
+      input    :
+        test: 123
+      format   : prettyprint
 ````
