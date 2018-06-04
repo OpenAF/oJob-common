@@ -18,9 +18,9 @@ jobs:
 
        if (getVersion() < 20171106) logWarn("It's advisable to use an OpenAF version equal or greater than 20171106.");
 
-       af.rm(args.tmpDir);
-       af.mkdir(args.tmpDir);
-       af.mkdir(args.outputDir);
+       io.rm(args.tmpDir);
+       io.mkdir(args.tmpDir);
+       io.mkdir(args.outputDir);
 
        sync(() => {
           oPack("install " + args.name + " -d " + args.tmpDir + " -justcopy");
@@ -34,8 +34,8 @@ jobs:
           pack = io.readFileYAML(args.tmpDir + "/.package.yaml");
        }
 
-       af.mv(pack.name + "-" + pack.version + ".opack", args.outputDir + "/" + pack.name + "-" + pack.version + ".opack");
+       io.mv(pack.name + "-" + pack.version + ".opack", args.outputDir + "/" + pack.name + "-" + pack.version + ".opack");
        for(var file in pack.files) {
-         af.rm(args.tmpDir + "/" + pack.files[file]);
+         io.rm(args.tmpDir + "/" + pack.files[file]);
        }
-       af.rm(args.tmpDir);
+       io.rm(args.tmpDir);

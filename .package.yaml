@@ -54,7 +54,7 @@ filesHash:
   oJobSQL.yaml: e9adfe77c95fc0cf35478c23f5b21bc09dd63e57
   oJobHTTPd.yaml: 78952d4d61fccee86c5b6442436207a70f42cdc9
   oJobDebug.yaml: 556cf30c9b6108fe9e9228a470a43039b7550a1c
-  oJobOPack.yaml: 2a1751cb969e5b9ce954d591ab90f719a9a626e2
+  oJobOPack.yaml: 3ec84a284d4290e4b650f5dd4e882a02fc93eeaf
   oJobBasics.yaml: 0887da498173dfce3a5448a7071398100e3ac0a8
   oJobHBS.yaml: e2e53a5818ac97152f215c30ee4cae0c0bf54155
   LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
