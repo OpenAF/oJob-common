@@ -558,7 +558,7 @@ Expects:
 | workDirStop | String | No | The working directory to use for the stop command. |
 | timeoutStop | Number | No | Timeout waiting for cmdToStop to exit. |
 | exitCodeStop | Number | No | If defined the cmdToStop exitcode must be this value. |
-| cmdToStart | String | No | Command to startup (in backgroud (use start (in windows) or & (in unix))) on the start event. | 
+| cmdToStart | String | No | Command to startup on the start event (make sure it exits after starting). | 
 | execToStart | String | No | If defined will execute the code on the start event. |
 | jobToStart | String | No | If defined will execute the job on the start event. |
 | waitAfterStart | Number | No | Number of ms to wait after starting. |
@@ -569,6 +569,20 @@ Expects:
 Example:
 
 ````yaml
+include:
+  - oJobWatchDog.yaml
+
+ojob:
+  logToFile   :
+    logToFolder          : /some/path/watchdog.logs
+    HKhowLongAgoInMinutes: 11152
+    setLogOff            : false
+  logToConsole: false
+  logJobs     : false
+  unique      :
+    pidFile     : /some/path/watchdog.pid
+    killPrevious: false
+
 jobs:
   - name: Watch my logya daemon
     to  : oJob WatchDog
@@ -594,4 +608,7 @@ jobs:
         pidKill(io.readFileString("/some/path/a.pid"), true);
 
       quiet         : false
+
+todo:
+  - nAttrMon watchdog
 ````

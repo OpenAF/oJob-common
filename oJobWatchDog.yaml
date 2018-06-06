@@ -107,6 +107,8 @@ jobs:
       // --------------
       if (isDef(args.checks.log) && isDef(args.checks.log.fileRE) && isDef(args.checks.log.histFile) && isDef(args.checks.log.folder)) {
         try {
+          if (isString(args.checks.log.stringRE)) args.checks.log.stringRE = [ args.checks.log.stringRE ];
+
           if (!args.quiet) log("Checking log file at " + args.checks.log.folder + " for patterns like '" + args.checks.log.stringRE.join("', ''") + "'...");
           var f = $from(io.listFiles(args.checks.log.folder).files).match("filename", args.checks.log.fileRE).max("lastModified");
           var history;
@@ -128,8 +130,6 @@ jobs:
           }
 
           args.__watchdog.checks.log = { history: history };
-          
-          if (isString(args.checks.log.stringRE)) args.checks.log.stringRE = [ args.checks.log.stringRE ];
 
           var str = io.readFileStream(f.canonicalPath);
           var c = 0;
