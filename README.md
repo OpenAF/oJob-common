@@ -14,6 +14,7 @@ Check the documentation for each:
 | [oJobRest](#ojobrest) | Building a simple REST server |
 | [oJobOPack](#ojobopack) | Simplified OPack creation |
 | [oJobRAID](#ojobraid) | Simplified RAID AF operation execution. |
+| [oJobWatchDog](#ojobwatchdog) | Helps build a cron-based process "watchdog". |
 
 ## oJobBasics
 
@@ -532,4 +533,65 @@ todo:
       input    :
         test: 123
       format   : prettyprint
+````
+
+## oJobWatchDog
+
+Helps build a cron-based process "watchdog" for checking if a daemon process isn't running, has a "fatal" error on the log or any custom way to check the responsive of the daemon process.
+
+Expects:
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| checks | Map | No | Map of checks to determine if the daemon process should be restarted or not. |
+| checks.pid.file | String | No | If a pid file location is provided it will check if the corresponding pid is running. If not it sets to trigger a stop and start operation. |
+| checks.log.folder | String | No | Folder where the log files to check are located. |
+| checks.log.fileRE | String | No | Checks for files matching fileRE choosing the latest by modified date. |
+| checks.log.stringRE | String | No | Array of regular expressions strings to look for. If found assumes a restart is needed. |
+| checks.log.histFile | String | No | The file where to store the history of findings on the file to avoid duplicate findings. |
+| checks.custom.exec | String | No | Executes the corresponding code in a function and passes if returns true or fails assuming a restart is needed if returns false. |
+| quiet | Boolean | No | If true will only produce logging if something is not right (default is true) |
+| cmdToStop | String | No | If defined will execute the command on the stop event. |
+| execToStop | String | No | If defined will execute the code on the stop event. |
+| jobToStop | String | No | If defined will execute the job on the stop event. |
+| waitAfterStop | Number | No | Number of ms to wait after stopping. |
+| workDirStop | String | No | The working directory to use for the stop command. |
+| timeoutStop | Number | No | Timeout waiting for cmdToStop to exit. |
+| exitCodeStop | Number | No | If defined the cmdToStop exitcode must be this value. |
+| cmdToStart | String | No | Command to startup (in backgroud (use start (in windows) or & (in unix))) on the start event. | 
+| execToStart | String | No | If defined will execute the code on the start event. |
+| jobToStart | String | No | If defined will execute the job on the start event. |
+| waitAfterStart | Number | No | Number of ms to wait after starting. |
+| workDirStart | String | No | The working directory to use for startup command. |
+| timeoutStart | Number | No | Timeout waiting for cmdToStart to exit. |
+| exitCodeStart | Number | No |  If defined the cmdToStart exitcode must be this value. |
+
+Example:
+
+````yaml
+jobs:
+  - name: Watch my logya daemon
+    to  : oJob WatchDog
+    args:
+      checks  :
+        pid:
+          file: /some/path/a.pid
+        log   :
+          folder  : /some/path/logya
+          fileRE  : log-\d+-\d+-\d+.log 
+          histFile: /some/path/logya/logya.json
+          stringRE: OutOfMemory
+        custom:
+          exec: |
+            print(123);
+            return false;
+
+      cmdToStart    : start ojob /some/path/a.yaml
+      workDirStart  : /some/path/
+      waitAfterStart: 5000
+
+      execToStop    : |
+        pidKill(io.readFileString("/some/path/a.pid"), true);
+
+      quiet         : false
 ````
