@@ -104,16 +104,18 @@ jobs:
           var history;
           if (io.fileExists(args.checks.log.histFile)) {
             history = io.readFile(args.checks.log.histFile);
-            if (history.file != f.filename) {
+            if (history.file != f.filename || history.createTime != f.createTime) {
               history = {
-                file: f.filename,
-                line: 0
+                file  : f.filename,
+                create: f.createTime,
+                line  : 0
               }
             }
           } else {
             history = {
-              file: f.filename,
-              line: 0
+              file  : f.filename,
+              create: f.createTime,
+              line  : 0
             };
           }
           
