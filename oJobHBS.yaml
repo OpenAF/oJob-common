@@ -19,7 +19,7 @@ jobs:
  #
  - name: oJob HBS
    help: >
-     This job will apply an args.tempalte hbs file using args.data to produce contents to args.output.
+     This job will apply an args.template hbs file using args.data to produce contents to args.output.
    exec: >
      if(isUnDef(args.template)) throw "Need to define a args.template filename to use";
 
