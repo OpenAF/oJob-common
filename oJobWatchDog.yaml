@@ -149,7 +149,7 @@ jobs:
             }
           });
           history.line = c;
-          history.size = io.fileInfo(f.canonicalPath);
+          history.size = io.fileInfo(f.canonicalPath).size;
           str.close();
 
           io.writeFile(args.checks.log.histFile, history);
