@@ -1,0 +1,227 @@
+# oJob WatchDog functionality
+# Author: Nuno Aguiar
+
+jobs:
+  - name: oJob WatchDog
+    help: |
+      Verifies that a process (OpenAF/oJob/etc...) is running. Expects:
+      - cmdToStop           (String)   If defined will run to try or ensure it stops.
+      - execToStop          (String)   If defined will execute to try to ensure it stops.
+      - waitAfterStop       (Number)   Number of ms to wait after stopping.
+      - workDirStop         (String)   The working directory to use for the stop command.      
+      - timeoutStop         (Number)   Timeout waiting for cmdToStop to exit.
+      - exitCodeStop        (Number)   If defined the cmdToStop exitcode must be this value.      
+    
+      - cmdToStart          (String)   Command to startup (in backgroud (use start (in windows) or & (in unix)))
+      - execToStart         (String)   If defined will execute to try to start.
+      - waitAfterStart      (Number)   Number of ms to wait after starting.
+      - workDirStart        (String)   The working directory to use for startup command.
+      - timeoutStart        (Number)   Timeout waiting for cmdToStart to exit.
+      - exitCodeStart       (Number)   If defined the cmdToStart exitcode must be this value.
+    
+      - checks              (Map)      Array of checks to perform to determine if it's running (if fail will assume needs restart)
+
+      - checks.pid.file     (String)   The pid file location (when ojob uses unique pidFile ojob options).
+
+      - checks.log.folder   (String)   Folder where the log files to check are located.
+      - checks.log.fileRE   (String)   Checks for files matching fileRE choosing the latest by modified date.
+      - checks.log.stringRE (Array)    Array of regular expressions strings to look for. If found assumes a restart is needed.
+      - checks.log.histFile (String)   The file where to store the history of findings on the file to avoid duplicate findings.
+
+      - checks.custom.exec  (String)   Executes the corresponding code in a function and passes if returns true or fails assuming a restart is needed if returns false.
+      - quiet               (Boolean)  If true will only produce logging if something is not right (default is true)
+
+    exec: |
+      args.checks =_$(args.checks).isMap().default({});
+
+      args.timeoutStart        = _$(args.timeoutStart).isNumber().default(void 0);
+      args.timeoutStop         = _$(args.timeoutStop).isNumber().default(void 0);
+      args.workDirStart        = _$(args.workDirStart).isString().default(void 0);
+      args.workDirStop         = _$(args.workDirStop).isString().default(void 0);
+      args.cmdToStart          = _$(args.cmdToStart).isString().default(void 0);
+      args.exitCodeStart       = _$(args.exitCodeStart).isNumber().default(void 0);
+      args.waitAfterStart      = _$(args.waitAfterStart).isNumber().default(void 0);      
+      args.exitCodeStop        = _$(args.exitCodeStop).isNumber().default(void 0);
+      args.waitAfterStop       = _$(args.waitAfterStop).isNumber().default(void 0);         
+      args.quiet               = _$(args.quiet).isBoolean().default(true);
+      
+      var shouldRestart = false;
+
+      // Checks
+      // ------
+
+      // Check pid file
+      // --------------
+      if (isDef(args.checks.pid)) {
+        var running = false;
+        try {
+          if (!args.quiet) log("Checking '" + args.checks.pid.file + "'");
+
+          if (io.fileExists(args.checks.pid.file)) {
+            var r = pidCheck(io.readFileString(args.checks.pid.file));
+            if (r) {
+              running = true;
+              if (!args.quiet) log("'" + args.checks.pid.file + "' is running.");
+            }
+          }
+
+          if (!running) {
+            logWarn("'" + args.checks.pid.file + "' not running.");
+            if (isDef(args.cmdToStart)) {
+              shouldRestart = true;
+            }
+          }
+        } catch(e) {
+          logErr("Found problem while checking for '" + args.checks.pid.file + "' (" + String(e) + ")");
+          throw e;
+        }
+      }
+
+      // Check custom
+      // ------------
+      if (isDef(args.checks.custom) && isDef(args.checks.custom.exec)) {
+        try {
+          var f = new Function("args", args.checks.custom.exec);
+          var r = f(args);
+          if (!r) shouldRestart = true;
+        } catch(e) {
+          logErr("Found problem while custom checking (" + String(e) + ")");
+          throw e;
+        }
+      }
+
+      // Check log file
+      // --------------
+      if (isDef(args.checks.log) && isDef(args.checks.log.fileRE) && isDef(args.checks.log.histFile) && isDef(args.checks.log.folder)) {
+        try {
+          var f = $from(io.listFiles(args.checks.log.folder).files).match("filename", args.checks.log.fileRE).max("lastModified");
+          var history;
+          if (io.fileExists(args.checks.log.histFile)) {
+            history = io.readFile(args.checks.log.histFile);
+            if (history.file != f.filename) {
+              history = {
+                file: f.filename,
+                line: 0
+              }
+            }
+          } else {
+            history = {
+              file: f.filename,
+              line: 0
+            };
+          }
+          
+          if (isString(args.checks.log.stringRE)) args.checks.log.stringRE = [ args.checks.log.stringRE ];
+
+          var str = io.readFileStream(f.canonicalPath);
+          var c = 0;
+          ioStreamReadLines(str, (l) => {
+            c++;
+            if (c > history.line) {
+              for(var ii in args.checks.log.stringRE) {
+                if (l.match(new RegExp(args.checks.log.stringRE[ii], "i"))) {
+                  shouldRestart = true;
+                  history.line = c;
+                  logWarn("Found line '" + l + "' on line " + c + " of " + f.canonicalPath + ".");
+                }
+              }
+            }
+          });
+          history.line = c;
+          str.close();
+
+          io.writeFile(args.checks.log.histFile, history);
+        } catch(e) {
+          logErr("Found problem while checking for log entries in '" + args.checks.log.folder + "'");
+          throw e;
+        }
+      }
+
+      // Restart
+      // -------
+      if (shouldRestart) {
+        if (isDef(args.execToStop)) {
+          try {
+            af.eval(args.execToStop);
+          } catch(e) {
+            logErr("Found problem while trying to restart executing '" + args.execToStop + "' (" + String(e) + ")");
+            throw e;
+          }
+        }
+
+        if (isDef(args.cmdToStop)) {
+          log("Trying to stop '" + args.cmdToStop + "'");
+          try {
+            var m = sh(args.cmdToStop, "", args.timeoutStop, true, args.workDirStop, true);
+            if (isDef(args.waitAfterStop)) {
+              if (!args.quiet) { log("Waiting after stop for " + args.waitAfterStop + "ms"); }
+              sleep(args.waitAfterStop);
+            }
+            if (isDef(args.exitCodeStop)) {
+              if (m.exitcode != args.exitCodeStop) throw "'" + args.cmdToStop + "'exit code returned was " + m.exitcode;
+            } else {
+              if (m.exitcode != 0) {
+                logWarn("While restarting '" + args.cmdToStop + "' received exit code = " + m.exitcode);
+              } 
+            }
+          } catch(e) {
+            logErr("Found problem while trying to restart '" + args.cmdToStop + "' (" + String(e) + ")");
+            throw e;
+          }
+        }
+        
+        if (isDef(args.execToStart)) {
+          try {
+            af.eval(args.execToStart);
+          } catch(e) {
+            logErr("Found problem while trying to restart executing '" + args.execToStart + "' (" + String(e) + ")");
+            throw e;
+          }
+        }
+
+        if (isDef(args.cmdToStart)) {
+          log("Trying to restart '" + args.cmdToStart + "'");
+          try {
+            var m = sh(args.cmdToStart, "", args.timeoutStart, true, args.workDirStart, true);
+            if (isDef(args.waitAfterStart)) {
+              if (!args.quiet) { log("Waiting after start for " + args.waitAfterStart + "ms"); }
+              sleep(args.waitAfterStart);
+            }
+            if (isDef(args.exitCodeStart)) {
+              if (m.exitcode != args.exitCodeStart) throw "'" + args.cmdToStart + "'exit code returned was " + m.exitcode;
+            } else {
+              if (m.exitcode != 0) {
+                logWarn("While restarting '" + args.cmdToStart + "' received exit code = " + m.exitcode);
+              } 
+            }
+          } catch(e) {
+            logErr("Found problem while trying to restart '" + args.cmdToStart + "' (" + String(e) + ")");
+            throw e;
+          }
+        }
+      }
+
+#todo:
+#  - name: oJob WatchDog
+#    args:
+#      checks  :
+#        pid:
+#          file: /some/path/a.pid
+#        log   :
+#          folder  : /some/path/logya
+#          fileRE  : log-\d+-\d+-\d+.log 
+#          histFile: /some/path/logya/logya.json
+#          stringRE: OutOfMemory
+#        custom:
+#          exec: |
+#            print(123);
+#            return false;
+#
+#      cmdToStart    : start ojob /some/path/a.yaml
+#      workDirStart  : /some/path/
+#      waitAfterStart: 5000
+#
+#      execToStop    : |
+#        pidKill(io.readFileString("/some/path/a.pid"), true);
+#
+#      quiet         : false

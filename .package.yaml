@@ -19,6 +19,7 @@ keywords:
   - Rest
   - ES
   - ElasticSearch
+  - WatchDog
 bugs:
   url: 'https://github.com/OpenAF/oJob-common/issues'
 repository:
@@ -29,41 +30,43 @@ name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20180602'
+version: '20180605'
 dependencies:
   openaf: '>=20180527'
 files:
-  - oJobSQL.yaml
-  - oJobHTTPd.yaml
-  - oJobDebug.yaml
-  - oJobOPack.yaml
-  - oJobBasics.yaml
-  - oJobHBS.yaml
-  - LICENSE
   - .package.yaml
-  - oJobTest.yaml
-  - oJobNet.yaml
-  - oJobRAID.yaml
+  - LICENSE
+  - oJobBasics.yaml
+  - oJobDebug.yaml
   - oJobES.yaml
-  - README.md
-  - oJobSSH.yaml
-  - oJobs.yaml
-  - oJobSVN.yaml
+  - oJobHBS.yaml
+  - oJobHTTPd.yaml
+  - oJobNet.yaml
+  - oJobOPack.yaml
+  - oJobRAID.yaml
   - oJobRest.yaml
+  - oJobs.yaml
+  - oJobSQL.yaml
+  - oJobSSH.yaml
+  - oJobSVN.yaml
+  - oJobTest.yaml
+  - oJobWatchDog.yaml
+  - README.md
 filesHash:
-  oJobSQL.yaml: e9adfe77c95fc0cf35478c23f5b21bc09dd63e57
-  oJobHTTPd.yaml: 78952d4d61fccee86c5b6442436207a70f42cdc9
-  oJobDebug.yaml: 556cf30c9b6108fe9e9228a470a43039b7550a1c
-  oJobOPack.yaml: 3ec84a284d4290e4b650f5dd4e882a02fc93eeaf
-  oJobBasics.yaml: 0887da498173dfce3a5448a7071398100e3ac0a8
-  oJobHBS.yaml: e2e53a5818ac97152f215c30ee4cae0c0bf54155
   LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
-  oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
-  oJobNet.yaml: a744fb83a9430ca9e34356bede5b0df8f2d48367
-  oJobRAID.yaml: b4916cff81119a9e626c735abd6426964cdfc17c
+  oJobBasics.yaml: 0887da498173dfce3a5448a7071398100e3ac0a8
+  oJobDebug.yaml: 556cf30c9b6108fe9e9228a470a43039b7550a1c
   oJobES.yaml: b567c18dd4abb4afc5ca16a9e34c21a59c183331
-  README.md: fb6b8aeb204ee4cac43006413bcdb19d0c929f63
-  oJobSSH.yaml: b81dfbe34209781575f43d14e214950180d8d567
-  oJobs.yaml: 43db984437d36414f426075a31f5a3a0d1502432
-  oJobSVN.yaml: ecfed00a4fa11b50ebf601168ac1251f7de29bfa
+  oJobHBS.yaml: e2e53a5818ac97152f215c30ee4cae0c0bf54155
+  oJobHTTPd.yaml: 78952d4d61fccee86c5b6442436207a70f42cdc9
+  oJobNet.yaml: a744fb83a9430ca9e34356bede5b0df8f2d48367
+  oJobOPack.yaml: 3ec84a284d4290e4b650f5dd4e882a02fc93eeaf
+  oJobRAID.yaml: b4916cff81119a9e626c735abd6426964cdfc17c
   oJobRest.yaml: b9d1f3e7c5051cf6ab8da99e3c5a2838ca5e6e2b
+  oJobs.yaml: 43db984437d36414f426075a31f5a3a0d1502432
+  oJobSQL.yaml: e9adfe77c95fc0cf35478c23f5b21bc09dd63e57
+  oJobSSH.yaml: b81dfbe34209781575f43d14e214950180d8d567
+  oJobSVN.yaml: ecfed00a4fa11b50ebf601168ac1251f7de29bfa
+  oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
+  oJobWatchDog.yaml: 108ac26aae764cc63bff402b9eceb4e2eab39439
+  README.md: fb6b8aeb204ee4cac43006413bcdb19d0c929f63
