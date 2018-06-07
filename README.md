@@ -20,11 +20,11 @@ Check the documentation for each:
 
 | oJobBasics jobs |
 |-----------------|
-| [oJob sh](#ojob_sh) |
-| [oJob From global](#ojob_from_global) |
-| [oJob Args from JSON](#ojob_args_from_json) |
-| [oJob Args from YAML](#ojob_args_from_yaml) |
-| [oJob Send email](#ojob_send_email) |
+| [oJob sh](#ojob-sh) |
+| [oJob From global](#ojob-from-global) |
+| [oJob Args from JSON](#ojob-args-from-json) |
+| [oJob Args from YAML](#ojob-args-from-yaml) |
+| [oJob Send email](#ojob-send-email) |
 
 ### oJob sh
 
