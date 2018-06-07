@@ -18,17 +18,25 @@ Check the documentation for each:
 
 ## oJobBasics
 
+| oJobBasics jobs |
+|-----------------|
+| [oJob sh](#ojob_sh) |
+| [oJob From global](#ojob_from_global) |
+| [oJob Args from JSON](#ojob_args_from_json) |
+| [oJob Args from YAML](#ojob_args_from_yaml) |
+| [oJob Send email](#ojob_send_email) |
+
 ### oJob sh
 
 This job runs a local shell command and accepts the following arguments:
 
-| Argument | Type | Description |
-|----------|------|-------------|
-| cmd | string/array | The command to execute (or an array of commands) |
-| quiet | boolean | Determines if the stdout should be visible or not (default is false) |
-| directory | string | Sets the working directory for the command |
-| stdin | string | Provide any stdin needed |
-| exitcode | number | Determines what exitcode should be consider success (default is 0) |
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| cmd | String/Array | Yes | The command to execute (or an array of commands) |
+| quiet | Boolean | No | Determines if the stdout should be visible or not (default is false) |
+| directory | String | No | Sets the working directory for the command |
+| stdin | String | No | Provide any stdin needed |
+| exitcode | Number | No | Determines what exitcode should be consider success (default is 0) |
 
 Example:
 
@@ -82,25 +90,108 @@ todo:
   - Example to parse output
 ````
 
+### oJob From global
+
+This job will reset or merge a global variable map. Expects:
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| global | String | Yes | Load arguments from the global variable specified. |
+
+### oJob Args from JSON
+
+This job will load the args map from a JSON file. Expects:
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| file | String | Yes | The filepath to read the JSON file from. |
+| global | String | No | Alternatively load to the global variable specified. |
+
+### oJob Args from YAML
+
+This job will load the args map from a YAML file. Expects:
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| file | String | Yes | The filepath to read the YAML file from. |
+| global | String | No | Alternatively load to the global variable specified. |
+
+### oJob Send email
+
+This job tries to send an email. Expects:
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| server | String | Yes | The email server to use. |
+| port | Number | No | The email server port to use. |
+| from | String | Yes | The email from address. |
+| to | Array | Yes | The email to addresses. |
+| cc | Array | No | The email cc addresses. |
+| bcc | Array | No | The email bcc addresses. |
+| isHTML | Boolean | No | Specifies if the email is in HTML format. |
+| subject | String | Yes | The email subject (a hbs template using args as data). |
+| output | String | Yes | The email body message (a hbs template using args as data). |
+| altOutput | String | No | The email body alternative message (defaults to message). |
+| credentials | Map | No | The email server credentials (user and pass). | 
+| useSSL | Boolean | No | If the email server uses SSL. |
+| useTLS | Boolean | No | If the email server uses TLS. |
+| embedFiles | Array | No | Array of maps (with file and name) to embeded on the email. |
+| addAttachments | Array | No | Array of maps (with file, isInLine, name) to attach on the email. |
+| addImages | Array | No | Array of urls to images (only available if isHTML = true)- | 
+| embedURLs | Array | No | Array of maps (with url and name) to embeded on the email. |
+| debug | Boolean | No | Determines if it should debug the process. |
+
+Example:
+
+smtp-config.yaml
+````yaml
+from       : my.email@some.domain
+server     : my.smtp.server
+credentials:
+  user: user1
+  pass: pass1
+useSSL     : true
+````
+
+sendEmail.yaml
+````yaml
+include:
+  - oJobBasics.yaml
+
+jobs:
+  - name: Send email test
+    from: oJob Args from YAML
+    to  : oJob Send email
+    args:
+      file   : smtp-config.yaml
+      to     :
+        - email1@some.domain
+      subject: Test email
+      output : My test email
+
+todo:
+  - Send email test
+````
+
 ## oJobSSH
 
-### oJob sh
+### SSH Exec
 
 Executes commands on a SSH connection. The expected arguments are:
 
-| Argument | Type | Description |
-|----------|------|-------------|
-| cmd | string/array | A SSH command-line to execute or and array of it (keep in mind that this isn't bash) |
-| stdin | string | An optional SSH stdin for the command-line to execute |
-| chHosts | string | A channel with hosts configurations to use instead of individual config |
-| host | string | The SSH host |
-| port | number | The SSH port (defaults to 22) |
-| login | string | The SSH login |
-| pass | string | The SSH pass |
-| key | string | The path to a SSH key file (optional) |
-| exitcode | number | Determines what exitcode should be consider success (default is 0) |
-| sudo | string | Sudo's to the corresponding user to executing the command-line |
-| quiet | boolean | Determines if no output of the command(s) execution should be provided (default to false) |
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| cmd | String/Array | Yes | A SSH command-line to execute or and array of it (keep in mind that this isn't bash) |
+| stdin | String | No | An optional SSH stdin for the command-line to execute |
+| chHosts | String | No | A channel with hosts configurations to use instead of individual config |
+| host | String | No | The SSH host |
+| port | Number | No | The SSH port (defaults to 22) |
+| login | String | No | The SSH login |
+| pass | String | No | The SSH pass |
+| key | String | No | The path to a SSH key file (optional) |
+| exitcode | Number | No | Determines what exitcode should be consider success (default is 0) |
+| sudo | String | No | Sudo's to the corresponding user to executing the command-line |
+| quiet | Boolean | No | Determines if no output of the command(s) execution should be provided (default to false) |
 
 Example:
 

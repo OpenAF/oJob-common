@@ -42,13 +42,58 @@ jobs:
   - name        : oJob Sleep 1s
     exec        : sleep(1000);
     
+  # Set arguments from a global variable
+  - name        : oJob From global
+    help        : |
+      This job will reset or merge a global variable map. Expects:
+        - args.global (String)  Load arguments from the global variable specified.
+    exec        : |
+      args.global = _$(args.global).isString().$_("Please provide a global variable name"); 
+      args = merge(args, global[args.global]);
+  
+  # Load args from JSON
+  - name        : oJob Args from JSON
+    help        : |
+      This job will load the args map from a JSON file. Expects:
+        - args.file   (String)  The filepath to read the JSON file from.
+        - args.global (String)  Alternatively load to the global variable specified.
+    exec        : |
+      _$(args.file)
+       .isString()
+       .check(io.fileExists, "The file " + args.file + " doesn't exist.")
+       .$_("You need to provide a JSON file to load arguments from.");
+      args.global = _$(args.global).isString().default(void 0); 
+
+      if (isDef(args.global))
+        global[args.global] = merge(global[args.global], io.readFile(args.file));
+      else
+        args = merge(args, io.readFile(args.file));
+
+  # Load args from YAML
+  - name        : oJob Args from YAML
+    help        : |
+      This job will load the args map from a YAML file. Expects:
+        - args.file   (String)  The filepath to read the YAML file from.
+        - args.global (String)  Alternatively load to the global variable specified.
+    exec        : |
+      _$(args.file)
+       .isString()
+       .check(io.fileExists, "The file " + args.file + " doesn't exist.")
+       .$_("You need to provide a YAML file to load arguments from.");
+      args.global = _$(args.global).isString().default(void 0); 
+
+      if (isDef(args.global))
+        global[args.global] = merge(global[args.global], io.readFileYAML(args.file));
+      else
+        args = merge(args, io.readFileYAML(args.file));
+
   ## ------------
   ## Send email
   ## ------------
   
   - name       : oJob Send email
     help       : |
-      This jobs tries to send an email. Expects:
+      This job tries to send an email. Expects:
         - args.server         (String)  The email server to use
         - args.port           (Number)  The email server port to use
         - args.from           (String)  The email from address
@@ -68,11 +113,14 @@ jobs:
         - args.subject        (String)  The email subject (a hbs template using args as data)
         - args.debug          (Boolean) Determines if it should debug the process
     exec       : |
+      if (isString(args.to)) args.to = [ args.to ];
+
       _$(args.server).isString().$_("Please provide an email server.");
       _$(args.from).isString().$_("Please provide a from email address.");
       _$(args.to).isArray().$_("Please provide the to email addresses.");
       _$(args.subject).isString().$_("Please provide a subject.");
       _$(args.output).isString().$_("Please provide an output.");
+
       args.cc          = _$(args.cc).isArray().default([]);
       args.bcc         = _$(args.bcc).isArray().default([]);
       args.debug       = _$(args.debug).isBoolean().default(void 0);
@@ -96,13 +144,13 @@ jobs:
 
       if (isDef(args.embedFiles)) {
         for(var ii in args.embedFiles) {
-          email.embedFile(embedFiles[ii].file, embedFiles[ii].name);
+          email.embedFile(args.embedFiles[ii].file, args.embedFiles[ii].name);
         };
       }
 
       if (isDef(args.embedURLs)) {
         for(var ii in args.embedURLs) {
-          email.embedURL(embedURLs[ii].url, embedURLs[ii].name);
+          email.embedURL(args.embedURLs[ii].url, args.embedURLs[ii].name);
         };
       }
 

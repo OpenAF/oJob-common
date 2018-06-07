@@ -2,25 +2,37 @@
 # Author: Nuno Aguiar
 
 jobs:
- # oJob HBS file 
- #
- - name: oJob HBS file
-   help: >
-     This job will apply an args.template hbs file using args.data to produce a new
-     file (args.target). 
-   exec: >
-     if(isUnDef(args.template)) throw "Need to define a args.template filename to use";
-     if(isUnDef(args.target)) throw "Need to define a args.target filename to write the output to";
+  - name: oJob HBS Add helpers
+    exec: |
+      ow.loadTemplate();
+      ow.template.addFormatHelpers();
+      ow.template.addConditionalHelpers();
+      ow.template.addHelper("debug", (s) => { sprint(s); });
+      ow.template.addHelper("stringify", (s) => { return stringify(s); });
+      ow.template.addHelper("stringifyInLine", (s) => { return stringify(s, void 0, ""); });
+      ow.template.addHelper("toYAML", (s) => { return af.toYAML(s); });
+      ow.template.addHelper("env", (s) => { return getEnv(s); });
+      ow.template.addHelper("escape", (s) => { return s.replace(/['"]/g, "\\$1"); });
 
-     io.writeFileString(args.target, ow.loadTemplate().parseHBS(args.template, args.data)); 
-     if (isUnDef(args.quiet) || !args.quiet) log("Wrote '" + args.target + "'' based on '" + args.template + "'");
+  # oJob HBS file 
+  #
+  - name: oJob HBS file
+    help: >
+      This job will apply an args.template hbs file using args.data to produce a new
+      file (args.target). 
+    exec: >
+      if(isUnDef(args.template)) throw "Need to define a args.template filename to use";
+      if(isUnDef(args.target)) throw "Need to define a args.target filename to write the output to";  
 
- # oJob HBS
- #
- - name: oJob HBS
-   help: >
-     This job will apply an args.template hbs file using args.data to produce contents to args.output.
-   exec: >
-     if(isUnDef(args.template)) throw "Need to define a args.template filename to use";
+      io.writeFileString(args.target, ow.loadTemplate().parseHBS(args.template, args.data)); 
+      if (isUnDef(args.quiet) || !args.quiet) log("Wrote '" + args.target + "'' based on '" + args.template + "'");
 
-     args.output = ow.loadTemplate().parseHBS(args.template, args.data); 
+  # oJob HBS
+  #
+  - name: oJob HBS
+    help: >
+      This job will apply an args.template hbs file using args.data to produce contents to args.output.
+    exec: >
+      if(isUnDef(args.template)) throw "Need to define a args.template filename to use";
+
+      args.output = ow.loadTemplate().parseHBS(args.template, args.data); 
