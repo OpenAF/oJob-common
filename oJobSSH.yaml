@@ -1,4 +1,4 @@
-# Define the jobs
+# Define the jobs for SSH
 # Author: Nuno Aguiar
 
 jobs:
@@ -6,6 +6,40 @@ jobs:
   ## SSH functionality
   ## -----------------
 
+  ###################
+  # Create a SSH pool
+  - name        : SSH Pool
+    help        : |
+      Creates a oJob object pool to access SSH
+        - args.chHosts  (String)   A channel with hosts configurations to use instead of individual config
+        - args.url      (String)   A SSH url
+        - args.host     (String)   The SSH host
+        - args.port     (Number)   The SSH port (defaults to 22)
+        - args.login    (String)   The SSH login
+        - args.pass     (String)   The SSH pass
+        - args.key      (String)   The path to a SSH key file (optional)
+    exec        : |
+      if (isUnDef(global.__oJobPools)) global.__oJobPools = {};
+      if (isUnDef(args.chHosts)) {
+        if (isUnDef(args.url)) {
+          _$(args.host).isString().$_("Please provide a SSH host.");
+          _$(args.port).isNumber().$_("Please provide a SSH port.");
+          _$(args.login).isString().$_("Please provide a SSH login.");
+          args.pass = _$(args.pass).isString().default(void 0);
+          args.key  = _$(args.key).isString()
+                       .check(io.fileExists, "File " + args.key + " doesn't exist")
+                       .default(void 0);
+        } else {
+          _$(args.url).isString();
+          global.__oJobPools[args.url] = ow.obj.pool.SSH(args.url, void 0, void 0, void 0, void 0, true);
+        }
+      } else {
+        $ch(args.chHosts).forEach((k, v) => {
+          global.__oJobPools["ssh://" + k.login + "@" + k.host + ":" + k.port] = ow.obj.pool.SSH(v.host, v.port, v.login, v.pass, v.key, true);
+        });
+      }
+
+  #######################################
   # Load a hosts yaml file into a channel
   - name        : SSH Load hosts
     help        : >
@@ -38,6 +72,7 @@ jobs:
          return (isDef(r.name) ? r.name : r.host + ":" + (isDef(r.port) ? r.port : 22) );
       })));
 
+  ########################
   # Exec commands over SSH
   - name        : SSH Exec
     help        : >
@@ -124,6 +159,7 @@ jobs:
         s.close();
       }
 
+  #######################
   # Copies files over SSH
   - name        : SSH Send file
     help        : >
@@ -158,6 +194,7 @@ jobs:
         s.close();
       }
 
+  #################################
   # Retrieves remote files over SSH
   - name        : SSH Get file
     help        : >
