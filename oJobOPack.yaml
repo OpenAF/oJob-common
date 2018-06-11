@@ -11,6 +11,8 @@ jobs:
           name        (String)  The url or opack name to pack
           tmpDir      (String)  Temporary folder to use (defaults to "./tmp")
           outputDir   (String)  Output folder where the opack will be placed (defaults to ".")
+          noVersion   (Boolean) Creates the opack without any version info
+          withSymLink (Boolean) Creates a symlink without version pointing to the version one just created.
      exec: >
        if (isUnDef(args.tmpDir))    args.tmpDir    = "./tmp";
        if (isUnDef(args.outputDir)) args.outputDir = ".";
@@ -34,7 +36,14 @@ jobs:
           pack = io.readFileYAML(args.tmpDir + "/.package.yaml");
        }
 
-       io.mv(pack.name + "-" + pack.version + ".opack", args.outputDir + "/" + pack.name + "-" + pack.version + ".opack");
+       if (!args.noVersion) {
+         io.mv(pack.name + "-" + pack.version + ".opack", args.outputDir + "/" + pack.name + "-" + pack.version + ".opack");
+       } else {
+         io.mv(pack.name + ".opack", args.outputDir + "/" + pack.name + ".opack");
+       }
+       if (args.withSymLink) 
+         sh("ln -s " + args.outputDir + "/" + pack.name + "-" + pack.version + ".opack " + args.outputDir + "/" + args.name + ".opack");
+         
        for(var file in pack.files) {
          io.rm(args.tmpDir + "/" + pack.files[file]);
        }
