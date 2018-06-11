@@ -27,7 +27,7 @@ jobs:
       });
       global.__esSubs = ow.ch.utils.getLogStashSubscriber("__es", "stdin", args.host, (e) => {
          sprintErr(e);
-      }, void 0, stamp);
+      }, void 0, args.stamp);
       $ch("__log").subscribe(global.__esSubs);
       
   - name: Stop ES logging
