@@ -9,14 +9,17 @@ jobs:
         Packs an external opack given an url or opack name:
          
           name        (String)  The url or opack name to pack
+          filePath    (String)  The filepath to the opack
           tmpDir      (String)  Temporary folder to use (defaults to "./tmp")
           outputDir   (String)  Output folder where the opack will be placed (defaults to ".")
           noVersion   (Boolean) Creates the opack without any version info
           withSymLink (Boolean) Creates a symlink without version pointing to the version one just created.
-     exec: >
-       if (isUnDef(args.tmpDir))    args.tmpDir    = "./tmp";
-       if (isUnDef(args.outputDir)) args.outputDir = ".";
-       if (isUnDef(args.name))      throw "You need to define a opack args.name.";
+     exec: |
+       args.tmpDir = _$(args.tmpDir).isString().default("./tmp");
+       args.outputDir = _$(args.outputDir).isString().default(".");
+       args.name = _$(args.name).isString().default(void 0);
+       args.filePath = _$(args.filePath).isString().default(void 0);
+       if (isUnDef(args.name) && isUnDef(args.filePath)) throw "You need to define a opack args.name ou args.filePath";
 
        if (getVersion() < 20171106) logWarn("It's advisable to use an OpenAF version equal or greater than 20171106.");
 
@@ -25,7 +28,8 @@ jobs:
        io.mkdir(args.outputDir);
 
        sync(() => {
-          oPack("install " + args.name + " -d " + args.tmpDir + " -justcopy");
+          if (isDef(args.name)) oPack("install " + args.name + " -d " + args.tmpDir + " -justcopy");
+          if (isDef(args.filePath)) args.tmpDir = args.filePath;
           oPack("pack " + args.tmpDir);
        }, oPack);
 
