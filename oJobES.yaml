@@ -10,10 +10,12 @@ jobs:
          host   (String) A LogStash like host to identify in each entry
          user   (String) A user name.
          pass   (String) A password (encrypted or not).
+         stamp  (Map)    A map to stamp on each elasticsearch entry for extra info.
     exec: |
       if (isUnDef(args.url)) throw "Please provide URL to ElasticSearch";
       if (isUnDef(args.index)) throw "Please provide an ElasticSearch index name";
       if (isUnDef(args.host)) throw "Please provide a LogStash-like host for ElasticSearch";
+      args.stamp = _$(args.stamp).isMap().default(void 0);
       
       startLog();
       $ch("__es").create(void 0, "elasticsearch", {
@@ -25,7 +27,7 @@ jobs:
       });
       global.__esSubs = ow.ch.utils.getLogStashSubscriber("__es", "stdin", args.host, (e) => {
          sprintErr(e);
-      });
+      }, void 0, stamp);
       $ch("__log").subscribe(global.__esSubs);
       
   - name: Stop ES logging
