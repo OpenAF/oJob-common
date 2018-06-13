@@ -33,6 +33,8 @@ jobs:
       - checks.custom.exec  (String)   Executes the corresponding code in a function and passes if returns true or fails assuming a restart is needed if returns false.
       - quiet               (Boolean)  If true will only produce logging if something is not right (default is true)
 
+      - jobToNotify         (String)   If defined will execute when finished checking, stopped or started (receives args.__watchdog and should check phase for start, stop and checks)
+
     exec: |
       args.checks =_$(args.checks).isMap().default({});
       args.__watchdog = { shouldRestart: false }; 
@@ -47,6 +49,7 @@ jobs:
       args.exitCodeStop        = _$(args.exitCodeStop).isNumber().default(void 0);
       args.waitAfterStop       = _$(args.waitAfterStop).isNumber().default(void 0);         
       args.quiet               = _$(args.quiet).isBoolean().default(true);
+      args.jobToNotify         = _$(args.jobToNotify).isString().default(void 0);
       
       var shouldRestart = false;
 
@@ -57,6 +60,7 @@ jobs:
 
       // Check pid file
       // --------------
+      args.__watchdog.phase = "checks";
       if (isDef(args.checks.pid)) {
         var running = false;
         try {
@@ -157,11 +161,21 @@ jobs:
           logErr("Found problem while checking for log entries in '" + args.checks.log.folder + "'");
           throw e;
         }
+
+        if (isDef(args.jobToNotify)) {
+          try {
+            oJobRunJob(args.jobToNotify, args);
+          } catch(e) {
+            logErr("Found problem while trying to notify executing job '" + args.jobToNotify + "' (" + String(e) + ")");
+            throw e;
+          }
+        }
       }
 
       // Restart
       // -------
       if (shouldRestart) {
+        args.__watchdog.phase = "stop";
         // STOP
         // ----
         if (isDef(args.execToStop)) {
@@ -200,6 +214,15 @@ jobs:
           }
         }
 
+        if (isDef(args.jobToNotify)) {
+          try {
+            oJobRunJob(args.jobToNotify, args);
+          } catch(e) {
+            logErr("Found problem while trying to notify executing job '" + args.jobToNotify + "' (" + String(e) + ")");
+            throw e;
+          }
+        }
+
         if (isDef(args.waitAfterStop)) {
            if (!args.quiet) { log("Waiting after stop for " + args.waitAfterStop + "ms"); }
            sleep(args.waitAfterStop);
@@ -207,6 +230,7 @@ jobs:
 
         // START
         // ----- 
+        args.__watchdog.phase = "start";
         if (isDef(args.execToStart)) {
           try {
             args.__watchdog.execToStart = af.eval(args.execToStart);
@@ -248,6 +272,14 @@ jobs:
           sleep(args.waitAfterStart);
         }
 
+        if (isDef(args.jobToNotify)) {
+          try {
+            oJobRunJob(args.jobToNotify, args);
+          } catch(e) {
+            logErr("Found problem while trying to notify executing job '" + args.jobToNotify + "' (" + String(e) + ")");
+            throw e;
+          }
+        }
       }
 
 #todo:
