@@ -470,7 +470,7 @@ The job "HTTP service" expects:
 |----------|------|-----------|-------------|
 | port | Number | No | The port number where to assign the HTTP(s) server (defaults to 8091) |
 | uri | String | No | The URI where the HTTP(s) service will be available. |
-| execURI | String | Yes | The code to execute whenever the uri is requested. The code is inclused into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
+| execURI | String | Yes | The code to execute whenever the uri is requested. The code is included into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
 
 Example:
 ````yaml
@@ -558,10 +558,10 @@ The job "REST service" expects:
 |----------|------|-----------|-------------|
 | port | Number | No | The port number where to assign the HTTP(s) server (defaults to 8091) |
 | uri | String | No | The URI where the HTTP(s) service will be available. |
-| execGET | String | Yes | The code to execute whenever the uri is requested with a GET verb. The code is inclused into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
-| execPOST | String | Yes | The code to execute whenever the uri is requested with a POST verb. The code is inclused into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
-| execPUT | String | Yes | The code to execute whenever the uri is requested with a PUT verb. The code is inclused into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
-| execDELETE | String | Yes | The code to execute whenever the uri is requested with a DELETE verb. The code is inclused into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
+| execGET | String | Yes | The code to execute whenever the uri is requested with a GET verb. The code is included into a function that receives the argument: idxs. "idxs" is a map containing all the parameters from the URL. |
+| execPOST | String | Yes | The code to execute whenever the uri is requested with a POST verb. The code is included into a function that receives the arguments: idxs and data. "idxs" is a map containing all the parameters from the URL. "data" is a map containing all the parameters passed on the request body. |
+| execPUT | String | Yes | The code to execute whenever the uri is requested with a PUT verb. The code is included into a function that receives the arguments: idxs and data. "idxs" is a map containing all the parameters from the URL. "data" is a map containing all the parameters passed on the request body. |
+| execDELETE | String | Yes | The code to execute whenever the uri is requested with a DELETE verb. The code is included into a function that receives the argument: idxs. "idxs" is a map containing all the parameters from the URL. |
 | returnWithParams | Boolean | No | Changes the behaviour of the return of each exec* function to use a map to force mimetype, http code, etc. (see help ow.server.rest.reply for more details) |
 
 ## oJobOPack
