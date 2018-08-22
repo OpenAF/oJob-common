@@ -67,10 +67,10 @@ jobs:
   
         __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
           return ress = ow.server.rest.reply(args.uri, r, 
-            af.eval("(function(idxs, data) { " + args.execPOST + " })"),
-            af.eval("(function(idxs) { " + args.execGET + " })"),
-            af.eval("(function(idxs, data) { " + args.execPUT + " })"),
-            af.eval("(function(idxs) { " + args.execDELETE + " })"),
+            af.eval("(function(idxs, data, request) { " + args.execPOST + " })"),
+            af.eval("(function(idxs, request) { " + args.execGET + " })"),
+            af.eval("(function(idxs, data, request) { " + args.execPUT + " })"),
+            af.eval("(function(idxs, request) { " + args.execDELETE + " })"),
             args.returnWithParams
            );
         };
