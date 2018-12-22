@@ -25,13 +25,14 @@ bugs:
   url: 'https://github.com/OpenAF/oJob-common/issues'
 repository:
   type: http
-  url: 'https://raw.githubusercontent.com/OpenAF/oJob-common/master'
+  backurl: 'https://raw.githubusercontent.com/OpenAF/oJob-common/master'
+  url: 'https://openaf.io/opacks/oJob-common.opack'
 description: A set of base oJobs as common building blocks for custom oJobs.
 name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20180822'
+version: '20181221'
 dependencies:
   openaf: '>=20180527'
 files:
@@ -70,4 +71,4 @@ filesHash:
   oJobSVN.yaml: ecfed00a4fa11b50ebf601168ac1251f7de29bfa
   oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
   oJobWatchDog.yaml: 3774f4bae284b0b14000a649ea0312efe610cbef
-  README.md: 0be9c33f4716b402275da1b427970b26708bddb5
+  README.md: 3248baaf4d65fd9833dc991201dd5c4bb0b24425

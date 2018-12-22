@@ -673,6 +673,9 @@ ojob:
   unique      :
     pidFile     : /some/path/watchdog.pid
     killPrevious: false
+  checkStall  :
+    everySeconds    : 1
+    killAfterSeconds: 60
 
 jobs:
   - name: Watch my logya daemon
