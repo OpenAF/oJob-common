@@ -472,6 +472,14 @@ The job "HTTP service" expects:
 | uri | String | No | The URI where the HTTP(s) service will be available. |
 | execURI | String | Yes | The code to execute whenever the uri is requested. The code is included into a function that receives the arguments: request and server. "request" is a map containing all the request properties. "server" is the HTTPServer object for which you should use replyOKText, replyOKJSON, etc. |
 
+The job "HTTP File Browse" expects:
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| port | Number | No | The port number where to assign the HTTP(s) server (defaults to 8091) |
+| uri | String | No | The URI where the HTTP(s) service will be available. |
+| path | String | Yes | The canonical path to the file path that will be made available for browsing. |
+
 Example:
 ````yaml
 include:
