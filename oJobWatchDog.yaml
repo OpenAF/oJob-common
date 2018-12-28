@@ -29,6 +29,7 @@ jobs:
       - checks.log.fileRE   (String)   Checks for files matching fileRE choosing the latest by modified date.
       - checks.log.stringRE (Array)    Array of regular expressions strings to look for. If found assumes a restart is needed.
       - checks.log.histFile (String)   The file where to store the history of findings on the file to avoid duplicate findings.
+      - checks.log.olderMin (Number)   Checks if the latest log file (fileRE) by modified date is older than x minutes.
 
       - checks.custom.exec  (String)   Executes the corresponding code in a function and passes if returns true or fails assuming a restart is needed if returns false.
       - quiet               (Boolean)  If true will only produce logging if something is not right (default is true)
@@ -109,12 +110,23 @@ jobs:
 
       // Check log file
       // --------------
-      if (isDef(args.checks.log) && isDef(args.checks.log.fileRE) && isDef(args.checks.log.histFile) && isDef(args.checks.log.folder)) {
+      if (isDef(args.checks.log) && 
+          isDef(args.checks.log.fileRE) && 
+          isDef(args.checks.log.histFile) && 
+          isDef(args.checks.log.folder) &&
+          isDef(args.checks.log.olderMin)) {
         try {
           if (isString(args.checks.log.stringRE)) args.checks.log.stringRE = [ args.checks.log.stringRE ];
 
           if (!args.quiet) log("Checking log file at " + args.checks.log.folder + " for patterns like '" + args.checks.log.stringRE.join("', ''") + "'...");
           var f = $from(io.listFiles(args.checks.log.folder).files).match("filename", args.checks.log.fileRE).max("lastModified");
+
+          if (isDef(args.checks.log.olderMin) && ow.loadFormat().dateDiff.inMinutes(new Date(f.lastModified), new Date()) > args.checks.log.olderMin) {
+            args.__watchdog.shouldRestart = true;
+            args.__watchdog.checks.logOlderMin = new Date(f.lastModified);
+            logWarn("Log is older than " + args.checks.log.olderMin + " minutes (" + new Date(f.lastModified) + ")");
+          }
+
           var history;
           if (io.fileExists(args.checks.log.histFile)) {
             history = io.readFile(args.checks.log.histFile);

@@ -648,6 +648,7 @@ Expects:
 | checks.log.fileRE | String | No | Checks for files matching fileRE choosing the latest by modified date. |
 | checks.log.stringRE | String | No | Array of regular expressions strings to look for. If found assumes a restart is needed. |
 | checks.log.histFile | String | No | The file where to store the history of findings on the file to avoid duplicate findings. |
+| checks.log.olderMin | Number | No | Checks if the latest log file (fileRE) by modified date is older than x minutes and if yes assumes it needs to be restarted. | 
 | checks.custom.exec | String | No | Executes the corresponding code in a function and passes if returns true or fails assuming a restart is needed if returns false. |
 | quiet | Boolean | No | If true will only produce logging if something is not right (default is true) |
 | cmdToStop | String | No | If defined will execute the command on the stop event. |
