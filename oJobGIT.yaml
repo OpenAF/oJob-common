@@ -1,0 +1,47 @@
+# GIT oJob functionality
+# Author: Nuno Aguiar
+
+jobs:
+  - name: GIT Copy Repository
+    help: >
+      Will copy a GIT repository files. Expects:
+         - gittarget (String)  The GIT repository files copy target folder.
+         - giturl    (String)  The GIT repository url.
+         - gittemp   (String)  The temporary folder to clone the GIT repository (defaults to gittarget + ".tmp").
+         - gitbranch (String)  The specific branch to checkout (defaults to master).
+         - gituser   (String)  The GIT remote repository user (can be encrypted).
+         - gitpass   (String)  The GIT remote repository pass (can be encrypted).
+    exec: |
+      var target    = _$(args.gittarget).$_("You need to specify a git target folder (gittarget)");
+      var giturl    = _$(args.giturl).$_("You need to provide a giturl");
+      var temp      = _$(args.gittemp).default(target + ".tmp");
+      var gitbranch = _$(args.gitbranch).default(void 0);
+      var gituser   = _$(args.gituser).default(void 0);
+      var gitpass   = _$(args.gitpass).default(void 0);
+
+      log("Checking temp and target folders...");
+      io.mkdir(target);
+      io.mkdir(temp);
+      if (io.fileExists(temp + "/.git")) {
+        logErr("The temp folder can't have an active GIT repository.");
+        throw "The temp folder can't have an active GIT repository.";
+      }
+
+      plugin("GIT");
+      try {
+        var git = new GIT();
+
+        log("Retriving '" + giturl + "' to '" + temp + "' temporary folder...");
+        git.clone(giturl, temp, false, gitbranch, gituser, gitpass);
+
+        log("Preparing target folder '" + target + "'...");
+        io.rm(target);
+        io.rm(temp + "/.git");
+        io.mv(temp, target);
+
+        log("Repository copy done.");
+      } catch(e) {
+        logErr("Problem copying repository: " + String(e));
+      } finally {
+        io.rm(temp);
+      }

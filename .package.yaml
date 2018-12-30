@@ -10,6 +10,7 @@ keywords:
   - SQL
   - SSH
   - SVN
+  - GIT
   - Test
   - Net
   - Debug
@@ -48,6 +49,7 @@ files:
   - oJobWatchDog.yaml
   - oJobNet.yaml
   - oJobRAID.yaml
+  - oJobGIT.yaml
   - oJobES.yaml
   - README.md
   - oJobSSH.yaml
@@ -66,6 +68,7 @@ filesHash:
   oJobWatchDog.yaml: 57145af5a98ec6767361f57916cd6b568e13bfa2
   oJobNet.yaml: a744fb83a9430ca9e34356bede5b0df8f2d48367
   oJobRAID.yaml: b4916cff81119a9e626c735abd6426964cdfc17c
+  oJobGIT.yaml: 041aa8c4b393d2285a6b765e1ad5d76f59e2f10f
   oJobES.yaml: 0d5e7ba5181f3344490aab6c42466c9189986812
   README.md: ffe7829b50a3b9a41decb486b5cea4afe489ecbf
   oJobSSH.yaml: c4270459c52d876181a74ee843ab99bed1c34fd7
