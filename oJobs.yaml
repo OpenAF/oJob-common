@@ -6,9 +6,11 @@ include:
    - oJobWAF.yaml
    - oJobHBS.yaml
    - oJobRest.yaml
+   - oJobGIT.yaml
    - oJobSVN.yaml
    - oJobES.yaml
    - oJobSQL.yaml
    - oJobOPack.yaml
    - oJobNet.yaml
    - oJobHTTPd.yaml
+   - oJobWatchDog.yaml

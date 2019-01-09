@@ -21,6 +21,7 @@ Check the documentation for each:
 | oJobBasics jobs |
 |-----------------|
 | [oJob sh](#ojob-sh) |
+| [oJob background processes](#ojob-background-processes) |
 | [oJob From global](#ojob-from-global) |
 | [oJob Args from JSON](#ojob-args-from-json) |
 | [oJob Args from YAML](#ojob-args-from-yaml) |
@@ -88,6 +89,44 @@ todo:
   - Example Echo 123
   - Example with multiple commands
   - Example to parse output
+````
+
+### oJob background processes
+
+These jobs will run a command in background and wait for all to finish if needed. oJob Process Launch expects:
+
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| cmd | String/Array | Yes | The command to execute (or an array of commands) in background. |
+| console | Boolean | No | Defines if stdout/stderr should be printed or not (defaults to true) |
+| success | String | No | Code to execute as a function in case of success. Receives a "res" map from executing a sh function. |
+| error | String | No | Code to execute as a function in case of error. Receives a "e" exception and a "cmd" with the original cmd argument. |
+
+Example:
+
+````yaml
+include:
+  - oJobBasics.yaml
+
+todo:
+  - Launch proc 1
+  - Launch proc 2
+  - oJob Process Wait
+
+jobs:
+  - name: Launch proc 1
+    to  :
+      - oJob Process Launch
+    args:
+      cmd    : "myProc1.sh"
+      success: "log(stringify(res, void 0, ''));"
+
+  - name: Launch proc 2
+    to  :
+      - oJob Process Launch
+    args:
+      cmd : "myProc2.sh"
 ````
 
 ### oJob From global

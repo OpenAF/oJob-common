@@ -213,6 +213,40 @@ jobs:
         if (res.exitcode != args.exitcode) throw "Exit code: " + res.exitcode;
       }
 
+  # oJob Launch process
+  #
+  - name: oJob Process Launch
+    help: >
+      Launches a process in background.
+
+        cmd     (String)  The command to launch the process (mandatory)
+        console (Boolean) Defines if stdout/stderr should be printed or not (defaults to true)
+        success (String)  Code to execute as a function in case of success. Receives a "res" map from executing a sh function.
+        error   (String)  Code to execute as a function in case of error. Receives a "e" exception and a "cmd" with the original cmd argument.
+
+    exec: |
+      global.__ojobProc = _$(global.__ojobProc).isArray("Global __ojobProc needs to be an array.").default([]);
+
+      _$(args.cmd).isString("args.cmd needs to be a string.").$_("A args.cmd needs to be defined.");
+      args.console  = _$(args.console).isBoolean("args.console needs to be a boolean.").default(true);
+      args.success  = _$(args.success).isString("args.success needs to be a string.").default(void 0);
+      args.error    = _$(args.error).isString("args.error needs to be a string.").default("logErr(\"Process error '\" + cmd + \"': \" + String(e))");
+
+      global.__ojobProc.push($do((s, f) => {
+          var res = sh(args.cmd, void 0, void 0, args.console, void 0, true);
+          if (isDef(args.success)) (new Function("res", args.success))(res);
+      }).catch((e) => {
+          if (isDef(args.error)) (new Function("e", "cmd", args.error))(e, args.cmd);
+      }));
+
+  # oJob Process Wait
+  #
+  - name: oJob Process Wait
+    help: >
+      Waits for the background launched processes.
+    exec: |
+      $doWait($doAll(global.__proc));
+
   ## ------------
   ## oJob Logging
   ## ------------
