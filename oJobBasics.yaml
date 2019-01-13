@@ -245,7 +245,7 @@ jobs:
     help: >
       Waits for the background launched processes.
     exec: |
-      $doWait($doAll(global.__proc));
+      $doWait($doAll(global.__ojobProc));
 
   ## ------------
   ## oJob Logging
