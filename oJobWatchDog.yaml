@@ -89,7 +89,7 @@ jobs:
         }
 
         if (isUnDef(args.execToStop) && isUnDef(args.cmdToStop)) {
-          args.execToStop = "pidKill(io.readFileString('" + args.checks.pid.file + "'), true);";
+          if (io.fileExists(args.checks.pid.file)) args.execToStop = "pidKill(io.readFileString('" + args.checks.pid.file + "'), true);";
         }
       }
 
