@@ -68,7 +68,7 @@ jobs:
           if (!args.quiet) log("Checking pid '" + args.checks.pid.file + "'");
 
           if (io.fileExists(args.checks.pid.file)) {
-            var r = pidCheck(io.readFileString(args.checks.pid.file));
+            var r = pidCheck(io.readFileString(args.checks.pid.file).replace(/^(\d+)[.\n\r]*/mg, "$1"));
             args.__watchdog.checks.pid = r;
             if (r) {
               running = true;
