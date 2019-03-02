@@ -63,7 +63,7 @@ filesHash:
   oJobES.yaml: 0d5e7ba5181f3344490aab6c42466c9189986812
   oJobGIT.yaml: 041aa8c4b393d2285a6b765e1ad5d76f59e2f10f
   oJobHBS.yaml: f314f109494e64e5ef5b24483a96ec59d54d6c11
-  oJobHTTPd.yaml: 3d5778891a633caddea9850c1b0907cda8252eb2
+  oJobHTTPd.yaml: 944c2fc70c8c1a47c1717cf49011005fa375f20f
   oJobNet.yaml: a744fb83a9430ca9e34356bede5b0df8f2d48367
   oJobOPack.yaml: cd9542c6720f38758af1512060be295a8e608184
   oJobRAID.yaml: b4916cff81119a9e626c735abd6426964cdfc17c
@@ -74,4 +74,4 @@ filesHash:
   oJobSVN.yaml: ecfed00a4fa11b50ebf601168ac1251f7de29bfa
   oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
   oJobWatchDog.yaml: 75bc668d850e8f66a1fe1155dca11879295820d2
-  README.md: ce83ac822715e3e2ef15dff22da6369ac643f7da
+  README.md: fd6b1c5f6780bca472e574e78b8d2670d2e12a87

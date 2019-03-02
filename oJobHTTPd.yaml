@@ -85,7 +85,7 @@ jobs:
      deps:
         - HTTP Start Server
      help: >
-        Provides a HTTP file browse definition. The expected arguments are:
+        Provides a classical HTTP file browse definition. The expected arguments are:
            - args.port  (Number) The port where the server was made available (default is 8091)
            - args.uri   (String) The URI where the HTTP File Browse will be available.
            - args.path  (String) The canonical path (real path) to the folder that contains the file to be browsed.
@@ -102,6 +102,12 @@ jobs:
      deps:
         - HTTP Start Server
      to  : HTTP Service
+     help: >
+        Provides a HTTP file browse definition. The expected arguments are:
+           - args.port   (Number) The port where the server was made available (default is 8091)
+           - args.uri    (String) The URI where the HTTP File Browse will be available.
+           - args.path   (String) The canonical path (real path) to the folder that contains the file to be browsed.
+           - args.browse (String) If "false" no browsing interface is included.
      args: 
        execURI   : |
          var shouldBrowse = global.__MHTTPD[String(port) + uri].BROWSE;

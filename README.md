@@ -1,7 +1,7 @@
 # oJob-common
 A set of base oJobs as common building blocks for custom oJobs.
 
-Check the documentation for each:
+Check the documentation for some of them:
 
 | oJob-common | Description |
 | ----------- | ----------- |
@@ -484,6 +484,7 @@ It's composed of 3 jobs:
 * HTTP Start Server
 * HTTP Stop Server
 * HTTP Service
+* HTTP File Browse
 
 The job "HTTP Start Server" expects: 
 
@@ -518,6 +519,7 @@ The job "HTTP File Browse" expects:
 | port | Number | No | The port number where to assign the HTTP(s) server (defaults to 8091) |
 | uri | String | No | The URI where the HTTP(s) service will be available. |
 | path | String | Yes | The canonical path to the file path that will be made available for browsing. |
+| browse | String | No | If "false" no browsing interface will be included. |
 
 Example:
 ````yaml
@@ -542,6 +544,13 @@ jobs:
       uri    : /echo
       execURI: return server.replyOKJSON(stringify(request));
  
+  - name: Browser
+    to  : HTTP File Browse
+    args:
+      port: 8080
+      uri : /browser
+      path: .
+
   - name: README
     to  : HTTP Service
     args:
@@ -570,6 +579,9 @@ todo:
 
   # Sets that /README shows this README.md file
   - README
+
+  # Sets that /browser shows a simple browse interface for the current directory.
+  - Browser
 ````
 
 ## oJobREST
