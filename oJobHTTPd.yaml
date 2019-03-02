@@ -76,12 +76,12 @@ jobs:
         args.uri     = _$(args.uri).isString().default("/");
 
         __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
-           return (new Function("var request = arguments[0]; var server = __pmIn.__ojobHttp[" + args.port + "]; " + args.execURI))(r);
+           return (new Function("var request = arguments[0]; var server = __pmIn.__ojobHttp[" + args.port + "]; var port = " + String(args.port) + "; var uri = '" + args.uri + "'; " + args.execURI))(r);
         };
 
-   # Defines a HTTP file browse
+   # Defines a classic HTTP file browse
    #
-   - name: HTTP File Browse
+   - name: HTTP Classical File Browse
      deps:
         - HTTP Start Server
      help: >
@@ -95,3 +95,76 @@ jobs:
         _$(args.path).isString().$_("You need to provide a path.");
 
         __pmIn.__ojobHttp[args.port].addFileBrowse(args.uri, args.path);
+
+   # Defines a HTTP file browse
+   #
+   - name: HTTP File Browse
+     deps:
+        - HTTP Start Server
+     to  : HTTP Service
+     args: 
+       execURI   : |
+         var shouldBrowse = global.__MHTTPD[String(port) + uri].BROWSE;
+         var path         = global.__MHTTPD[String(port) + uri].PATH;
+         var tmplb        = global.__MHTTPD[String(port) + uri].TMPLB;
+         var tmplh        = global.__MHTTPD[String(port) + uri].TMPLH;
+
+         var content = "";
+         var puri = String(request.uri).replace(new RegExp("^" + uri), (uri == "/" ? "" : "/")).replace(/\/+/g, "/");
+         var furi = String((new java.io.File(new java.io.File(String((new java.io.File(path + "/" + puri)).getCanonicalFile()).replace(/\\+/g, "/")))));
+
+         var finfo;
+         try { 
+            finfo = io.fileInfo(furi);
+         } catch(e) {
+            return server.replyOKHTML("");
+         }
+         
+         if (finfo.isDirectory) { 
+            if (shouldBrowse) {
+               content += tmplh({ puri: (puri == "" ? "/" : puri) });
+               content += "| Filename | Last modified | Size | Size in bytes |\n";
+               content += "|----------|:-------------:|-----:|--------------:|\n";
+               if (puri != "/" && puri != "") 
+                 content += "| __[..](" + uri + puri.replace(/[^\/]+\/$/, "") + ")__ | | |\n";
+
+               var theList = $from(io.listFiles(furi).files).sort("-isDirectory", "filename").select((f) => {
+               return merge(f, {
+                  fLastModified: ow.format.fromDate(new Date(f.lastModified), 'yyyy-MM-dd HH:mm:ss'),
+                  fSize        : ow.format.toBytesAbbreviation(f.size),
+                  puri         : puri,
+                  uri          : uri
+               });
+               });
+               content += tmplb(theList);
+            }
+         } else {
+            if (request.uri.endsWith(".md")) {
+               return ow.server.httpd.replyFileMD(server, path, uri, request.uri); 
+            } else {
+               return ow.server.httpd.replyFile(server, path, uri, request.uri);
+            }
+         }
+         
+         if (shouldBrowse)
+            return server.replyOKHTML(ow.template.parseMD2HTML(content, true));
+         else
+            return server.replyOKHTML("");
+
+     exec: |
+       ow.loadTemplate(); ow.loadFormat();
+
+       var temph = _$(args.templateHead).isString().default("## {{puri}}<img align=\"right\" src=\"/fonts/openaf_small.png\">\n");
+       var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}__[{{filename}}/]({{uri}}{{puri}}{{filename}}/)__ | {{fLastModified}} | | {{else}} [{{filename}}]({{uri}}{{puri}}{{filename}}) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}");
+
+       args.uri  = _$(args.uri).isString().default("/");
+       args.path = _$(args.path).isString().default("."); 
+
+       global.__MHTTPD = _$(global.__MHTTPD).isMap().default({});
+       global.__MHTTPD[String(args.port) + args.uri] = {
+         BROWSE: _$(args.browse).isString().default("true") === 'true',
+         PATH  : String( (new java.io.File( args.path )).getCanonicalPath() ),
+         TMPLB : ow.template.execCompiled(ow.template.compile(templ)),
+         TMPLH : ow.template.execCompiled(ow.template.compile(temph))
+       };
+         
