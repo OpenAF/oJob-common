@@ -86,10 +86,18 @@ jobs:
       print("STDERR   = " + args.stderr);
       print("EXITCODE = " + args.exitcode);
 
+  # Example to prepare cmd
+  #
+  - name: Example to prepare cmd
+    to  : oJob sh
+    exec: |
+      args.cmd = "echo " + new Date();
+
 todo:
   - Example Echo 123
   - Example with multiple commands
   - Example to parse output
+  - Example to prepare cmd
 ````
 
 ### oJob background processes
