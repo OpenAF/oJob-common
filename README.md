@@ -26,6 +26,7 @@ Check the documentation for some of them:
 | [oJob Args from JSON](#ojob-args-from-json) |
 | [oJob Args from YAML](#ojob-args-from-yaml) |
 | [oJob Send email](#ojob-send-email) |
+| [oJob Jobs Report](#ojob-jobs-report) |
 
 ### oJob sh
 
@@ -210,6 +211,28 @@ jobs:
 
 todo:
   - Send email test
+````
+
+### oJob Jobs Report
+
+This job prints a job execution report on shutdown.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| format | String | No | Output in json, yaml or table format (defaults to table) |
+
+**Note:** you can also use the job "oJob Jobs Final Report" to output the report on shutdown.
+
+````yaml
+include:
+  - oJobBasics.yaml
+
+jobs:
+  # some jobs
+
+todo:
+  - oJob Jobs Final Report
+  # some todos
 ````
 
 ## oJobSSH

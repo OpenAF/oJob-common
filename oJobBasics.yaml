@@ -261,3 +261,39 @@ jobs:
          $from(ow.oJob.getLogCh().getAll()).equals("name", args.name).select()
         )
       ));
+
+  # Display report
+  - name        : oJob Jobs Report
+    help: >
+      Outputs a jobs report (e.g. job name, status, number of executions, total time, avg time and last execution)
+
+        format  (String)  Can be json, yaml or table (default)
+
+    exec        : |
+      ow.loadFormat(); print("\n");
+      var report = $from($ch("oJob::log").getAll())
+        .notEquals("name", "oJob Jobs Report")
+        .notEquals("name", "oJob Jobs Final Report")
+        .select((r) => {
+        return {
+          "Job name"  : r.name,
+          "Status"    : (r.start ? (r.success ? "OK" : (r.deps ? (r.error ? "NOT OK!" : "executing") : "failed deps")) : "not started"),
+          "# execs"   : r.count,
+          "Total time": r.totalTime + " (" + ow.format.elapsedTime4ms(r.totalTime, { abrev: true }) + ")",
+          "Avg time"  : r.avgTime + " (" + ow.format.elapsedTime4ms(r.avgTime, { abrev: true }) + ")",
+          "Last exec" : ow.format.timeago($from(r.log).sort("-endTime").at(0).endTime)
+        }
+      });
+
+      if (isUnDef(args.format)) args.format = "table";
+      switch(args.format) {
+      case "json": sprint(report); break;
+      case "yaml": print(af.toYAML(report)); break;
+      default    : print(printTable(report));
+      }
+  
+  # Same as oJob Jobs Report but on shutdown
+  - name        : oJob Jobs Final Report
+    type        : shutdown
+    exec        : |
+      oJobRunJob("oJob Jobs Report", args);
