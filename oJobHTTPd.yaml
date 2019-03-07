@@ -159,9 +159,10 @@ jobs:
 
      exec: |
        ow.loadTemplate(); ow.loadFormat();
+       ow.template.addHelper("encodeURI", encodeURI);
 
        var temph = _$(args.templateHead).isString().default("## {{puri}}<img align=\"right\" src=\"/fonts/openaf_small.png\">\n");
-       var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}__[{{filename}}/]({{uri}}{{puri}}{{filename}}/)__ | {{fLastModified}} | | {{else}} [{{filename}}]({{uri}}{{puri}}{{filename}}) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}");
+       var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}__[{{filename}}/]({{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}/)__ | {{fLastModified}} | | {{else}} [{{filename}}]({{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}");
 
        args.uri  = _$(args.uri).isString().default("/");
        args.path = _$(args.path).isString().default("."); 
