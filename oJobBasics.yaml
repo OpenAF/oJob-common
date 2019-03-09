@@ -271,7 +271,8 @@ jobs:
 
     exec        : |
       ow.loadFormat(); print("\n");
-      var report = $from($ch("oJob::log").getAll())
+      var logs = $ch("oJob::log").getAll();
+      var report = $from(logs)
         .notEquals("name", "oJob Jobs Report")
         .notEquals("name", "oJob Jobs Final Report")
         .select((r) => {
@@ -279,10 +280,19 @@ jobs:
           "Job name"  : r.name,
           "Status"    : (r.start ? (r.success ? "OK" : (r.deps ? (r.error ? "NOT OK!" : "executing") : "failed deps")) : "not started"),
           "# execs"   : r.count,
-          "Total time": r.totalTime + " (" + ow.format.elapsedTime4ms(r.totalTime, { abrev: true }) + ")",
-          "Avg time"  : r.avgTime + " (" + ow.format.elapsedTime4ms(r.avgTime, { abrev: true }) + ")",
-          "Last exec" : ow.format.timeago($from(r.log).sort("-endTime").at(0).endTime)
+          "Total time": ow.format.elapsedTime4ms(r.totalTime, { abrev: true }),
+          "Avg time"  : ow.format.elapsedTime4ms(r.avgTime, { abrev: true }),
+          "Last exec" : (r.log.length > 0 ? ow.format.timeago($from(r.log).sort("-endTime").at(0).endTime) : "n/a")
         }
+      });
+
+      report.push({
+        "Job name"  : "TOTAL",
+        "Status"    : "",
+        "# execs"   : "",
+        "Total time": ow.format.elapsedTime4ms((now() - $from(logs).sort("createDate").at(0).createDate)),
+        "Avg time"  : "",
+        "Last exec" : ""
       });
 
       if (isUnDef(args.format)) args.format = "table";
