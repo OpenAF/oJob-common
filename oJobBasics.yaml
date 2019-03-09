@@ -295,5 +295,4 @@ jobs:
   # Same as oJob Jobs Report but on shutdown
   - name        : oJob Jobs Final Report
     type        : shutdown
-    exec        : |
-      oJobRunJob("oJob Jobs Report", args);
+    from        : oJob Jobs Report
