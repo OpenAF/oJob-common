@@ -1,0 +1,53 @@
+# oJob Channels functionality
+# Author: Nuno Aguiar
+
+jobs:
+  ###############################
+  - name: oJob Ch Start Buffering
+    help: |
+      Creates a buffering channel between a source and a target channel. Expects:
+
+         source     (String)       The source channel name
+         target     (String)       The target channel name
+         id         (String/Array) A string or array of fields that uniquely identify records on the source and target channels
+         byNumber   (Number)       Limit number of records to buffer (see more in ow.ch.utils.getBufferSubscriber)
+         byTimeInMs (Number)       Limit time in ms to hold records in buffer (see more in ow.ch.utils.getBufferSubscriber)
+         filterFunc (String)       Function to filter what gets buffered or not (see more in ow.ch.utils.getBufferSubscriber)
+         bufferFunc (String)       Function to determine when to flush the buffer (see more in ow.ch.utils.getBufferSubscriber)
+
+      Note: Do use oJob Ch Stop Buffering to ensure proper release of resources.
+    exec: |
+      if (isString(args.id)) args.id = [ args.id ];
+      if (isString(args.filterFunc)) args.filterFunc = new Function(args.filterFunc);
+      if (isString(args.bufferFunc)) args.bufferFunc = new Function(args.bufferFunc);
+
+      if (isUnDef(global.__ojobcommon)) global.__ojobcommon = {};
+      if (isUnDef(global.__ojobcommon.bufferSubs)) global.__ojobcommon.bufferSubs = {};
+      if (isUnDef(global.__ojobcommon.bufferSubs[args.source])) global.__ojobcommon.bufferSubs[args.source] = [];
+
+      global.__ojobcommon.bufferSubs[args.source].push($ch(args.source).subscribe(ow.ch.utils.getBufferSubscriber(args.source, args.id, args.byNumber, args.byTimeInMs, args.target, args.filterFunc, args.bufferFunc)));
+
+  ##############################
+  - name: oJob Ch Stop Buffering
+    help: |
+      Stops buffering between a source and a target channel previously set up by oJob Ch Start Buffering. Expects:
+
+         source     (String)       The source channel name
+         target     (String)       The target channel name
+    exec: |
+      if (isDef(global.__ojobcommon) && isDef(global.__ojobcommon.bufferSubs) && isDef(global.__ojobcommon.bufferSubs[args.source])) {
+        $ch(args.source).unsubscribe(global.__ojobcommon.bufferSubs[args.source]);
+        delete global.__ojobcommon.bufferSubs[args.source];
+      }
+
+      ow.ch.utils.closeBuffer(args.source + "::__bufferTransit");
+
+  #############################
+  - name: oJob Ch Wait For Jobs
+    help: |
+      Waits for the jobs associated with a channel. Expects:
+       
+         name    (String) The channel name
+         timeout (Number) Optionally provide a timeout for the wait in ms 
+    exec: |
+      $ch(args.name).waitForJobs(args.timeout);
