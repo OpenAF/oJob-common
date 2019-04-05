@@ -42,38 +42,60 @@ jobs:
   - name        : SSH Exec
     help        : >
       Executes commands on a SSH connection. The expected arguments are:
-        - args.cmd      (String)   A SSH command-line to execute or and array of it (keep in mind that this isn't bash)
-        - args.stdin    (String)   An optional SSH stdin for the command-line to execute
-        - args.chHosts  (String)   A channel with hosts configurations to use instead of individual config
-        - args.host     (String)   The SSH host
-        - args.port     (Number)   The SSH port (defaults to 22)
-        - args.login    (String)   The SSH login
-        - args.pass     (String)   The SSH pass
-        - args.key      (String)   The path to a SSH key file (optional)
-        - args.exitcode (number)   Determines what exitcode should be consider success (default is 0)
-        - args.sudo     (String)   Sudo's to the corresponding user to executing the command-line
-        - args.quiet    (Boolean)  Determines if no output of the command(s) execution should be provided (default to false)
+        - args.cmd       (String)   A SSH command-line to execute or and array of it (keep in mind that this isn't bash)
+        - args.stdin     (String)   An optional SSH stdin for the command-line to execute
+        - args.chHosts   (String)   A channel with hosts configurations to use instead of individual config
+        - args.host      (String)   The SSH host
+        - args.port      (Number)   The SSH port (defaults to 22)
+        - args.login     (String)   The SSH login
+        - args.pass      (String)   The SSH pass
+        - args.key       (String)   The path to a SSH key file (optional)
+        - args.exitcode  (Number)   Determines what exitcode should be consider success (default is 0)
+        - args.sudo      (String)   Sudo's to the corresponding user to executing the command-line
+        - args.quiet     (Boolean)  Determines if no output of the command(s) execution should be provided (default to false)
+        - args.prefix    (Boolean)  Should use a prefix for each output line if quiet is false (default is false)
+        - args.prefixLog (Boolean)  Determines that the prefix will use log instead of print (default is false)   
+        - args.parallel  (Boolean)  Executes over chHosts in parallel (default is false)
     exec        : >
       plugin("SSH");
+      var iio = !args.quiet;
       if (isUnDef(args.host) && isUnDef(args.chHosts) && $ch().list().indexOf("hosts")) args.chHosts = "hosts";
+      if (isUnDef(args.parallel)) args.parallel = false;
+      if (args.prefix && !args.quiet) {
+        iio = false;
+        ow.loadFormat();
+        if (args.prefixLog) 
+          cmdf = ow.format.streamSHLog((f) => { return args.prefix + " | " + f; });
+        else
+          cmdf = ow.format.streamSH((f) => { return args.prefix + " | " + f; });
+      }
 
       if (isDef(args.chHosts)) {
          args.stdout = "";
          args.stderr = "";
-         $from($ch(args.chHosts).getAll()).select(function(r) {
+         var tfunc = function(r) {
+            var cmdf;
+            if (args.prefix && !args.quiet) {
+              iio = false;
+              ow.loadFormat();
+              if (args.prefixLog) 
+                cmdf = ow.format.streamSHLog((f) => { return (isDef(r.name) ? r.name : r.host + ":" + r.port) + " | " + f; });
+              else
+                cmdf = ow.format.streamSH((f) => { return (isDef(r.name) ? r.name : r.host + ":" + r.port) + " | " + f; });
+            }
             if (isUnDef(r.port)) r.port = 22;
             if (isUnDef(r.stdin)) r.stdin = "";
             if (isUnDef(args.exitcode)) args.exitcode = 0;
 
             var s = new SSH(r.host, r.port, r.login, r.pass, r.key, true);
-            if (!args.quiet) log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "]");
+            if (iio) log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "]");
             if (isArray(args.cmd)) {
                for(var i in args.cmd) {
                  var res;
                  if (!args.sudo) 
-                    res = s.exec(args.cmd[i], args.stdin, !args.quiet, void 0, true);
+                    res = s.exec(args.cmd[i], args.stdin, iio, void 0, true, cmdf);
                  else
-                    res = s.execSudo(args.cmd[i], args.sudo, args.stdin, !args.quiet, void 0, true);
+                    res = s.execSudo(args.cmd[i], args.sudo, args.stdin, iio, void 0, true, cmdf);
                  args.stdout += res.stdout;
                  args.stderr += res.stderr;
                  if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
@@ -81,22 +103,35 @@ jobs:
             } else {
                var res;
                if (!args.sudo)
-                  res = s.exec(args.cmd, args.stdin, !args.quiet, void 0, true);
+                  res = s.exec(args.cmd, args.stdin, iio, void 0, true, cmdf);
                else
-                  res = s.execSudo(args.cmd, args.sudo, args.stdin, !args.quiet, void 0, true);
+                  res = s.execSudo(args.cmd, args.sudo, args.stdin, iio, void 0, true, cmdf);
                args.stdout += res.stdout;
                args.stderr += res.stderr;
                if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd + "'): " + res.exitcode;               
             }
             s.close();
-         })
+         }
+         if (args.parallel) 
+          $from($ch(args.chHosts).getAll()).pselect(tfunc);
+         else
+          $from($ch(args.chHosts).getAll()).select(tfunc);
       } else {
+        var cmdf;
+        if (args.prefix && !args.quiet) {
+          iio = false;
+          ow.loadFormat();
+          if (args.prefixLog) 
+            cmdf = ow.format.streamSHLog((f) => { return (isDef(args.name) ? args.name : args.host + ":" + args.port) + " | " + f; });
+          else
+            cmdf = ow.format.streamSH((f) => { return (isDef(args.name) ? args.name : args.host + ":" + args.port) + " | " + f; });
+        }
         if (isUnDef(args.port)) args.port = 22;
         if (isUnDef(args.stdin)) args.stdin = "";
         if (isUnDef(args.exitcode)) args.exitcode = 0;
 
         var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
-        if (!args.quiet) log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "]");
+        if (iio) log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "]");
         args.stdout = "";
         args.stderr = "";
 
@@ -104,9 +139,9 @@ jobs:
           for (var i in args.cmd) {
             var res;
             if (!args.sudo) 
-              res = s.exec(args.cmd[i], args.stdin, !args.quiet, void 0, true);
+              res = s.exec(args.cmd[i], args.stdin, iio, void 0, true, cmdf);
             else
-              res = s.execSudo(args.cmd[i], args.sudo, args.stdin, !args.quiet, void 0, true);
+              res = s.execSudo(args.cmd[i], args.sudo, args.stdin, iio, void 0, true, cmdf);
             args.stdout += res.stdout;
             args.stderr += res.stderr;
             if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
@@ -114,9 +149,9 @@ jobs:
         } else {
           var res;
           if (!args.sudo)
-            res = s.exec(args.cmd, args.stdin, !args.quiet, void 0, true);
+            res = s.exec(args.cmd, args.stdin, iio, void 0, true, cmdf);
           else
-            res = s.execSudo(args.cmd, args.sudo, args.stdin, !args.quiet, void 0, true); 
+            res = s.execSudo(args.cmd, args.sudo, args.stdin, iio, void 0, true, cmdf); 
           args.stdout += res.stdout;
           args.stderr += res.stderr;
           if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd + "'): " + res.exitcode;

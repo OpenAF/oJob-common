@@ -33,7 +33,7 @@ name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20190313'
+version: '20190404'
 dependencies:
   openaf: '>=20180527'
 files:
@@ -59,7 +59,7 @@ files:
   - README.md
 filesHash:
   LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
-  oJobBasics.yaml: ddca13e0a758fc05320ee4291c559cf25c08c028
+  oJobBasics.yaml: 5d64367ae12b528b8d8140a346a2cc878641a6e6
   oJobCh.yaml: 5f21cc46f4200b5f692bf4034fb4af22c2d7e6fb
   oJobDebug.yaml: 556cf30c9b6108fe9e9228a470a43039b7550a1c
   oJobES.yaml: 0d5e7ba5181f3344490aab6c42466c9189986812
@@ -72,7 +72,7 @@ filesHash:
   oJobRest.yaml: 495cd46622acddccf5b82d08d76a663bb7501ac0
   oJobs.yaml: 64ce5ec5b2e0457d81cf283ba6106eaa6e1a3b3c
   oJobSQL.yaml: e9adfe77c95fc0cf35478c23f5b21bc09dd63e57
-  oJobSSH.yaml: c4270459c52d876181a74ee843ab99bed1c34fd7
+  oJobSSH.yaml: 9a653f0376ce44779e9733de5815643e7e8b263f
   oJobSVN.yaml: ecfed00a4fa11b50ebf601168ac1251f7de29bfa
   oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
   oJobWatchDog.yaml: 75bc668d850e8f66a1fe1155dca11879295820d2

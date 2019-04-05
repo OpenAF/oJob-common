@@ -193,21 +193,33 @@ jobs:
         - args.exitcode  (number)  Determines what exitcode should be consider success (default is 0)
         - args.stderr    (string)  Get's set to the stderr
         - args.stdout    (string)  Get's set to the stdout 
+        - args.prefix    (string)  A prefix for each output line if quiet is false
+        - args.prefixLog (boolean) Determines that the prefix will use log instead of print (default is false)
         
     exec        : |
+      var cmdf, iio = !args.quiet;
       if (isUnDef(args.stdin)) args.stdin = true;
       if (isUnDef(args.exitcode)) args.exitcode = 0;
+      if (isUnDef(args.prefixLog)) args.prefixLog = false;
+      if (isDef(args.prefix) && !args.quiet) {
+        iio = false;
+        ow.loadFormat();
+        if (args.prefixLog) 
+          cmdf = ow.format.streamSHLog((f) => { return args.prefix + " | " + f; });
+        else
+          cmdf = ow.format.streamSH((f) => { return args.prefix + " | " + f; });
+      }
       if (isArray(args.cmd)) {
         args.stdout = "";
         args.stderr = "";
         for(var i in args.cmd) {
-          var res = sh(args.cmd[i], args.stdin, args.timeout, !args.quiet, args.directory, true);
+          var res = sh(args.cmd[i], args.stdin, args.timeout, iio, args.directory, true, cmdf);
           args.stdout += res.stdout
           args.stderr += res.stderr;
           if (res.exitcode != args.exitcode) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
         }
       } else {
-        var res = sh(args.cmd, args.stdin, args.timeout, !args.quiet, args.directory, true);
+        var res = sh(args.cmd, args.stdin, args.timeout, iio, args.directory, true, cmdf);
         args.stdout = res.stdout;
         args.stderr = res.stderr;
         if (res.exitcode != args.exitcode) throw "Exit code: " + res.exitcode;
