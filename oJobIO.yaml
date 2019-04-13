@@ -1,0 +1,89 @@
+# Author: Nuno Aguiar
+
+jobs:
+  ######################
+  - name: IO Append File
+    help: >
+      Appends a line to a file. Expects:
+        - target     (String)        A text file to which the line will be appended.
+        - line       (String/Array)  The line to be appended.
+        - separator  (String)        Optional specify a different separator than '\n'.
+    exec: |
+      _$(args.target).isString().$_("A target needs to be provided.");
+      _$(args.line).$_("A line to be append needs to be provided.");
+      args.separator = _$(args.separator).isString().default("\n");
+
+      if (isDef(args.lines) && isUnDef(args.line)) args.line = args.lines;
+      if (isString(args.line)) args.line = [ args.line ];
+      
+      for(var ii in args.line) {
+        io.writeFileString(args.target, args.line[ii] + args.separator, void 0, true);
+      }
+
+  #########################
+  - name: IO Find & Replace
+    help: >
+      Finds and replaces text on a target. Expects:
+        - target     (String)   The text file to be changed.
+        - search     (String)   The regular expression used for replacing.
+        - flags      (String)   Optional regular expression flags for search.
+        - replace    (String)   The replace text.
+        - separator  (String)   Optional specify a different separator than '\n'.
+        - byline     (Boolean)  If true will load the file to memory as a all and changed it, if false will replace line by line (defaults to true).
+    exec: |
+      _$(args.target).isString().$_("A target needs to be provided.");
+      _$(args.search).isString().$_("A search regexp needs to be provided.");
+      _$(args.replace).isString().$_("A replace regexp needs to be provided.");
+      args.flags     = _$(args.flags).isString().default("");
+      args.separator = _$(args.separator).isString().default("\n");
+      args.byline    = _$(args.byline).isBoolean().default(true);
+
+      if (!args.byline) {
+        var iss = io.readFileString(args.target);
+        iss = iss.replace(new RegExp(args.search, args.flags), args.replace);
+        io.writeFileString(args.target, iss);
+      } else {
+        var is = io.readFileStream(args.target);
+        var os = io.writeFileStream("tmp_" + args.target + ".tmp");
+        ioStreamReadLines(is, (line) => {
+          line += args.separator;
+          ioStreamWrite(os, String(line).replace(new RegExp(args.search, args.flag), args.replace), line.length, false);
+        }, args.separator, false);
+        is.close();
+        os.close();
+        io.mv("tmp_" + args.target + ".tmp", args.target);
+      }
+      
+  ##################
+  - name: IO MV File
+    help: >
+      Moves a source to a target. Expects:
+        - source  (String)  A source to move from.
+        - target  (String)  A target to move to.
+    exec: |
+      _$(args.source).isString().$_("A source to copy from needs to be provided.");
+      _$(args.target).isString().$_("A target to copy to needs to be provided.");
+
+      io.mv(args.source, args.target);
+
+  ##################
+  - name: IO RM File
+    help: >
+      Removes a file or directory recursively. Expects:
+        - filepath  (String)  The filepath (file or directory) to remove.
+    exec: |
+      _$(args.filepath).isString().$_("A filepath is needed to remove (either file or directory).");
+
+      io.rm(args.filepath);
+
+  ##################
+  - name: IO CP File
+    help: >
+      Copies a source to a target. Expects:
+        - source  (String)  A source to copy from.
+        - target  (String)  A target to copy to.
+    exec: |
+      _$(args.source).isString().$_("A source to copy from needs to be provided.");
+      _$(args.target).isString().$_("A target to copy to needs to be provided.");
+
+      io.cp(args.source, args.target);
