@@ -1,0 +1,84 @@
+# XLS oJob functionality
+# Author: Nuno Aguiar
+
+jobs:
+  ##########################
+  - name: oJob XLS Open File
+    help: |
+      Opens a XLSx file to use with other oJob XLS jobs. Expects:
+        - file      (String)  The XLSx to write to.
+        - template  (String)  The XLSx file to use as a template.  
+    exec: |
+      plugin("XLS");
+      ow.loadFormat();
+
+      global.__xls = _$(global.__xls).isObject().default({});
+      args.file = _$(args.file).isString().$_("Please provide a XLSx file.");
+
+      global.__xls[args.file] = new XLS(args.template);
+
+
+  ######################
+  - name: oJob XLS Table
+    help: |
+      Adds an array of objects as a table on a XLS file sheet. Expects:
+        - file        (String)  The XLSx to write to.
+        - sheet       (String)  The sheet name of number.
+        - data        (Array)   The array of objects to add.
+        - position    (Map)     A XLSx position map with column and row ({ row: 1, column: 'A' })
+        - headerStyle (Object)  A map of table header style options (check ow.format.xls.setStyle).
+        - lineStyle   (Object)  A map of table line style options (check ow.format.xls.setStyle)
+        - autoResize  (Boolean) Use 'false' to turn off the default column auto-sizing (default true).
+        - autoFilter  (Boolean) Use 'false' to turn off the default auto filter (default true).
+    exec: |
+      global.__xls = _$(global.__xls).isObject().$_("Please use the 'oJob XLS Open File' job first.");
+      args.file = _$(args.file).isString().$_("Please provide a XLSx file.");
+      args.position = _$(args.position).isMap().default({ row: 1, column: 'A' });
+      args.sheet = _$(args.sheet).default("table");
+      args.data = _$(args.data).isArray().default([]);
+      args.autoResize = _$(args.autoResize).isBoolean().default(true);
+      args.autoFilter = _$(args.autoFilter).isBoolean().default(true);
+
+      args.headerStyle = _$(args.headerStyle).isMap().default({
+        bold: true,
+        fontPoints: 10,
+        wrapText: true,
+        borderBottom: "thick",
+        borderBottomColor: "red"
+      });
+
+      args.lineStyle = _$(args.lineStyle).isMap().default({
+        valign: "top",
+        fontPoints: 10,
+        wrapText: true
+      });
+
+      if (isUnDef(args.position.row) || isUnDef(args.position.column)) throw "Please provide a column and a row on position.";
+
+      if (args.data.length > 0) {
+        var sheet = global.__xls[args.file].getSheet(args.sheet);
+        global.__xls[args.file].setTable(sheet, args.position.column, args.position.row, args.data, ow.format.xls.getStyle(global.__xls[args.file], args.headerStyle), ow.format.xls.getStyle(global.__xls[args.file], args.lineStyle));
+        if (args.autoResize) {
+          for(var ii = 1; ii <= Object.keys(args.data[0]).length; ii++) {
+            global.__xls[args.file].autoSizeColumn(sheet, global.__xls[args.file].toName(ii));
+          }
+        }
+        if (args.autoFilter) {
+          ow.format.xls.autoFilter(sheet, args.position.column + args.position.row + ":" + global.__xls[args.file].toName(Object.keys(args.data[0]).length + global.__xls[args.file].toNumber(args.position.column) - 1) + args.position.row)
+        }
+      }
+
+  ###########################
+  - name: oJob XLS Close File
+    help: |
+      Closes a XLSx file writing it to the filesystem. Expects:
+        - file      (String)  The XLSx to write to.
+    exec: |
+      global.__xls = _$(global.__xls).isObject().$_("Please use the 'oJob XLS Open File' job first.");
+      args.file = _$(args.file).isString().$_("Please provide a XLSx file.");
+
+      if (isUnDef(global.__xls[args.file])) throw "Please open the file '" + args.file + "' first.";
+
+      global.__xls[args.file].writeFile(args.file);
+      global.__xls[args.file].close();
+      delete global.__xls[args.file];
