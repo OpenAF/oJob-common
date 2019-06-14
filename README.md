@@ -6,6 +6,7 @@ Check the documentation for some of them:
 | oJob-common | Description |
 | ----------- | ----------- |
 | [oJobBasics](#ojobbasics) | Basic init/done logging, sh command execution, etc. |
+| [oJobEmail](#ojobemail) | Send emails. |
 | [oJobSSH](#ojobssh) | SSH to execute commands and upload/download files. |
 | [oJobSQL](#ojobsql) | Query or execute SQL to a JDBC database. |
 | [oJobES](#ojobes) | Logging to ElasticSearch |
@@ -164,6 +165,34 @@ This job will load the args map from a YAML file. Expects:
 | file | String | Yes | The filepath to read the YAML file from. |
 | global | String | No | Alternatively load to the global variable specified. |
 
+### oJob Jobs Report
+
+This job prints a job execution report on shutdown.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| format | String | No | Output in json, yaml or table format (defaults to table) |
+
+**Note:** you can also use the job "oJob Jobs Final Report" to output the report on shutdown.
+
+````yaml
+include:
+  - oJobBasics.yaml
+
+jobs:
+  # some jobs
+
+todo:
+  - oJob Jobs Final Report
+  # some todos
+````
+
+## oJobEmail
+
+| oJobEmail jobs |
+|-----------------|
+| [oJob Send email](#ojob-send-email) |
+
 ### oJob Send email
 
 This job tries to send an email. Expects:
@@ -219,28 +248,6 @@ jobs:
 
 todo:
   - Send email test
-````
-
-### oJob Jobs Report
-
-This job prints a job execution report on shutdown.
-
-| Argument | Type | Mandatory | Description |
-|----------|------|-----------|-------------|
-| format | String | No | Output in json, yaml or table format (defaults to table) |
-
-**Note:** you can also use the job "oJob Jobs Final Report" to output the report on shutdown.
-
-````yaml
-include:
-  - oJobBasics.yaml
-
-jobs:
-  # some jobs
-
-todo:
-  - oJob Jobs Final Report
-  # some todos
 ````
 
 ## oJobSSH
