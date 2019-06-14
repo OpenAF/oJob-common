@@ -1,16 +1,20 @@
 include:
    - oJobBasics.yaml
+   - oJobCh.yaml
    - oJobDebug.yaml
-   - oJobSSH.yaml
-   - oJobTest.yaml
-   - oJobWAF.yaml
-   - oJobHBS.yaml
-   - oJobRest.yaml
-   - oJobGIT.yaml
-   - oJobSVN.yaml
+   - oJobEmail.yaml
    - oJobES.yaml
-   - oJobSQL.yaml
-   - oJobOPack.yaml
-   - oJobNet.yaml
+   - oJobGIT.yaml
+   - oJobHBS.yaml
    - oJobHTTPd.yaml
-   - oJobWatchDog.yaml
+   - oJobIO.yaml
+   - oJobNet.yaml
+   - oJobOPack.yaml
+   - oJobRAID.yaml
+   - oJobRest.yaml
+   - oJobSQL.yaml
+   - oJobSSH.yaml
+   - oJobSVN.yaml
+   - oJobTest.yaml
+   - oJobWatchDog.yaml   
+   - oJobXLS.yaml

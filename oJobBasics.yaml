@@ -42,6 +42,93 @@ jobs:
   - name        : oJob Sleep 1s
     exec        : sleep(1000);
     
+  # Print an object as a json
+  - name        : oJob Stringify
+    help        : >
+      This job prints to the console the provided javascript expression. Expects:
+        expr  (String)   A javascript object or expression.
+        min   (Boolean)  Minify the json output
+    exec        : |
+      _$(args.expr).isString().$_("Please provide an expression or object.");
+      args.min = _$(args.min).isBoolean().default(false);
+
+      if (args.min)
+        print(stringify(eval(args.expr), void 0, ""));
+      else
+        sprint(eval(args.expr));
+
+  # Assign an object to a variable
+  - name : oJob Set
+    help : >
+      Assigns a value to a variable. Expects:
+        
+        name  (String)  The global variable name.
+        value (Object)  The value to assign to the variable.
+    exec : |
+      args.value = _$(args.value).default(void 0);
+      _$(args.name).isString().$_("Please provide the variable name.");
+
+      global[args.name] = args.value;
+
+  # Assign a map with path
+  - name : oJob Path Set
+    help : >
+      Assigns a value to a variable on a specific path. Expects:
+        
+        name  (String)  The global variable name.
+        path  (String)  The object path where the variable will be assigned.
+        value (Object)  The value to assign to the variable on the specific object path.
+    exec : |
+      args.value = _$(args.value).default(void 0);
+      args.path = _$(args.path).isString().default(void 0);
+      _$(args.name).isString().$_("Please provide the variable name.");
+
+      ow.loadObj();
+      if (isUnDef(global[args.name])) global[args.name] = {};
+      ow.obj.setPath(global[args.name], args.path, args.value);
+
+  # Print an object as a yaml
+  - name        : oJob YAML
+    help        : >
+      This job prints to the console the provided javascript expression as YAML. Expects:
+        expr  (String)   A javascript object or expression.
+    exec        : |
+      _$(args.expr).isString().$_("Please provide an expression or object.");
+
+      print(af.toYAML(eval(args.expr)).replace(/\n$/mg, ""));
+
+  # Map an array
+  - name        : oJob Map Array
+    help        : >
+      This job sets a variable 'name' from a srcName array of maps remapped with the provided selectors. Expects:
+
+        name      (String)  The global variable name.
+        srcName   (String)  The source variable array or expression.
+        selectors (Array)   Array of object path selectors.
+        limit     (Number)  Optional limit number of array entries to process.
+    exec        : |
+      _$(args.name).isString().$_("Please provide the variable name.");
+      _$(args.srcName).isString().$_("Please provide a source array variable name or expression.");
+      args.selectors = _$(args.selectors).isArray().default([]);
+      args.limit = _$(args.limit).isNumber().default(void 0);
+
+      global[args.name] = mapArray(eval(args.srcName), args.selectors, args.limit);
+
+  # Apply a JMESPath
+  - name        : oJob Map
+    help        : >
+      This job sets a variable 'name' mapped using $path/JMESPath, defined by path, from the variable/expression 'srcName'. Expects:
+
+        name      (String)  The global variable name.
+        srcName   (String)  The source variable array or expression.
+        path      (String)  The $path/JMESPath expression (see help of $path).
+    exec        : |
+      _$(args.name).isString().$_("Please provide the variable name.");
+      _$(args.srcName).isString().$_("Please provide a source array variable name or expression.");
+      args.path = _$(args.path).isString().default("");
+
+      global[args.name] = $path(eval(args.srcName), args.path);
+
   # Set arguments from a global variable
   - name        : oJob From global
     help        : |
