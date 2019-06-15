@@ -46,16 +46,16 @@ jobs:
   - name        : oJob Stringify
     help        : >
       This job prints to the console the provided javascript expression. Expects:
-        expr  (String)   A javascript object or expression.
+        name  (String)   A javascript object or expression.
         min   (Boolean)  Minify the json output
     exec        : |
-      _$(args.expr).isString().$_("Please provide an expression or object.");
+      _$(args.name).isString().$_("Please provide an expression or object.");
       args.min = _$(args.min).isBoolean().default(false);
 
       if (args.min)
-        print(stringify(eval(args.expr), void 0, ""));
+        print(stringify(eval(args.name), void 0, ""));
       else
-        sprint(eval(args.expr));
+        sprint(eval(args.name));
 
   # Assign an object to a variable
   - name : oJob Set
@@ -68,7 +68,7 @@ jobs:
       args.value = _$(args.value).default(void 0);
       _$(args.name).isString().$_("Please provide the variable name.");
 
-      global[args.name] = args.value;
+      eval(args.name + " = args.value");
 
   # Assign a map with path
   - name : oJob Path Set
@@ -91,11 +91,29 @@ jobs:
   - name        : oJob YAML
     help        : >
       This job prints to the console the provided javascript expression as YAML. Expects:
-        expr  (String)   A javascript object or expression.
+        name  (String)   A javascript object or expression.
     exec        : |
-      _$(args.expr).isString().$_("Please provide an expression or object.");
+      _$(args.name).isString().$_("Please provide an expression or object.");
 
-      print(af.toYAML(eval(args.expr)).replace(/\n$/mg, ""));
+      print(af.toYAML(eval(args.name)).replace(/\n$/mg, ""));
+
+  # Sort an array
+  - name        : oJob Sort Array
+    help        : >
+      This job sorts a variable 'srcName' to 'name'. Expects:
+
+        name     (String)  The global variable name.
+        srcName  (String)  The source variable array or expression (defaults to name).
+        reverse  (Boolean) Reverse result (defautls to false).
+    exec        : |
+      _$(args.name).isString().$_("Please provide the variable name.");
+      args.srcName = _$(args.srcName).isString().default(args.name);
+      args.reverse = _$(args.reverse).isBoolean().default(false);
+
+      var arr = eval(args.srcName);
+      _$(arr).isArray("srcName must result into an array.").$_("srcName must result into an array");
+
+      eval(args.name + " = (args.reverse ? arr.sort().reverse() : arr.sort())");
 
   # Map an array
   - name        : oJob Map Array
@@ -112,7 +130,7 @@ jobs:
       args.selectors = _$(args.selectors).isArray().default([]);
       args.limit = _$(args.limit).isNumber().default(void 0);
 
-      global[args.name] = mapArray(eval(args.srcName), args.selectors, args.limit);
+      eval(args.name + " = mapArray(eval(args.srcName), args.selectors, args.limit)");
 
   # Apply a JMESPath
   - name        : oJob Map
@@ -127,7 +145,7 @@ jobs:
       _$(args.srcName).isString().$_("Please provide a source array variable name or expression.");
       args.path = _$(args.path).isString().default("");
 
-      global[args.name] = $path(eval(args.srcName), args.path);
+      eval(args.name + " = $path(eval(args.srcName), args.path)");
 
   # Set arguments from a global variable
   - name        : oJob From global

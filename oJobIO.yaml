@@ -87,3 +87,31 @@ jobs:
       _$(args.target).isString().$_("A target to copy to needs to be provided.");
 
       io.cp(args.source, args.target);
+ 
+  #####################
+  - name: IO List files
+    help: >
+      List files from a local filepath to args.files array. Expects:
+        - path      (String)  The filepath to list files from.
+        - recursive (Boolean) Recursive file list (defaults false)
+    exec: |
+      _$(args.path).isString().$_("Please provide a path.");
+      args.recursive = _$(args.recursive).isBoolean().default(false);
+
+      if (args.recursive) {
+         args.files = io.listFilesRecursive(args.path);
+      } else {
+         args.files = io.listFiles(args.path).files;
+      }
+ 
+  #########################
+  - name: IO List filenames
+    help: >
+      List filenames from a local filepath to args.files array. Expects:
+        - path     (String)  The filepath to list files from.
+        - fullpath (Boolean) Include the fullpath with each file (defaults: true)
+    exec: |
+      _$(args.path).isString().$_("Please provide a path.");
+      args.fullpath = _$(args.fullpath).isBoolean().default(true);
+
+      args.files = io.listFilenames(args.path, args.fullpath);
