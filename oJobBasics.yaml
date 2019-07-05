@@ -253,7 +253,7 @@ jobs:
     exec: |
       global.__ojobProc = _$(global.__ojobProc).isArray("Global __ojobProc needs to be an array.").default([]);
 
-      _$(args.cmd).isString("args.cmd needs to be a string.").$_("A args.cmd needs to be defined.");
+      _$(args.cmd).$_("A args.cmd needs to be defined.");
       args.console  = _$(args.console).isBoolean("args.console needs to be a boolean.").default(true);
       args.success  = _$(args.success).isString("args.success needs to be a string.").default(void 0);
       args.error    = _$(args.error).isString("args.error needs to be a string.").default("logErr(\"Process error '\" + cmd + \"': \" + String(e))");
