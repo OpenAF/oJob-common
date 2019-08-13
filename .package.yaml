@@ -79,7 +79,7 @@ filesHash:
   oJobCh.yaml: 5f21cc46f4200b5f692bf4034fb4af22c2d7e6fb
   oJobSSH.yaml: 9a653f0376ce44779e9733de5815643e7e8b263f
   oJobs.yaml: 83d8406c43b4a5325686467ed80911a9c1e26d49
-  oJobEmail.yaml: 8f2e4ba0027af9b46122e45f2d3aac2c175b6ce1
+  oJobEmail.yaml: 366597e3f42975ed432a5f02b05463fe90415f3b
   oJobXLS.yaml: 97c309095e07e0b7d86c6f1cb9fb383ddf204e6d
   oJobSVN.yaml: ecfed00a4fa11b50ebf601168ac1251f7de29bfa
   oJobRest.yaml: 495cd46622acddccf5b82d08d76a663bb7501ac0
