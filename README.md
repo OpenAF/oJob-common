@@ -233,7 +233,7 @@ useSSL     : true
 sendEmail.yaml
 ````yaml
 include:
-  - oJobBasics.yaml
+  - oJobEmail.yaml
 
 jobs:
   - name: Send email test
