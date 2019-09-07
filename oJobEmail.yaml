@@ -1,6 +1,7 @@
 # oJob Email
 # Author: Nuno Aguiar
 
+jobs:
   ## ------------
   ## Send email
   ## ------------
@@ -27,13 +28,25 @@
         - args.subject        (String)  The email subject (a hbs template using args as data)
         - args.debug          (Boolean) Determines if it should debug the process
     exec       : |
-      if (isString(args.to)) args.to = [ args.to ];
+      if (isString(args.to)) args.to = [ String(args.to) ];
+      if (isString(args.cc)) args.cc = [ args.cc ];
+      if (isString(args.bcc)) args.bcc = [ args.bcc ];
+
+      var cL = (l) => {
+        for(var o in l) {
+          l[o] = String(l[o]);
+        }
+      };
 
       _$(args.server).isString().$_("Please provide an email server.");
       _$(args.from).isString().$_("Please provide a from email address.");
       _$(args.to).isArray().$_("Please provide the to email addresses.");
       _$(args.subject).isString().$_("Please provide a subject.");
       _$(args.output).isString().$_("Please provide an output.");
+
+      cL(args.to);
+      cL(args.cc);
+      cL(args.bcc);
 
       args.cc          = _$(args.cc).isArray().default([]);
       args.bcc         = _$(args.bcc).isArray().default([]);
