@@ -59,18 +59,31 @@ jobs:
            - args.execPUT          (Function) The PUT function. Receives a map of idxs and a data map.
            - args.execDELETE       (Function) The DELETE function. Receives a map of idxs.
            - args.returnWithParams (Boolean)  Use a more detailed return map.
+           - args.error            (Boolean)  If true will return a __error entry in case of exception.
 
         Do ensure that the job 'REST Start Server' gets executed first.
      exec: |
         if (isUnDef(args.port)) args.port = 8091;
         if (isUnDef(args.uri))  args.uri = "/rest";
+        args.error = _$(args.error).default(true);
   
+        var _efn = (s) => {
+           if (args.error) {
+              if (args.returnWithParams)
+                return "try { " + s + " } catch(e) { logErr(String(e)); return { data: { __error: String(e) }, status: 500, mimetype: \"application/json\" } }";
+              else
+                return "try { " + s + " } catch(e) { logErr(String(e)); return { __error: String(e) } }";
+           } else {
+              return s;
+           }
+        };
+
         __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
           return ress = ow.server.rest.reply(args.uri, r, 
-            af.eval("(function(idxs, data, request) { " + args.execPOST + " })"),
-            af.eval("(function(idxs, request) { " + args.execGET + " })"),
-            af.eval("(function(idxs, data, request) { " + args.execPUT + " })"),
-            af.eval("(function(idxs, request) { " + args.execDELETE + " })"),
+            af.eval("(function(idxs, data, request) { " + _efn(args.execPOST) + " })"),
+            af.eval("(function(idxs, request) { " + _efn(args.execGET) + " })"),
+            af.eval("(function(idxs, data, request) { " + _efn(args.execPUT) + " })"),
+            af.eval("(function(idxs, request) { " + _efn(args.execDELETE) + " })"),
             args.returnWithParams
            );
         };

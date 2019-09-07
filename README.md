@@ -660,6 +660,7 @@ The job "REST service" expects:
 | execPUT | String | Yes | The code to execute whenever the uri is requested with a PUT verb. The code is included into a function that receives the arguments: idxs and data. "idxs" is a map containing all the parameters from the URL. "data" is a map containing all the parameters passed on the request body. |
 | execDELETE | String | Yes | The code to execute whenever the uri is requested with a DELETE verb. The code is included into a function that receives the argument: idxs. "idxs" is a map containing all the parameters from the URL. |
 | returnWithParams | Boolean | No | Changes the behaviour of the return of each exec* function to use a map to force mimetype, http code, etc. (see help ow.server.rest.reply for more details) |
+| error | Boolean | No | If true and an error occurs in execGET, execPOST, execPUT or execDELETE will return a map with the exception in a map with a key __error (defaults to true) |
 
 ## oJobOPack
 
