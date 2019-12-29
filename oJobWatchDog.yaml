@@ -186,7 +186,7 @@ jobs:
 
       // Restart
       // -------
-      if (shouldRestart) {
+      if (shouldRestart || (isDef(args.STOP) && args.STOP)) {
         args.__watchdog.phase = "stop";
         // STOP
         // ----
@@ -242,54 +242,56 @@ jobs:
 
         // START
         // ----- 
-        args.__watchdog.phase = "start";
-        if (isDef(args.execToStart)) {
-          try {
-            args.__watchdog.execToStart = af.eval(args.execToStart);
-          } catch(e) {
-            logErr("Found problem while trying to start executing '" + args.execToStart + "' (" + String(e) + ")");
-            throw e;
-          }
-        }
-
-        if (isDef(args.jobToStart)) {
-          try {
-            oJobRunJob(args.jobToStart, args);
-          } catch(e) {
-            logErr("Found problem while trying to start executing job '" + args.jobToStart + "' (" + String(e) + ")");
-            throw e;
-          }
-        }
-
-        if (isDef(args.cmdToStart)) {
-          log("Trying to restart '" + args.cmdToStart + "'");
-          try {
-            var m = sh(args.cmdToStart, "", args.timeoutStart, true, args.workDirStart, true);
-            args.__watchdog.cmdToStart = m;
-            if (isDef(args.exitCodeStart)) {
-              if (m.exitcode != args.exitCodeStart) throw "'" + args.cmdToStart + "'exit code returned was " + m.exitcode;
-            } else {
-              if (m.exitcode != 0) {
-                logWarn("While restarting '" + args.cmdToStart + "' received exit code = " + m.exitcode);
-              } 
+        if (isUnDef(args.STOP) || !args.STOP) {
+          args.__watchdog.phase = "start";
+          if (isDef(args.execToStart)) {
+            try {
+              args.__watchdog.execToStart = af.eval(args.execToStart);
+            } catch(e) {
+              logErr("Found problem while trying to start executing '" + args.execToStart + "' (" + String(e) + ")");
+              throw e;
             }
-          } catch(e) {
-            logErr("Found problem while trying to start '" + args.cmdToStart + "' (" + String(e) + ")");
-            throw e;
           }
-        }
 
-        if (isDef(args.waitAfterStart)) {
-          if (!args.quiet) { log("Waiting after start for " + args.waitAfterStart + "ms"); }
-          sleep(args.waitAfterStart);
-        }
+          if (isDef(args.jobToStart)) {
+            try {
+              oJobRunJob(args.jobToStart, args);
+            } catch(e) {
+              logErr("Found problem while trying to start executing job '" + args.jobToStart + "' (" + String(e) + ")");
+              throw e;
+            }
+          }
 
-        if (isDef(args.jobToNotify)) {
-          try {
-            oJobRunJob(args.jobToNotify, args);
-          } catch(e) {
-            logErr("Found problem while trying to notify executing job '" + args.jobToNotify + "' (" + String(e) + ")");
-            throw e;
+          if (isDef(args.cmdToStart)) {
+            log("Trying to restart '" + args.cmdToStart + "'");
+            try {
+              var m = sh(args.cmdToStart, "", args.timeoutStart, true, args.workDirStart, true);
+              args.__watchdog.cmdToStart = m;
+              if (isDef(args.exitCodeStart)) {
+                if (m.exitcode != args.exitCodeStart) throw "'" + args.cmdToStart + "'exit code returned was " + m.exitcode;
+              } else {
+                if (m.exitcode != 0) {
+                  logWarn("While restarting '" + args.cmdToStart + "' received exit code = " + m.exitcode);
+                } 
+              }
+            } catch(e) {
+              logErr("Found problem while trying to start '" + args.cmdToStart + "' (" + String(e) + ")");
+              throw e;
+            }
+          }
+
+          if (isDef(args.waitAfterStart)) {
+            if (!args.quiet) { log("Waiting after start for " + args.waitAfterStart + "ms"); }
+            sleep(args.waitAfterStart);
+          }
+
+          if (isDef(args.jobToNotify)) {
+            try {
+              oJobRunJob(args.jobToNotify, args);
+            } catch(e) {
+              logErr("Found problem while trying to notify executing job '" + args.jobToNotify + "' (" + String(e) + ")");
+              throw e;
+            }
           }
         }
       }
