@@ -79,7 +79,7 @@ jobs:
   
         if (isDef(args.job) && isDef(args.job) && isDef(args.job.start) && isDef(args.job.end)) {
           if (args.job.start.length > 0 &&
-              args.job.start.length == args.job.end.length &&
+              args.job.start.length >= args.job.end.length &&
               $path(args.job.end, "[] | max(@)") >= $path(args.job.start, "[] | max(@)"))
             itsokay = true;
         } else {
@@ -114,7 +114,7 @@ jobs:
           args.job = $ch(global.oJobCheck.ch).get(merge(global.oJobCheck.stamp, { name: args.jobName, uuid: args.jobUUID }));
           if (isDef(args.job) && isDef(args.job.start) && isDef(args.job.end) &&
               args.job.start.length > 0 &&
-              args.job.start.length == args.job.end.length &&
+              args.job.start.length >= args.job.end.length &&
               $path(args.job.end, "[] | max(@)") >= $path(args.job.start, "[] | max(@)"))
             execOk = true;
           c--;
