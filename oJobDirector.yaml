@@ -1,0 +1,124 @@
+# Direct distributed jobs through a single channel
+# Author: Nuno Aguiar
+
+jobs:
+    #-------------------------
+    - name: oJob Director init
+      help: >
+        Initializes an oJob Director expecting:
+  
+          ch    (String)   An OpenAF channel name (defaults to oJob::check)
+          stamp (Map)      A key and value stamp map (defaults to { type: "director" })
+      exec: |
+        global.oJobCheck = _$(global.oJobCheck, "global oJobCheck").isMap().default({});
+        global.oJobCheck.ch = _$(args.ch).isString().default("oJob::check");
+        global.oJobCheck.stamp = _$(args.stamp).isMap().default({ type: "director" });
+  
+    #----------------------------
+    - name: oJob Director checkin
+      help: >
+        Checks in a specific job with a jobUUID execution (to be used with "from"). Will not execute
+        further job code if the job name and uuid have already been executed.
+  
+          jobName (String) The job generic name
+          jobUUID (String) The job execution uuid
+      from: oJob Director check
+      exec: |
+        _$(args.jobName).$_("Please define a job name.");
+        _$(args.jobUUID, "jobUUID").isString().$_();
+  
+        args.job = $ch(global.oJobCheck.ch).get(merge(global.oJobCheck.stamp, { name: args.jobName, uuid: args.jobUUID }));
+        if (isDef(args.job)) {
+          args.job.start.push(nowUTC());
+        } else {
+          args.job = merge(global.oJobCheck.stamp, {
+            name : args.jobName,
+            uuid : args.jobUUID,
+            start: [ nowUTC() ]
+          })
+        }
+  
+        $ch(global.oJobCheck.ch).set(merge(global.oJobCheck.stamp, { name: args.jobName, uuid: args.jobUUID }), args.job);
+        
+    #-----------------------------
+    - name: oJob Director checkout
+      help: >
+        Checks out a specific job with a jobUUID execution (to be used with "to"):
+  
+          jobName (String) The job generic name
+          jobUUID (String) The job execution uuid
+      from: oJob Director check
+      exec: |
+        _$(args.jobName).$_("Please define a job name.");
+  
+        _$(args.jobUUID, "jobUUID").isString().$_();
+        args.job = $ch(global.oJobCheck.ch).get(merge(global.oJobCheck.stamp, { name: args.jobName, uuid: args.jobUUID }));
+  
+        if (isUnDef(args.job)) {
+          logErr("job '" + args.jobName + "' wasn't previously registered.");
+        } else {
+          if (isUnDef(args.job.end)) {
+            args.job.end = [ nowUTC() ];
+          } else {
+            args.job.end.push(nowUTC());
+          }
+  
+          $ch(global.oJobCheck.ch).set(merge(global.oJobCheck.stamp, { name: args.jobName, uuid: args.jobUUID }), args.job);
+        }
+    
+    #--------------------------
+    - name: oJob Director check
+      help: Used internally by oJob Directory checkin and checkout.
+      from: oJob Director init
+      exec: |
+        _$(args.jobName).$_("Please define a job name.");
+        _$(args.jobUUID, "jobUUID").isString().$_();
+  
+        args.job = $ch(global.oJobCheck.ch).get(merge(global.oJobCheck.stamp, { name: args.jobName, uuid: args.jobUUID }));
+        var itsokay = false;
+  
+        if (isDef(args.job) && isDef(args.job) && isDef(args.job.start) && isDef(args.job.end)) {
+          if (args.job.start.length > 0 &&
+              args.job.start.length == args.job.end.length &&
+              $path(args.job.end, "[] | max(@)") >= $path(args.job.start, "[] | max(@)"))
+            itsokay = true;
+        } else {
+          itsokay = false;
+        }
+  
+        if (itsokay) {
+          logWarn("Job named '" + args.jobName + "' for uuid '" + args.jobUUID + "' has already executed... skipping.");
+          return;
+        }
+  
+    #-------------------------
+    - name: oJob Director wait
+      help: >
+        Waits for a specific job with a jobUUID execution (to be used with "from"). If it timesout waiting
+        it will throw an exception.
+  
+          jobName      (String) The job generic name
+          jobUUID      (String) The job execution uuid
+          jobWaitRetry (Number) Number of retries to check the job execution status (defaults to 40)
+          jobWaitTime  (Number) Time between retries to check the job execution status (defaults to 1500ms)
+      from: oJob Director init
+      exec: |
+        _$(args.jobName).$_("Please define a job name.");
+        _$(args.jobUUID, "jobUUID").isString().$_();
+        args.jobWaitRetry = _$(args.jobWaitRetry).isNumber().default(40);
+        args.jobWaitTime  = _$(args.jobWaitTime).isNumber().default(1500);
+        var execOk = false;
+        
+        var c = args.jobWaitRetry;
+        do {
+          args.job = $ch(global.oJobCheck.ch).get(merge(global.oJobCheck.stamp, { name: args.jobName, uuid: args.jobUUID }));
+          if (isDef(args.job) && isDef(args.job.start) && isDef(args.job.end) &&
+              args.job.start.length > 0 &&
+              args.job.start.length == args.job.end.length &&
+              $path(args.job.end, "[] | max(@)") >= $path(args.job.start, "[] | max(@)"))
+            execOk = true;
+          c--;
+          if (!execOk) sleep(args.jobWaitTime, true);
+        } while(c > 0 && !execOk);
+  
+        if (!execOk) throw "Timeout waiting for job '" + args.jobName + "' for uuid '" + args.jobUUID + "'.";
