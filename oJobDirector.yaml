@@ -68,7 +68,12 @@ jobs:
     
     #--------------------------
     - name: oJob Director check
-      help: Used internally by oJob Directory checkin and checkout.
+      help: >
+        Checks if a specific job with a jobUUID execution has executed or not. If yes, it will warn and return from
+        the current job (to be used with "from"):
+    
+          jobName (String) The job generic name
+          jobUUID (String) The job execution uuid
       from: oJob Director init
       exec: |
         _$(args.jobName).$_("Please define a job name.");
