@@ -1,9 +1,121 @@
 # Author: Nuno Aguiar
 
+global:
+   __oJobRestDocTemplate: &__oJobRestDocTemplate |
+      # {{title}}
+      
+      ## GET
+      
+      {{{docGET.desc}}}
+      
+      {{#with docGET.in}}
+      ### Input
+      | Field | Type | Description |
+      |---|---|---|
+      {{#each this}}
+      |{{field}}|{{type}}|{{description}}|\n
+      {{/each}}
+      {{/with}}
+
+      {{#with docGET.out}}
+      ### Output
+      | Field | Type | Description |
+      |---|---|---|
+      {{#each this}}
+      |{{field}}|{{type}}|{{description}}|
+      {{/each}}
+      {{/with}}
+
+      {{#with docGET.examples}}
+      ### Examples
+      {{{this}}}
+      {{/with}}
+
+      ## POST
+      
+      {{{docPOST.desc}}}
+      
+      {{#with docPOST.in}}
+      ### Input
+      | Field | Type | Description |
+      |---|---|---|
+      {{#each this}}
+      |{{field}}|{{type}}|{{description}}|\n
+      {{/each}}
+      {{/with}}
+      
+      {{#with docPOST.out}}
+      ### Output
+      | Field | Type | Description |
+      |---|---|---|
+      {{#each this}}
+      |{{field}}|{{type}}|{{description}}|
+      {{/each}}
+      {{/with}}
+
+      {{#with docPOST.examples}}
+      ### Examples
+      {{{this}}}
+      {{/with}}
+
+      ## PUT
+      
+      {{{docPUT.desc}}}
+      
+      {{#with docPUT.in}}
+      ### Input
+      | Field | Type | Description |
+      |---|---|---|
+      {{#each this}}
+      |{{field}}|{{type}}|{{description}}|\n
+      {{/each}}
+      {{/with}}
+      
+      {{#with docPUT.out}}
+      ### Output
+      | Field | Type | Description |
+      |---|---|---|
+      {{#each this}}
+      |{{field}}|{{type}}|{{description}}|
+      {{/each}}
+      {{/with}}
+
+      {{#with docPUT.examples}}
+      ### Examples
+      {{{this}}}
+      {{/with}}
+      
+      ## DELETE
+      
+      {{{docDELETE.desc}}}
+      
+      {{#with docDELETE.in}}
+      ### Input
+      | Field | Type | Description |
+      |---|---|---|
+      {{#each this}}
+      |{{field}}|{{type}}|{{description}}|\n
+      {{/each}}
+      {{/with}}
+      
+      {{#with docDELETE.out}}
+      ### Output
+      | Field | Type | Description |
+      |---|---|---|
+      {{#each this}}
+      |{{field}}|{{type}}|{{description}}|
+      {{/each}}
+      {{/with}}
+
+      {{#with docDELETE.examples}}
+      ### Examples
+      {{{this}}}
+      {{/with}}
+
 jobs:
    # Prepares a REST server
    #
-   - name: REST Start Server 
+   - name: REST Start Server
      help: >
         Provides a REST server. The expected arguments are:
            - args.port     (Number)     The port where the server should be made available (default is 8091)
@@ -30,7 +142,11 @@ jobs:
      exec: |
         if (isUnDef(args.port)) args.port = 8091;
 
-        ow.server.httpd.route(__pmIn.__ojobRest[args.port], __pmIn.__ojobRoutes[args.port], function(r) { return hs.reply("", "", 401, {}); });
+        if (isDef(global.__oJobRestDoc)) {
+           ow.server.httpd.route(__pmIn.__ojobRest[args.port], ow.server.httpd.mapRoutesWithLibs(__pmIn.__ojobRest[args.port], __pmIn.__ojobRoutes[args.port]), function(r) { return __pmIn.__ojobRest[args.port].reply("", "", 401, {}); });
+        } else {
+           ow.server.httpd.route(__pmIn.__ojobRest[args.port], __pmIn.__ojobRoutes[args.port], function(r) { return __pmIn.__ojobRest[args.port].reply("", "", 401, {}); });
+        }
         log("READY [" + args.port + "]");
 
    # Stopping the REST server
@@ -46,6 +162,45 @@ jobs:
         delete __pmIn.__ojobRoutes[args.port];
         log("STOPPED [" + args.port + "]");
 
+   # Doc endpoint for a REST service
+   #
+   - name: REST Doc Service
+     deps:
+        - REST Start Server
+     to  : REST Apply Service
+     args:
+      baseTemplate: *__oJobRestDocTemplate
+     help: >
+        Provides a REST documentation service defintion to display the markdown documentation of an URI. The expected arguments are:
+           - args.uri              (String)   The URI where the documentation will be available (defaults to "/docs")
+           - args.port             (Number)   The port for the REST documentation service (defaults to 8091)
+           - args.docURI           (String)   The original URI to which the documentation relates to.
+           - args.docPort          (Number)   The original endpoint port to which the documentation relates to (default to args.port)
+           - args.template         (String)   Use a different ow.template template for documentation (available vars: title, uri, port, docURI, docPort, docGET, docPOST, docPUT and docDELETE (with desc, examples, in and out))
+           - args.title            (String)   The documentation page title (defaults to docURI).
+     exec: |
+        args.uri      = _$(args.uri, "uri").isString().default("/docs");
+        args.port     = _$(args.port, "port").isNumber().default(8091);
+        args.docURI   = _$(args.docURI, "docURI").isString().$_();
+        args.docPort  = _$(args.docPort, "docPort").isNumber().default(args.port);
+        args.title    = _$(args.title, "title").isString().default(args.docURI);
+        args.template = _$(args.template, "template").isString().default(args.baseTemplate);
+
+        __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
+          var templ = templify(args.template, {
+             title  : args.title,
+             uri    : args.uri,
+             port   : args.port,
+             docURI : args.docURI,
+             docPort: args.docPort,
+             docGET    : global.__oJobRestDoc[args.docPort][args.docURI].get,
+             docPOST   : global.__oJobRestDoc[args.docPort][args.docURI].post,
+             docPUT    : global.__oJobRestDoc[args.docPort][args.docURI].put,
+             docDELETE : global.__oJobRestDoc[args.docPort][args.docURI].delete,
+          });
+          return __pmIn.__ojobRest[args.port].replyOKHTML(ow.template.parseMD2HTML(templ, true));
+        };
+
    # Defines a REST service
    #
    - name: REST Service
@@ -55,6 +210,7 @@ jobs:
      help: >
         Provides a REST service definition. The expected arguments are:
            - args.uri              (String)   The URI where the REST service will be available.
+           - args.port             (Number)   The port for the REST service endpoint (defaults to 8091)
            - args.execGET          (Function) The GET function. Receives a map of idxs.
            - args.execPOST         (Function) The POST function. Receives a map of idxs and a data map.
            - args.execPUT          (Function) The PUT function. Receives a map of idxs and a data map.
@@ -63,6 +219,10 @@ jobs:
            - args.error            (Boolean)  If true will return a __error entry in case of exception.
            - args.audit            (Boolean)  Turns request audit logging on (default true)
            - args.auditTemplate    (String)   Provide an audit logging template based on the request argument.
+           - args.docGET           (Map)      Markdown documentation for execGET (desc (string), in and out (arrays of field, type, description))
+           - args.docPOST          (Map)      Markdown documentation for execPOST (desc (string), in and out (arrays of field, type, description))
+           - args.docPUT           (Map)      Markdown documentation for execPUT (desc (string), in and out (arrays of field, type, description))
+           - args.docDELETE        (Map)      Markdown documentation for execDELETE (desc (string), in and out (arrays of field, type, description))
 
         Do ensure that the job 'REST Start Server' gets executed first.
      exec: |
@@ -71,6 +231,18 @@ jobs:
         args.audit = _$(args.audit).default(true);
         args.auditTemplate = _$(args.auditTemplate).default("AUDIT HTTP | {{method}} {{uri}} {{reply.status}} {{{reply.mimetype}}} ({{header.remote-addr}}; {{header.user-agent}})");
         args.error = _$(args.error).default(true);
+
+        if (isDef(args.docGET) || isDef(args.docPOST) || isDef(args.docPUT) || isDef(args.docDELETE)) {
+           if (isUnDef(global.__oJobRestDoc))            global.__oJobRestDoc = {};
+           if (isUnDef(global.__oJobRestDoc[args.port])) global.__oJobRestDoc[args.port] = {};
+
+           global.__oJobRestDoc[args.port][args.uri] = {
+              get   : _$(args.docGET).isMap().default({ desc: "n/a" }),
+              post  : _$(args.docPOST).isMap().default({ desc: "n/a" }),
+              put   : _$(args.docPUT).isMap().default({ desc: "n/a" }),
+              delete: _$(args.docDELETE).isMap().default({ desc: "n/a" })
+           }
+        }
   
         var fn = void 0;
         if (args.audit) {
