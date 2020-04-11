@@ -1,0 +1,123 @@
+# Author: Nuno Aguiar
+
+jobs:
+  # -----------------------
+  - name: oJobManager Init
+    help: >
+      Initializes oJobManager creating the oJobManager-jobs and oJobManager-locks channels. It also
+      provides the function global.oJobManagerLaunchJob(aJobName, aArgs) that enables the launching of
+      containers (include the docker opack to launch in docker). Optionally expects:
+
+        chJobs  (Map) A map with the oJobManager-jobs channel type and corresponding args.
+        chLocks (Map) A map with the oJobManager-locks channel type and corresponding args.
+    exec: |
+      if (isUnDef(global.__oJobManager)) {
+        args.chJobs = _$(args.chJobs, "chJobs").isMap().default({
+          type: "simple",
+          args: {}
+        });
+        args.chLocks = _$(args.chLocks, "chLocks").isMap().default({
+          type: "simple",
+          args: {}
+        });
+        ow.loadServer();
+
+        // Creating channels
+        $ch("oJobManager-jobs").create(1, args.chJobs.type, args.chJobs.args);
+        $ch("oJobManager-locks").create(1, args.chLocks.type, args.chLocks.args);
+
+        global.__oJobManager = {
+          jobList  : [],
+          jobLocks : new ow.server.locks(1, "oJobManager-locks"),
+          startTime: {}
+        };
+
+        global.oJobManagerLaunchJob = function(aJobName, aArgs) {
+          aArgs = _$(aArgs).isMap().default({});
+          ow.oJob.add2Todo({ name: aJobName, args: aArgs });
+        }
+      }
+
+  # ------------------------
+  - name: oJobManager Error
+    help: >
+      Provides the error handling functionality. Should be used directly on a catch property when executing
+      oJobManager Start and oJobManager End.
+    deps: 
+      - oJobManager Job Start
+    exec: |
+      for(var ii in global.__oJobManager.jobList) {
+        var val = $ch("oJobManager-jobs").get({ name: global.__oJobManager.jobList[ii], startTime: global.__oJobManager.startTime[global.__oJobManager.jobList[ii]] });
+
+        // Unlock
+        global.__oJobManager.jobLocks.unlock(global.__oJobManager.jobList[ii]);
+  
+        // Set end info
+        var endt = nowUTC();
+        if (isDef(val)) {
+            val.endTime = endt;
+            val.endDate = new Date(endt);
+            val.inError = true;
+            val.error   = String(args.e);
+
+            $ch("oJobManager-jobs").set({ name: global.__oJobManager.jobList[ii], startTime: global.__oJobManager.startTime[global.__oJobManager.jobList[ii]] }, val);
+        }
+      }
+
+
+  # ----------------------------
+  - name: oJobManager Job Start
+    help: >
+      Check and registers a container job to start. Expects:
+
+        name    (String)  The unique job container name
+        timeout (Number)  The timeout, in ms, of the lock to keep based on the job name (defaults to 1 hour)
+    from: 
+      - oJobManager Init
+    exec: |
+      _$(args.name, "name").isString().$_();
+      args.timeout = _$(args.timeout, "timeout").default(60 * 60 * 1000);
+
+      // Keeps internal array with jobs running
+      global.__oJobManager.jobList.push(args.name);
+
+      // Locks the current job with timeout.
+      var res = global.__oJobManager.jobLocks.lock(args.name, void 0, void 0, args.timeout);
+      if (!res) throw "Can't lock to execute job '" + args.name + "'."; 
+
+      // Records starting job on the jobs channel.
+      global.__oJobManager.startTime[args.name] = nowUTC();
+      $ch("oJobManager-jobs").set({ name: args.name, startTime: global.__oJobManager.startTime[args.name] }, {
+          name     : args.name,
+          startTime: global.__oJobManager.startTime[args.name],
+          startDate: new Date(global.__oJobManager.startTime[args.name]),
+          endTime  : void 0,
+          endDate  : void 0,
+          inError  : false
+      });
+
+  # --------------------------
+  - name: oJobManager Job End
+    help: >
+      Unregisters a container job after ending. Expects:
+
+        name (String) The unique job container name
+    exec: |
+      _$(args.name, "name").isString().$_();
+
+      // Get previous info
+      var val = $ch("oJobManager-jobs").get({ name: args.name, startTime: global.__oJobManager.startTime[args.name] });
+
+      // Unlock
+      global.__oJobManager.jobLocks.unlock(args.name);
+
+      // Set end info
+      var endt = nowUTC();
+      if (isDef(val)) {
+          val.endTime = endt;
+          val.endDate = new Date(endt);
+          val.inError = false;
+      }
+      $ch("oJobManager-jobs").set({ name: args.name, startTime: global.__oJobManager.startTime[args.name] }, val);
+
+      global.__oJobManager.jobList = deleteFromArray(global.__oJobManager.jobList, global.__oJobManager.jobList.indexOf(args.name));
