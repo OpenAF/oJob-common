@@ -20,7 +20,7 @@ jobs:
         if (isUnDef(__pmIn.__ojobRoutes)) __pmIn.__ojobRoutes = {};
         if (isUnDef(args.port)) args.port = 8091;
         if (isDef(args.cp)) af.externalAddClasspath(args.cp);
-        if (isDef(args.keystore)) ks = "/" + args.keystore;
+        if (isDef(args.keystore)) ks = args.keystore;
         args.mapLibs = _$(args.mapLibs).isBoolean().default(false);
 
         if (isUnDef(__pmIn.__ojobHttp[args.port])) __pmIn.__ojobHttp[args.port] = (isDef(args.hs) ? hs : ow.server.httpd.start(args.port, args.host, ks, args.pass));
