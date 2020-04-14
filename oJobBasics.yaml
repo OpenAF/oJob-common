@@ -332,3 +332,19 @@ jobs:
   - name        : oJob Jobs Final Report
     type        : shutdown
     from        : oJob Jobs Report
+
+  # Wrapper for $doA2B
+  - name: oJob A2B
+    help: >
+      Will execute A code providing a function (fn) to send data, in batches, to B code which receives it async as values. Expects:
+
+        A          (String) The function A code that should use the provided parameter "fn" as a function to send batches of data to B
+        B          (String) The function B code that uses the provided parameter "values" to async handle data sent by A
+        numThreads (Number) Optionally provide the number of threads to launch 
+        timeout    (Number) Optionally provide a different safe wait timeout (defaults to 2500 ms)
+    exec: |
+      _$(args.A, "A").$_();
+      _$(args.B, "B").$_();
+
+      $doA2B(new Function("fn", args.A), new Function("valuesk", args.B), args.numThreads, args.timeout);
+
