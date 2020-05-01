@@ -192,6 +192,108 @@ jobs:
       else
         args = merge(args, io.readFileYAML(args.file));
 
+  # ---------------------------
+  - name: oJob Split into items
+    help: |
+      Splits an args source into an array of maps (_list). Expects:
+
+        source    (String)  A object path to the string source to split
+        separator (String)  The separator for the source string (defaults to \n)
+
+      Example:
+
+        a source string with the value "abc, xyz, 1" 
+        + separator = ',' 
+        transforms into:
+
+        - item: abc
+        - item: xyz
+        - item: 1
+    exec: |
+      _$(args.source, "source").isString().$_();
+      args.separator = _$(args.separator, "separator").isString().default("\n");
+
+      ow.loadObj();
+      args._list = String(ow.obj.getPath(args, args.source)).split(args.separator).map(r => {
+        return { item: r };
+      });
+  
+  # ---------------------
+  - name: oJob Print list
+    help: |
+      Prints the current list (args._list).
+    exec: |
+      _$(args._list, "_list").$_("No list found.");
+      print(af.toYAML(args._list));
+
+  # ---------------------
+  - name: oJob Print args
+    help: |
+      Prints the current args. Optionally expects:
+
+        _path (String)  The object path over args.
+    exec: |
+      var r = args;
+      if (isDef(args._path) && isString(args._path)) {
+        ow.loadObj();
+        r = ow.obj.getPath(r, args._path);
+      }
+      print(isMap(r) ? af.toYAML(r) : r);
+
+  # --------------------------
+  - name: oJob Get kept result
+    help: |
+      Retrieves a previously kept result, with OAF Keep result. Optionally expects:
+
+        ojobkeep  (Map)
+          name      (String)  The name of the result that was kept.
+
+    exec: |
+      args.ojobkeep    = _$(args.ojobkeep, "ojobkeep").isMap().default({});
+      global._ojobkeep = _$(global._ojobkeep).isMap().default({});
+
+      args.ojobkeep.name = _$(args.ojobkeep.name).default("default");
+      var res = global._ojobkeep[args.ojobkeep.name];
+
+      if (isUnDef(args.ojobkeep.keep)) {
+        if (isArray(res)) args._list = res;
+        if (isMap(res))   args = merge(args, res);
+      } else {
+        ow.loadObj();
+        ow.obj.getPath(args, args.ojobkeep.keep);
+      }
+
+  # ----------------------
+  - name: oJob Keep result
+    help: |
+      Keeps the current args result to later be retrieved with OAF Get kept result or the function oafGetResult(aName). Optionally expects:
+
+        ojobkeep  (Map)
+          name     (String)  The name of the result to keep.
+          keep     (String)  A object path on args to keep. If not defined it will keep _list or the entire args.
+
+    exec: |
+      args.ojobkeep    = _$(args.ojobkeep, "ojobkeep").isMap().default({});
+      global._ojobkeep = _$(global._ojobkeep).isMap().default({});
+
+      args.ojobkeep.name = _$(args.ojobkeep.name).default("default");
+
+      if (isUnDef(global.oJobGetKeptResult)) global.oJobGetKeptResult = (name) => {
+          name = _$(name).default("default");
+          if (isUnDef(global._ojobkeep)) global._ojobkeep = {};
+          return global._ojobkeep[name];
+      }
+
+      if (isUnDef(args.ojobkeep.keep)) {
+        if (isDef(args._list)) 
+          global._ojobkeep[args.ojobkeep.name] = args._list;
+        else
+          global._ojobkeep[args.ojobkeep.name] = args;
+      } else {
+        ow.loadObj();
+        global._ojobkeep[args.ojobkeep.name] = ow.obj.getPath(args, args.ojobkeep.keep);
+      }
+
   ## ------------
   ## oJob shell
   ## ------------
@@ -205,8 +307,8 @@ jobs:
         - args.directory (string)  Sets the working directory for the command
         - args.stdin     (string)  Provide any stdin needed
         - args.exitcode  (number)  Determines what exitcode should be consider success (default is 0)
-        - args.stderr    (string)  Get's set to the stderr
-        - args.stdout    (string)  Get's set to the stdout 
+        - args.stderr    (string)  Get's set to the stderr if quiet is true
+        - args.stdout    (string)  Get's set to the stdout if quiet is true
         - args.prefix    (string)  A prefix for each output line if quiet is false
         - args.prefixLog (boolean) Determines that the prefix will use log instead of print (default is false)
         
