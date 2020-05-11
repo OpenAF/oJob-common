@@ -294,6 +294,45 @@ jobs:
         global._ojobkeep[args.ojobkeep.name] = ow.obj.getPath(args, args.ojobkeep.keep);
       }
 
+  # -----------------
+  - name: oJob Switch
+    help: |
+      Adds new "todo" entries depending on the value of a provided args variable. Expects:
+
+        switchOn      (String)  The variable in args that will define which set of "todo"s will be added (trimmed)
+        lowerCase     (Boolean) Compare the switchOn in lower case (defaults to false)
+        todos.[value] (Map)     Map of "todo"s
+        default       (Map)     Default map of "todo"s
+
+        Example:
+
+          switchOn : mode
+          lowerCase: true
+          todos    :
+            mode1:
+            - Job 1
+            - Job 2
+            mode2:
+            - Job 2
+            - Job 3
+          default  :
+            - Job 2
+
+    exec: |
+      _$(args.switchOn, "switchOn").isString().$_();
+      _$(args.todos, "todos").isMap().$_();
+      args.lowerCase = _$(args.lowerCase, "lowerCase").isBoolean().default(false);
+      args.default = _$(args.default, "default").isArray().default([]);
+      
+      var todoValue = String(args[args.switchOn]).trim();
+      if (args.lowerCase) todoValue = todoValue.toLowerCase();
+
+      if (isDef(args.todos[todoValue]) && isArray(args.todos[todoValue])) {
+        args.todos[todoValue].map(j => ow.oJob.add2Todo(j));
+      } else {
+        args.default.map(j => ow.oJob.add2Todo(j));
+      }
+
   ## ------------
   ## oJob shell
   ## ------------
