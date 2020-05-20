@@ -115,3 +115,85 @@ jobs:
       args.fullpath = _$(args.fullpath).isBoolean().default(true);
 
       args.files = io.listFilenames(args.path, args.fullpath);
+
+  # ---------------------------
+  - name: IO Change text file
+    exec: |
+      switch(args.op) {
+      case "create" : 
+        io.writeFileString(args.file, args.replace);
+        break;
+      case "replace" : 
+        var ft = io.createTempFile("tmp_" + nowNano() + ".txt");
+        var wstream = io.writeFileStream(ft);
+        var rstream = io.readFileStream(args.file);
+        var cline = 0, cignore = false, csource = args.find.split(/\n/).length -1;
+        ioStreamReadLines(rstream, line => {
+           if (!cignore && cline == args.target) { 
+              ioStreamWrite(wstream, args.replace); 
+              cline++;
+              csource--;
+              if (csource > 0) cignore = true;
+           } else {
+              if (!cignore && csource > 0) {
+                 ioStreamWrite(wstream, line + "\n"); 
+                 cline++;
+              } else {
+                 csource--;
+                 if (csource <= 0) { cignore = false; csource = 2; };
+              }
+           }
+        });
+        io.mv(ft, args.file);
+        break;
+      case "append":
+        io.writeFileString(args.file, args.replace, void 0, true); 
+        break;
+      }
+
+  # --------------------------------
+  - name: IO Check changes text file
+    exec: |
+      _$(args.file, "file").$_();
+      _$(args.find, "find").$_();
+
+      args.op = "check";
+      if (!io.fileExists(args.file)) {
+         args.op = "create";
+      } else {
+         args.op = "append";
+         var lst = args.find.split(/\n/);
+         var found = false, pfound = false, ptarget = lst.length -1, target = 0;
+       
+         var stream = io.readFileStream(args.file);
+         ioStreamReadLines(stream, line => {
+            if (pfound && ptarget == 1) {
+               found = true;
+               args.op = "replace";
+               target = target - lst.length + 1;
+               return true;
+            } else {
+               if (line == lst[lst.length - ptarget]) {
+                  ptarget--;
+                  pfound = true;
+                  target++;
+               } else {
+                  pfound = false; 
+                  ptarget = lst.length;
+                  target++;
+               }
+            } 
+         });
+         args.found = found;
+         args.target = target;
+      } 
+
+  # -------------------------
+  - name: IO Modify text file 
+    from: 
+    - IO Check changes text file
+    - IO Change text file
+    #args:
+    #  file: a.txt
+    #  find: 
+    #  replace: 
