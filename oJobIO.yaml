@@ -135,12 +135,12 @@ jobs:
               csource--;
               if (csource > 0) cignore = true;
            } else {
-              if (!cignore && csource > 0) {
+              if (!cignore) {
                  ioStreamWrite(wstream, line + "\n"); 
                  cline++;
               } else {
                  csource--;
-                 if (csource <= 0) { cignore = false; csource = 2; };
+                 if (csource <= 0) { cignore = false; };
               }
            }
         });
@@ -162,27 +162,26 @@ jobs:
          args.op = "create";
       } else {
          args.op = "append";
-         var lst = args.find.split(/\n/);
-         var found = false, pfound = false, ptarget = lst.length -1, target = 0;
+         var lst = args.find.split(/\n/); lst.pop();
+         var found = false, pfound = false, ptarget = lst.length, target = 0;
        
          var stream = io.readFileStream(args.file);
          ioStreamReadLines(stream, line => {
-            if (pfound && ptarget == 1) {
+            if (line == lst[lst.length - ptarget]) {
+              ptarget--;
+              pfound = true;
+            } else {
+              pfound = false; 
+              ptarget = lst.length;
+            }
+
+            if (pfound && ptarget <= 0) {
                found = true;
                args.op = "replace";
-               target = target - lst.length + 1;
+               target = target - (lst.length -1);
                return true;
-            } else {
-               if (line == lst[lst.length - ptarget]) {
-                  ptarget--;
-                  pfound = true;
-                  target++;
-               } else {
-                  pfound = false; 
-                  ptarget = lst.length;
-                  target++;
-               }
             } 
+            target++;
          });
          args.found = found;
          args.target = target;
@@ -193,6 +192,12 @@ jobs:
     from: 
     - IO Check changes text file
     - IO Change text file
+    help: |
+      Given a file tries to find the first string 'find' and replace with 'replace'. If the file doesn't exist it will create it. Expects:
+
+        file    (String) The file for find/replace
+        find    (String) The string to find
+        replace (String) The string to replace
     #args:
     #  file: a.txt
     #  find: 
