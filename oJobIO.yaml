@@ -116,10 +116,10 @@ jobs:
 
       args.files = io.listFilenames(args.path, args.fullpath);
 
-  # ========================= 
+  # =========================
   - name: IO Modify text file 
     help: > 
-      Given a file tries to find the first string 'find' and replace with 'replace'. If the file doesn't exist it will create it. Expects:
+      Given a file tries to find the first string 'find' and replace with 'replace'. If the file doesn't exist it will create it. It differs from the "IO Find & Replace" job as it doesn't use regular expressions and just looks for exact matches which is usually more pratical for text configuration files. Expects:
 
         - file    (String) The file for find/replace
         - find    (String) The string to find
