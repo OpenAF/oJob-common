@@ -368,13 +368,13 @@ jobs:
         args.stdout = "";
         args.stderr = "";
         for(var i in args.cmd) {
-          var res = sh(args.cmd[i], args.stdin, args.timeout, iio, args.directory, true, cmdf);
+          var res = sh(templify(args.cmd[i], args), args.stdin, args.timeout, iio, args.directory, true, cmdf);
           args.stdout += res.stdout
           args.stderr += res.stderr;
           if (res.exitcode != args.exitcode) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
         }
       } else {
-        var res = sh(args.cmd, args.stdin, args.timeout, iio, args.directory, true, cmdf);
+        var res = sh(templify(args.cmd, args), args.stdin, args.timeout, iio, args.directory, true, cmdf);
         args.stdout = res.stdout;
         args.stderr = res.stderr;
         if (res.exitcode != args.exitcode) throw "Exit code: " + res.exitcode;
@@ -400,7 +400,7 @@ jobs:
       args.error    = _$(args.error).isString("args.error needs to be a string.").default("logErr(\"Process error '\" + cmd + \"': \" + String(e))");
 
       global.__ojobProc.push($do((s, f) => {
-          var res = sh(args.cmd, void 0, void 0, args.console, void 0, true);
+          var res = sh(templify(args.cmd, args), void 0, void 0, args.console, void 0, true);
           if (isDef(args.success)) (new Function("res", args.success))(res);
       }).catch((e) => {
           if (isDef(args.error)) (new Function("e", "cmd", args.error))(e, args.cmd);

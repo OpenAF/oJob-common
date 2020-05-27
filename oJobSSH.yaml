@@ -93,9 +93,9 @@ jobs:
                for(var i in args.cmd) {
                  var res;
                  if (!args.sudo) 
-                    res = s.exec(args.cmd[i], args.stdin, iio, void 0, true, cmdf);
+                    res = s.exec(templify(args.cmd[i], args), args.stdin, iio, void 0, true, cmdf);
                  else
-                    res = s.execSudo(args.cmd[i], args.sudo, args.stdin, iio, void 0, true, cmdf);
+                    res = s.execSudo(templify(args.cmd[i], args), args.sudo, args.stdin, iio, void 0, true, cmdf);
                  args.stdout += res.stdout;
                  args.stderr += res.stderr;
                  if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
@@ -103,9 +103,9 @@ jobs:
             } else {
                var res;
                if (!args.sudo)
-                  res = s.exec(args.cmd, args.stdin, iio, void 0, true, cmdf);
+                  res = s.exec(templify(args.cmd, args), args.stdin, iio, void 0, true, cmdf);
                else
-                  res = s.execSudo(args.cmd, args.sudo, args.stdin, iio, void 0, true, cmdf);
+                  res = s.execSudo(templify(args.cmd, args), args.sudo, args.stdin, iio, void 0, true, cmdf);
                args.stdout += res.stdout;
                args.stderr += res.stderr;
                if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd + "'): " + res.exitcode;               
@@ -139,9 +139,9 @@ jobs:
           for (var i in args.cmd) {
             var res;
             if (!args.sudo) 
-              res = s.exec(args.cmd[i], args.stdin, iio, void 0, true, cmdf);
+              res = s.exec(templify(args.cmd[i], args), args.stdin, iio, void 0, true, cmdf);
             else
-              res = s.execSudo(args.cmd[i], args.sudo, args.stdin, iio, void 0, true, cmdf);
+              res = s.execSudo(templify(args.cmd[i], args), args.sudo, args.stdin, iio, void 0, true, cmdf);
             args.stdout += res.stdout;
             args.stderr += res.stderr;
             if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
@@ -149,9 +149,9 @@ jobs:
         } else {
           var res;
           if (!args.sudo)
-            res = s.exec(args.cmd, args.stdin, iio, void 0, true, cmdf);
+            res = s.exec(templify(args.cmd, args), args.stdin, iio, void 0, true, cmdf);
           else
-            res = s.execSudo(args.cmd, args.sudo, args.stdin, iio, void 0, true, cmdf); 
+            res = s.execSudo(templify(args.cmd, args), args.sudo, args.stdin, iio, void 0, true, cmdf); 
           args.stdout += res.stdout;
           args.stderr += res.stderr;
           if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd + "'): " + res.exitcode;
