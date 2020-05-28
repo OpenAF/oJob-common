@@ -470,11 +470,13 @@ jobs:
       }
   
   # Same as oJob Jobs Report but on shutdown
+  # ------------------------------------
   - name        : oJob Jobs Final Report
     type        : shutdown
     from        : oJob Jobs Report
 
   # Wrapper for $doA2B
+  # --------------
   - name: oJob A2B
     help: >
       Will execute A code providing a function (fn) to send data, in batches, to B code which receives it async as values. Expects:
@@ -489,3 +491,45 @@ jobs:
 
       $doA2B(new Function("fn", args.A), new Function("valuesk", args.B), args.numThreads, args.timeout);
 
+  # -----------------------
+  - name: oJob Get settings
+    help: 
+      text   : Will retrieve the yaml settings stored on the user home folder
+      expects:
+      - name: settingsFile
+        desc: Which file, under the user home folder, will the settings be stored
+      returns:
+      - name: settings
+        desc: Returns a map with the current settings
+    exec: |
+      _$(args.settingsFile, "settingsFile").$_();
+      var hd = String(java.lang.System.getProperty("user.home")).replace(/\\/g, "/") + "/" + args.settingsFile;
+      
+      if (io.fileExists(hd))
+        args.settings = io.readFileYAML(hd);
+      else
+        args.settings = {}
+
+  # -----------------------
+  - name: oJob Set settings 
+    help:
+      text   : Will set yaml settings stored on the user home folder
+      expects:
+      - name: settingsFile
+        desc: Which file, under the user home folder, will the settings be stored
+      - name: settings
+        desc: The settings map to merge with the current structure
+      - name: reset
+        desc: Boolean if true will overwrite any existing settings (default false)
+    exec: |
+      _$(args.settingsFile, "settingsFile").$_();
+      _$(args.settings, "settings").$_();
+      args.reset = _$(args.reset, "reset").default(false);
+
+      var hd = String(java.lang.System.getProperty("user.home")).replace(/\\/g, "/") + "/" + args.settingsFile;
+      if (args.reset || !io.fileExists(hd)) {
+        io.writeFileYAML(hd, args.settings);
+      } else {
+        var existing = io.readFileYAML(hd);
+        io.writeFileYAML(hd, merge(existing, args.settings));
+      }
