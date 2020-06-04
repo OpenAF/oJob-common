@@ -282,3 +282,41 @@ jobs:
             fn
            );
         };
+
+   # ------------------
+   - name: REST Healthz
+     deps:
+     - REST Start Server
+     to  : REST Service
+     help:
+       text: Adds a healthz URI
+       expects:
+       - name: port
+         desc: The port of the REST Start Server (default to 8091)
+       - name: uri
+         desc: The uri to use (default /healthz)
+       - name: healthz
+         desc: A custom function to return the /healthz result (defaults to ow.metrics.getAll with status 200 or "error" with status 500 if an exception is thrown). Should return a result with params.
+     exec: |
+         ow.loadMetrics();
+         args.port    = _$(args.port).isNumber().default(8091);
+         args.uri     = _$(args.uri).isString().default("/healthz");
+
+         args.healthz = _$(args.healthz).isString().default(" try { return { data: ow.metrics.getAll(), status: 200, mimetype: \"application/json\" } } catch(e) { return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ");
+         args.execGET = args.healthz;
+         args.returnWithParams = true;
+
+   # ---------------------
+   - name: REST Add Metric
+     help: 
+       text   : Add a metric to the current daemon execution
+       expects:
+       - name: metric
+         desc: Metric name
+       - name: fn 
+         desc: Metric function code returning a map
+     exec: |
+       _$(args.metric, "metric").$_();
+       _$(args.fn, "fn").$_();
+       ow.loadMetrics();
+       ow.metrics.add(args.metric, new Function(args.fn));
