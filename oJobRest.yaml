@@ -130,11 +130,13 @@ jobs:
         var ks;
         if (isUnDef(__pmIn.__ojobRest)) __pmIn.__ojobRest = {};
         if (isUnDef(__pmIn.__ojobRoutes)) __pmIn.__ojobRoutes = {};
+        if (isUnDef(__pmIn.__ojobRoutesMetrics)) __pmIn.__ojobRoutesMetrics = {};
         if (isUnDef(args.port)) args.port = 8091;
         if (isDef(args.cp)) af.externalAddClasspath(args.cp);
         if (isDef(args.keystore)) ks = "/" + args.keystore;
         if (isUnDef(__pmIn.__ojobRest[args.port])) __pmIn.__ojobRest[args.port] = (isDef(args.hs) ? hs : ow.server.httpd.start(args.port, args.host, ks, args.pass));
         __pmIn.__ojobRoutes[args.port] = {};
+        __pmIn.__ojobRoutesMetrics[args.port] = {};
 
    # Applies a REST service definition
    #
@@ -272,15 +274,33 @@ jobs:
            }
         };
 
+        __pmIn.__ojobRoutesMetrics[args.port][args.uri] = {
+           start: $atomic(),
+           err  : $atomic(),
+           end  : $atomic(), 
+           sum  : $atomic() 
+        };
+
         __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
-          return ress = ow.server.rest.reply(args.uri, r, 
-            af.eval("(function(idxs, data, request) { " + _efn(args.execPOST) + " })"),
-            af.eval("(function(idxs, request) { " + _efn(args.execGET) + " })"),
-            af.eval("(function(idxs, data, request) { " + _efn(args.execPUT) + " })"),
-            af.eval("(function(idxs, request) { " + _efn(args.execDELETE) + " })"),
-            args.returnWithParams,
-            fn
+           __pmIn.__ojobRoutesMetrics[args.port][args.uri].start.inc();
+           var ini = now(); 
+
+           var ress = ow.server.rest.reply(args.uri, r, 
+             af.eval("(function(idxs, data, request) { " + _efn(args.execPOST) + " })"),
+             af.eval("(function(idxs, request) { " + _efn(args.execGET) + " })"),
+             af.eval("(function(idxs, data, request) { " + _efn(args.execPUT) + " })"),
+             af.eval("(function(idxs, request) { " + _efn(args.execDELETE) + " })"),
+             args.returnWithParams,
+             fn
            );
+           
+           __pmIn.__ojobRoutesMetrics[args.port][args.uri].sum.getAdd(now() - ini);
+           if (isDef(ress.__error) || (isDef(ress.data) && isDef(ress.data.__error)))
+              __pmIn.__ojobRoutesMetrics[args.port][args.uri].err.inc();
+           else
+              __pmIn.__ojobRoutesMetrics[args.port][args.uri].end.inc();
+ 
+           return ress;
         };
 
    # ------------------
@@ -299,12 +319,23 @@ jobs:
          desc: A custom function to return the /healthz result (defaults to ow.metrics.getAll with status 200 or "error" with status 500 if an exception is thrown). Should return a result with params.
      exec: |
          ow.loadMetrics();
+
          args.port    = _$(args.port).isNumber().default(8091);
          args.uri     = _$(args.uri).isString().default("/healthz");
-
+         
          args.healthz = _$(args.healthz).isString().default(" try { return { data: ow.metrics.getAll(), status: 200, mimetype: \"application/json\" } } catch(e) { return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ");
          args.execGET = args.healthz;
          args.returnWithParams = true;
+
+         ow.metrics.add("oJobRest", () => {
+            var u = [];
+            var k = Object.keys(__pmIn.__ojobRoutesMetrics[args.port]);
+            k.map(ki => {
+               var o = __pmIn.__ojobRoutesMetrics[args.port][ki];
+               u.push({ uri: ki, start: o.start.get(), err: o.err.get(), end: o.end.get(), sum: o.sum.get(), avg: o.sum.get() / (o.end.get() + o.err.get()) });
+            });
+            return u;
+         });
 
    # ---------------------
    - name: REST Add Metric
