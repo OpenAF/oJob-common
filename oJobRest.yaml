@@ -323,7 +323,7 @@ jobs:
          args.port    = _$(args.port).isNumber().default(8091);
          args.uri     = _$(args.uri).isString().default("/healthz");
          
-         args.healthz = _$(args.healthz).isString().default(" try { return { data: ow.metrics.getAll(), status: 200, mimetype: \"application/json\" } } catch(e) { return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ");
+         args.healthz = _$(args.healthz).isString().default(" try { return { data: (isDef(idxs.s) ? ow.metrics.getSome(idxs.s.split(\",\")) : ow.metrics.getAll()), status: 200, mimetype: \"application/json\" } } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ");
          args.execGET = args.healthz;
          args.returnWithParams = true;
 
