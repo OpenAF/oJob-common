@@ -19,6 +19,7 @@ jobs:
         if (isUnDef(__pmIn.__ojobHttp)) __pmIn.__ojobHttp = {};
         if (isUnDef(__pmIn.__ojobRoutes)) __pmIn.__ojobRoutes = {};
         if (isUnDef(args.port)) args.port = 8091;
+        if (isUnDef(args.cp) && isDef(args.keystore) && !isNull(java.io.File(args.keystore).getParent())) args.cp = java.io.File(args.keystore).getParent().toString();
         if (isDef(args.cp)) af.externalAddClasspath(args.cp);
         if (isDef(args.keystore)) ks = args.keystore;
         args.mapLibs = _$(args.mapLibs).isBoolean().default(false);
