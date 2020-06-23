@@ -164,6 +164,33 @@ jobs:
         delete __pmIn.__ojobRoutes[args.port];
         log("STOPPED [" + args.port + "]");
 
+   # ------------------------
+   - name: REST List Services
+     deps:
+     - REST Start Server
+     to  :
+     - REST Apply Service
+     help: |
+       Provides a REST endpoint list for a endpoint prefix (aURI). The expected arguments:
+         - args.uri   (String)   The URI where the documentation will be available (defaults to "/")
+         - args.port  (Number)   The port for the REST documentation service (defaults to 8091)
+         - args.list  (String)   The map key that will hold the endpoint list (defaults to "paths")
+         - args.stamp (Map)      The map to stamp the reply with.
+     exec: |
+       args.uri      = _$(args.uri, "uri").isString().default("/");
+       args.port     = _$(args.port, "port").isNumber().default(8091);
+       args.stamp    = _$(args.stamp, "stamp").isMap().default({});
+       args.list     = _$(args.list, "list").isString().default("paths");
+
+       var lst = {};
+       lst[args.list] = $from(Object.keys(__pmIn.__ojobRoutes[args.port]))
+                        .starts(args.uri)
+                        .select();
+       
+       __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
+         return __pmIn.__ojobRest[args.port].reply(stringify(merge(args.stamp, lst), void 0, ""));
+       }
+
    # Doc endpoint for a REST service
    #
    - name: REST Doc Service
