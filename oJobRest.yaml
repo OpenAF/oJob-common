@@ -172,21 +172,34 @@ jobs:
      - REST Apply Service
      help: |
        Provides a REST endpoint list for a endpoint prefix (aURI). The expected arguments:
-         - args.uri   (String)   The URI where the documentation will be available (defaults to "/")
-         - args.port  (Number)   The port for the REST documentation service (defaults to 8091)
-         - args.list  (String)   The map key that will hold the endpoint list (defaults to "paths")
-         - args.stamp (Map)      The map to stamp the reply with.
+         - args.uri         (String)   The URI where the documentation will be available (defaults to "/")
+         - args.port        (Number)   The port for the REST documentation service (defaults to 8091)
+         - args.list        (String)   The map key that will hold the endpoint list (defaults to "paths")
+         - args.stamp       (Map)      The map to stamp the reply with.
+         - args.excludeLibs (Boolean)  If true it will not show /js, /css and /fonts (defaults to true)
      exec: |
-       args.uri      = _$(args.uri, "uri").isString().default("/");
-       args.port     = _$(args.port, "port").isNumber().default(8091);
-       args.stamp    = _$(args.stamp, "stamp").isMap().default({});
-       args.list     = _$(args.list, "list").isString().default("paths");
+       args.uri         = _$(args.uri, "uri").isString().default("/");
+       args.port        = _$(args.port, "port").isNumber().default(8091);
+       args.stamp       = _$(args.stamp, "stamp").isMap().default({});
+       args.list        = _$(args.list, "list").isString().default("paths");
+       args.excludeLibs = _$(args.excludeLibs, "excludeLibs").isBoolean().default(true);
 
        var lst = {};
        lst[args.list] = $from(Object.keys(__pmIn.__ojobRoutes[args.port]))
                         .starts(args.uri)
                         .select();
-       
+
+       if (args.excludeLibs) { 
+         var t = [];
+         for(var ii in lst[args.list]) {
+           if (!lst[args.list][ii].startsWith("/fonts/") &&
+               !lst[args.list][ii].startsWith("/css/") && 
+               !lst[args.list][ii].startsWith("/js/")) 
+             t.push(lst[args.list][ii]);
+         }
+         lst[args.list] = t;
+       }
+ 
        __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
          return __pmIn.__ojobRest[args.port].reply(stringify(merge(args.stamp, lst), void 0, ""));
        }
@@ -207,6 +220,7 @@ jobs:
            - args.docPort          (Number)   The original endpoint port to which the documentation relates to (default to args.port)
            - args.template         (String)   Use a different ow.template template for documentation (available vars: title, uri, port, docURI, docPort, docGET, docPOST, docPUT and docDELETE (with desc, examples, in and out))
            - args.title            (String)   The documentation page title (defaults to docURI).
+           - args.justJson         (Boolean)  Returns just the documentation json (defaults to false).
      exec: |
         args.uri      = _$(args.uri, "uri").isString().default("/docs");
         args.port     = _$(args.port, "port").isNumber().default(8091);
@@ -214,20 +228,32 @@ jobs:
         args.docPort  = _$(args.docPort, "docPort").isNumber().default(args.port);
         args.title    = _$(args.title, "title").isString().default(args.docURI);
         args.template = _$(args.template, "template").isString().default(args.baseTemplate);
+        args.justJson = _$(args.justJson, "justJson").isBoolean().default(false);
 
         __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
-          var templ = templify(args.template, {
-             title  : args.title,
-             uri    : args.uri,
-             port   : args.port,
-             docURI : args.docURI,
-             docPort: args.docPort,
-             docGET    : global.__oJobRestDoc[args.docPort][args.docURI].get,
-             docPOST   : global.__oJobRestDoc[args.docPort][args.docURI].post,
-             docPUT    : global.__oJobRestDoc[args.docPort][args.docURI].put,
-             docDELETE : global.__oJobRestDoc[args.docPort][args.docURI].delete,
-          });
-          return __pmIn.__ojobRest[args.port].replyOKHTML(ow.template.parseMD2HTML(templ, true));
+          if (args.justJson) {
+            var o = { 
+              uri   : args.uri,
+              get   : global.__oJobRestDoc[args.docPort][args.docURI].get,
+              post  : global.__oJobRestDoc[args.docPort][args.docURI].post,
+              put   : global.__oJobRestDoc[args.docPort][args.docURI].put,
+              delete: global.__oJobRestDoc[args.docPort][args.docURI].delete,
+            }; 
+            return ow.server.httpd.reply(o);
+          } else {
+            var templ = templify(args.template, {
+               title  : args.title,
+               uri    : args.uri,
+               port   : args.port,
+               docURI : args.docURI,
+               docPort: args.docPort,
+               docGET    : global.__oJobRestDoc[args.docPort][args.docURI].get,
+               docPOST   : global.__oJobRestDoc[args.docPort][args.docURI].post,
+               docPUT    : global.__oJobRestDoc[args.docPort][args.docURI].put,
+               docDELETE : global.__oJobRestDoc[args.docPort][args.docURI].delete,
+            });
+            return __pmIn.__ojobRest[args.port].replyOKHTML(ow.template.parseMD2HTML(templ, true));
+          }
         };
 
    # Defines a REST service
