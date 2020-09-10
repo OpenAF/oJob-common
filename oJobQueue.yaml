@@ -1,0 +1,54 @@
+jobs:
+# --------------------
+- name: oJob Queue Add
+  exec: |
+    global.oJobQueue.add(args);
+
+# -----------------------
+- name: oJob Queue Delete
+  exec: |
+    global.oJobQueue.del(args);
+
+# ------------------------
+- name: oJob Queue Manager
+  exec: |
+    args.queueTimeout = _$(args.queueTimeout, "queueTimeout").isNumber().default(60000);
+    args.queuePeriod  = _$(args.queuePeriod, "queuePeriod").isNumber().default(5000);
+    args.queueDelete  = _$(args.queueDelete, "queueDelete").isBoolean().default(true);
+
+    ow.loadServer();
+    global.__oJobQueue = new ow.server.queue();
+
+    plugin("Threads");
+    var t = new Threads();
+    t.addSingleThread(function() {
+        while(1) {
+        while (global.__oJobQueue.size() > 0) {
+            try {
+            var msg = global.__oJobQueue.receive(args.queueTimeout);
+            if (isDef(msg)) {
+                oJobRunJob(msg.obj.job, msg, genUUID());
+                if (args.queueDelete) global.__oJobQueue.delete(msg.idx);
+            }
+            } catch(e) {
+            }
+        }
+        sleep(args.queuePeriod, true);
+        }
+    });
+
+    global.oJobQueue = {
+        add: function(arg) {
+        if (isDef(global.__oJobQueue) && isDef(arg.job) && isDef(arg.data)) {
+            global.__oJobQueue.send({
+            job : arg.job,
+            data: arg.data
+            }, void 0, arg.timeout);
+        }
+        },
+        del: function(arg) {
+        if (isDef(global.__oJobQueue) && isDef(arg.idx)) global.__oJobQueue.delete(arg.idx);
+        }
+    }
+
+    t.startNoWait();
