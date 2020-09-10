@@ -9,6 +9,34 @@ jobs:
   exec: |
     global.oJobQueue.del(args);
 
+# ----------------------
+- name: oJob Queue Rules
+  exec: |
+    args.rules = _$(args.rules, "rules").isArray().default([]);
+    args.data  = _$(args.data, "data").isMap().default({});
+    args.logFn = _$(args.logFn, "logFn").isFunction().default((r, ev) => {
+      log("Queue | Trigger job '" + r.job + "'.");
+    });
+    args.errFn = _$(args.errFn, "errFn").isFunction().default((r, ev, e) => {
+      logErr("Queue | Error in rule for job '" + r.job + "', evaluated as '" + ev + "': " + String(e));
+    });
+
+    var cexpr = "";
+    args.rules.map(r => {
+      try {
+        cexpr = templify(r.rule, args);
+        if (eval(cexpr)) {
+          args.logFn(r, cexpr);
+          global.oJobQueue.add({
+            job : r.job,
+            data: args
+          })
+        }
+      } catch(e) {
+        args.errFn(r, cexpr, e);
+      }
+    });
+
 # ------------------------
 - name: oJob Queue Manager
   exec: |
