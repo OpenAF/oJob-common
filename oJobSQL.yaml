@@ -1,37 +1,41 @@
 # Author: Nuno Aguiar
 
 jobs:
+  # ----------------
   - name: SQL Result
     help: 
       Use internally by oJobSQL
     exec: >
       if (isUnDef(args.sql))     throw "Please specify a query to run with sql=select\ user\ from\ dual";
-      if (isUnDef(args.format))  args.format = "json";
+      args.format = _$(args.format, "format").default("pm");
 
       var _res;
       if (args.execute) {
-         _res = args._db.u(args.sql);
-         args.format = "execute";
+         args._db.rollback();
+         try {
+           _res = args._db.u(args.sql);
+           args._db.commit();
+         } catch(e) {
+           args._db.rollback();
+           throw e;
+         }
       } else {
-         _res = args._db.q(args.sql).results;
-      }
-
-      switch(args.format) {
-      case 'table':
-         args.output = printTable(_res, undefined, true);
-         break;   
-      default     :
-         args.output = _res;
-      }
-
-      if (!args.quiet) {
-         switch(args.format) {
-         case 'table'  : print(args.output); break;
-         case 'execute': print(args.output); break;
-         default       : sprint(args.output);
+         args._db.rollback();
+         try {
+          _res = args._db.q(args.sql).results;
+           args._db.commit();
+         } catch(e) {
+           args._db.rollback();
+           throw e;
          }
       }
 
+      args.output = _res;
+
+      if (isUnDef(args.__format) && isDef(args.format)) args.__format = args.format;
+      ow.oJob.output(args.output, args);
+
+  # ---------
   - name: SQL 
     to  : SQL Result
     help: > 
@@ -42,17 +46,18 @@ jobs:
         DBUser      (String)  The database user login
         DBPass      (String)  The database user password
         sql         (String)  The SQL to execute/query 
-        format      (String)  If 'table' the output will be provided in a tabular format (screen size permitting)
-                              otherwise the default format is a JSON array.
-        quiet       (Boolean) If true no output will be displayed on the logs.
+        execute     (Boolean) If true if will execute the sql statement instead of querying (e.g. update, truncate, ...)
 
       Provides:
 
         output      (Object)  In the default format it will be the resulting array. 
                               In tabular format it will return a string.
     exec: >
-      if (isUnDef(args.raidURL)) throw "Please specify a raidURL=http://user:pass@1.2.3.4:8080";
-      if (isUnDef(args.raidDB))  throw "Please specify a raidDB=Adm";
+      args.DBDriver = _$(args.DBDriver, "DBDriver").isString().default(void 0);
+      _$(args.DBURL, "DBURL").isString().$_();
+      _$(args.DBUser, "DBUser").isString().$_();
+      _$(args.DBPass, "DBPass").isString().$_();
+
       if (isUnDef(args.sql))     throw "Please specify a query to run with sql=select\ user\ from\ dual";
       if (isUnDef(args.format))  args.format = "json";
 
@@ -61,7 +66,52 @@ jobs:
       else
         args._db = new DB(args.DBURL, args.DBUser, args.DBPass);
 
+  # ---------------
+  - name: SQL Batch
+    help: >
+      Executes a series of DB SQLs. Expects:
+        
+        DBDriver        (String)  The JDBC driver to use (defaults to Oracle)
+        DBURL           (String)  A JDBC URL to access the database
+        DBUser          (String)  The database user login
+        DBPass          (String)  The database user password
+        sqls            (Array)   The SQLs to execute/query 
+        continueOnError (Boolean) If continueOnError = true it won't stop on exceptions
 
+      Provides:
+
+        output      (Array)   An array of maps with each SQL statement and the corresponding number of affected lines
+    exec: |
+      args.DBDriver = _$(args.DBDriver, "DBDriver").isString().default(void 0);
+      _$(args.DBURL, "DBURL").isString().$_();
+      _$(args.DBUser, "DBUser").isString().$_();
+      _$(args.DBPass, "DBPass").isString().$_();
+      args.continueOnError = _$(args.continueOnError, "continueOnError").isBoolean().default(false);
+
+      if (isUnDef(args.sqls)) throw "Please provide a sqls string or array of strings.";
+
+      if (isString(args.sqls)) args.sqls = [ args.sqls ];
+      if (isDef(args.DBDriver)) 
+        args._db = new DB(args.DBDriver, args.DBURL, args.DBUser, args.DBPass);
+      else
+        args._db = new DB(args.DBURL, args.DBUser, args.DBPass);
+
+      args._db.getConnect().setAutoCommit(true);
+
+      var res = args.sqls.map(sql => {
+        var res = { sql: sql, result: void 0 };
+        try {
+          res.result = args._db.u(sql);
+        } catch(e) {
+          res.error = String(e);
+          if (!args.continueOnError) throw(String(e));
+        }
+        return res;
+      });
+
+      args.output = res;
+
+  # --------------
   - name: SQL RAID
     to  : SQL Result
     help: > 
@@ -73,9 +123,6 @@ jobs:
         raidDBPass  (String)  Using a specific RAID database password if one can't be determined
         raidUseCIR  (Boolean) Determines if the use of CIR should be forced for database parameters detection
         sql         (String)  The SQL to execute/query
-        format      (String)  If 'table' the output will be provided in a tabular format (screen size permitting)
-                              otherwise the default format is a JSON array.
-        quiet       (Boolean) If true no output will be displayed on the logs.
         execute     (Boolean) If true if will execute the sql statement instead of querying (e.g. update, truncate, ...)
 
       Provides:
