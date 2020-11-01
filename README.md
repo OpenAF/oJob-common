@@ -385,7 +385,6 @@ jobs:
       DBURL : *jdbcurl
       DBUser: *jdbcuser
       DBPass: *jdbcpass
-      quiet : true
       sql   : select current_date cd, sysdate sd from dual
     exec: |
       tprint("Current date = {{CD}}", args.output[0]);
@@ -426,7 +425,6 @@ jobs:
     args:
       raidURL: *raidurl
       raidDB : *raiddb
-      quiet  : true
       sql    : select current_date cd, sysdate sd from dual
     exec: |
       tprint("Current date = {{CD}}", args.output[0]);
