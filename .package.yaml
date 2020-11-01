@@ -1,26 +1,41 @@
-author: The author(s) name(s)
+author: Nuno Aguiar
 scripts:
   preerase: ''
   posterase: ''
   preinstall: ''
   postinstall: ''
 keywords:
-  - Keyword1
-  - keyword2
+  - ojob
+  - common
+  - SQL
+  - SSH
+  - SVN
+  - GIT
+  - Test
+  - Net
+  - Debug
+  - HBS
+  - Basics
+  - HTTPd
+  - Rest
+  - ES
+  - ElasticSearch
+  - WatchDog
+  - Email
 bugs:
-  url: URL to track bugs
+  url: 'https://github.com/OpenAF/oJob-common/issues'
 repository:
   type: http
-  url: URL to main repository
-description: A nice description
-name: A_nice_name
+  backurl: 'https://raw.githubusercontent.com/OpenAF/oJob-common/master'
+  url: 'https://openaf.io/opacks/oJob-common.opack'
+description: A set of base oJobs as common building blocks for custom oJobs.
+name: oJob-common
 main: ''
 mainJob: ''
-license: The licence description
-version: '20010101'
+license: Apache 2.0
+version: '20201031'
 dependencies:
-  packa: '>=20100101'
-  packb: <20120101
+  openaf: '>=20200801'
 files:
   - oJobBasics.yaml
   - oJobSSH.yaml
