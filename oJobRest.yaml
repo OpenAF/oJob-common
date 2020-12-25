@@ -128,13 +128,13 @@ jobs:
         ow.loadServer();
         $do(() => { ow.loadTemplate(); });
         var ks;
-        if (isUnDef(__pmIn.__ojobRest)) __pmIn.__ojobRest = {};
+        if (isUnDef(__pmIn.__ojobHttp)) __pmIn.__ojobHttp = {};
         if (isUnDef(__pmIn.__ojobRoutes)) __pmIn.__ojobRoutes = {};
         if (isUnDef(__pmIn.__ojobRoutesMetrics)) __pmIn.__ojobRoutesMetrics = {};
         if (isUnDef(args.port)) args.port = 8091;
         if (isDef(args.cp)) af.externalAddClasspath(args.cp);
         if (isDef(args.keystore)) ks = "/" + args.keystore;
-        if (isUnDef(__pmIn.__ojobRest[args.port])) __pmIn.__ojobRest[args.port] = (isDef(args.hs) ? hs : ow.server.httpd.start(args.port, args.host, ks, args.pass));
+        if (isUnDef(__pmIn.__ojobHttp[args.port])) __pmIn.__ojobHttp[args.port] = (isDef(args.hs) ? hs : ow.server.httpd.start(args.port, args.host, ks, args.pass));
         __pmIn.__ojobRoutes[args.port] = {};
         __pmIn.__ojobRoutesMetrics[args.port] = {};
 
@@ -145,9 +145,9 @@ jobs:
         if (isUnDef(args.port)) args.port = 8091;
 
         if (isDef(global.__oJobRestDoc)) {
-           ow.server.httpd.route(__pmIn.__ojobRest[args.port], ow.server.httpd.mapRoutesWithLibs(__pmIn.__ojobRest[args.port], __pmIn.__ojobRoutes[args.port]), function(r) { return __pmIn.__ojobRest[args.port].reply("", "", 401, {}); });
+           ow.server.httpd.route(__pmIn.__ojobHttp[args.port], ow.server.httpd.mapRoutesWithLibs(__pmIn.__ojobHttp[args.port], __pmIn.__ojobRoutes[args.port]), function(r) { return __pmIn.__ojobHttp[args.port].reply("", "", 401, {}); });
         } else {
-           ow.server.httpd.route(__pmIn.__ojobRest[args.port], __pmIn.__ojobRoutes[args.port], function(r) { return __pmIn.__ojobRest[args.port].reply("", "", 401, {}); });
+           ow.server.httpd.route(__pmIn.__ojobHttp[args.port], __pmIn.__ojobRoutes[args.port], function(r) { return __pmIn.__ojobHttp[args.port].reply("", "", 401, {}); });
         }
         log("READY [" + args.port + "]");
 
@@ -159,8 +159,8 @@ jobs:
         - REST Start Server
      exec: |
         if (isUnDef(args.port)) args.port = 8091;
-        ow.server.httpd.stop(__pmIn.__ojobRest[args.port]);
-        delete __pmIn.__ojobRest[args.port];
+        ow.server.httpd.stop(__pmIn.__ojobHttp[args.port]);
+        delete __pmIn.__ojobHttp[args.port];
         delete __pmIn.__ojobRoutes[args.port];
         log("STOPPED [" + args.port + "]");
 
@@ -201,7 +201,7 @@ jobs:
        }
  
        __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
-         return __pmIn.__ojobRest[args.port].reply(stringify(merge(args.stamp, lst), void 0, ""));
+         return __pmIn.__ojobHttp[args.port].reply(stringify(merge(args.stamp, lst), void 0, ""));
        }
 
    # Doc endpoint for a REST service
@@ -252,7 +252,7 @@ jobs:
                docPUT    : global.__oJobRestDoc[args.docPort][args.docURI].put,
                docDELETE : global.__oJobRestDoc[args.docPort][args.docURI].delete,
             });
-            return __pmIn.__ojobRest[args.port].replyOKHTML(ow.template.parseMD2HTML(templ, true));
+            return __pmIn.__ojobHttp[args.port].replyOKHTML(ow.template.parseMD2HTML(templ, true));
           }
         };
 
