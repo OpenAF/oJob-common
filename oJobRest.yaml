@@ -271,6 +271,7 @@ jobs:
            - args.execPUT          (Function) The PUT function. Receives a map of idxs and a data map.
            - args.execDELETE       (Function) The DELETE function. Receives a map of idxs.
            - args.returnWithParams (Boolean)  Use a more detailed return map.
+           - args.returnHTML       (Boolean)  Returns a partial HTML. 
            - args.error            (Boolean)  If true will return a __error entry in case of exception.
            - args.audit            (Boolean)  Turns request audit logging on (default true)
            - args.auditTemplate    (String)   Provide an audit logging template based on the request argument.
@@ -316,7 +317,7 @@ jobs:
            }
         }
    
-        var _efn = (s) => {
+        var _efn = s => {
            if (args.error) {
               if (args.returnWithParams)
                 return "try { " + s + " } catch(e) { logErr(String(e)); return { data: { __error: String(e) }, status: 500, mimetype: \"application/json\" } }";
@@ -344,7 +345,8 @@ jobs:
              af.eval("(function(idxs, data, request) { " + _efn(args.execPUT) + " })"),
              af.eval("(function(idxs, request) { " + _efn(args.execDELETE) + " })"),
              args.returnWithParams,
-             fn
+             fn,
+             args.returnHTML
            );
            
            __pmIn.__ojobRoutesMetrics[args.port][args.uri].sum.getAdd(now() - ini);
