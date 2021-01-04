@@ -110,6 +110,27 @@ jobs:
            }
         };
 
+   # -----------------
+   - name: HTTP Upload
+     deps:
+     - HTTP Start Server
+     to  : HTTP Service
+     args:
+       eURI: |
+         if (isDef(request.params) && isDef(request.params.data) && request.method == "POST") {
+            log("Received file '" + request.params.data + "'...");
+            io.cp(request.files.data, '{{{path}}}/' + request.params.data);
+            return "ok";
+         } else {
+            return server.replyOKHTML("<html><body><form action=\"" + request.uri + "\" enctype=\"multipart/form-data\" method=\"POST\"><input type=\"file\" name=\"data\" value=\"data\" id=\"data\"/><input type=\"submit\" value=\"submit\"/></form></body></html>");
+         }
+     exec: |
+       args.path = _$(args.path, "path").default(".");
+       args.uri  = _$(args.uri).isString().default("/upload");
+
+       io.mkdir(args.path);
+       args.execURI = templify(args.eURI, { path: args.path });
+ 
    # ------------------
    - name: HTTP Healthz
      deps:
@@ -124,12 +145,16 @@ jobs:
          desc: The uri to use (default /healthz)
        - name: healthz
          desc: A custom function to return the /healthz result (defaults to ow.metrics.getAll with status 200 or "error" with status 500 if an exception is thrown)
+       - name: openmetrics
+         desc: If openmetrics = true the output will be in openmetrics/prometheus instead of json
      exec: |
          ow.loadMetrics();
          args.port    = _$(args.port).isNumber().default(8091);
          args.uri     = _$(args.uri).isString().default("/healthz");
 
-         args.healthz = _$(args.healthz).isString().default(" try { return ow.server.httpd.reply(ow.metrics.getAll()); } catch(e) { return ow.server.httpd.reply(\"error\", 500, void 0, {}); } ");
+         var s1 = " try { return ow.server.httpd.reply(ow.metrics.getAll()); } catch(e) { return ow.server.httpd.reply(\"error\", 500, void 0, {}); } ";
+         var s2 = " try { return ow.metrics.fromObj2OpenMetrics(ow.metrics.getAll()); } catch(e) { return ow.server.httpd.reply(\"error\", 500, void 0, {}); } ";
+         args.healthz = _$(args.healthz).isString().default(args.openmetrics ? s2 : s1);
          args.execURI = args.healthz;
 
    # ---------------------
