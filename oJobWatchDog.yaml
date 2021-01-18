@@ -176,7 +176,8 @@ jobs:
 
         if (isDef(args.jobToNotify)) {
           try {
-            oJobRunJob(args.jobToNotify, args);
+            //oJobRunJob(args.jobToNotify, args);
+            ow.oJob.add2Todo({ name: args.jobToNotify, args: args });
           } catch(e) {
             logErr("Found problem while trying to notify executing job '" + args.jobToNotify + "' (" + String(e) + ")");
             throw e;
@@ -201,7 +202,8 @@ jobs:
 
         if (isDef(args.jobToStop)) {
           try {
-            oJobRunJob(args.jobToStop, args);
+            //oJobRunJob(args.jobToStop, args);
+            ow.oJob.add2Todo({ name: args.jobToStop, args: args });
           } catch(e) {
             logErr("Found problem while trying to stop executing job '" + args.jobToStop + "' (" + String(e) + ")");
             throw e;
@@ -228,7 +230,8 @@ jobs:
 
         if (isDef(args.jobToNotify)) {
           try {
-            oJobRunJob(args.jobToNotify, args);
+            //oJobRunJob(args.jobToNotify, args);
+            ow.oJob.add2Todo({ name: args.jobToNotify, args: args })
           } catch(e) {
             logErr("Found problem while trying to notify executing job '" + args.jobToNotify + "' (" + String(e) + ")");
             throw e;
@@ -255,7 +258,8 @@ jobs:
 
           if (isDef(args.jobToStart)) {
             try {
-              oJobRunJob(args.jobToStart, args);
+              //oJobRunJob(args.jobToStart, args);
+              ow.oJob.add2Todo({ name: args.jobToStart, args: args });
             } catch(e) {
               logErr("Found problem while trying to start executing job '" + args.jobToStart + "' (" + String(e) + ")");
               throw e;
@@ -287,7 +291,8 @@ jobs:
 
           if (isDef(args.jobToNotify)) {
             try {
-              oJobRunJob(args.jobToNotify, args);
+              //oJobRunJob(args.jobToNotify, args);
+              ow.oJob.add2Todo({ name: args.jobToNotify, args: args });
             } catch(e) {
               logErr("Found problem while trying to notify executing job '" + args.jobToNotify + "' (" + String(e) + ")");
               throw e;
