@@ -157,6 +157,32 @@ jobs:
          args.healthz = _$(args.healthz).isString().default(args.openmetrics ? s2 : s1);
          args.execURI = args.healthz;
 
+   # ------------------
+   - name: HTTP Metrics
+     deps:
+     - HTTP Start Server
+     to  : HTTP Service
+     help:
+       text: Adds a metrics URI with a OpenMetrics/Prometheus output
+       expects:
+       - name: port
+         desc: The port of the HTTP Start Server (default to 8091)
+       - name: uri
+         desc: The uri to use (default /metrics)
+       - name: metrics
+         desc: A custom function to return the /metrics result (defaults to ow.metrics.getAll with status 200 or "error" with status 500 if an exception is thrown).
+       - name: prefix
+         desc: OpenMetrics/Prometheus metrics' name prefix
+       - name: helpmap
+         desc: OpenMetrics/Prometheus metrics' help map (see help ow.metrics.fromObj2OpenMetrics)
+     exec: |
+         ow.loadMetrics();
+         args.port    = _$(args.port).isNumber().default(8091);
+         args.uri     = _$(args.uri).isString().default("/metrics");
+         
+         args.metrics = _$(args.metrics).isString().default("try { var rrr = ow.server.httpd.reply(ow.metrics.fromObj2OpenMetrics((isDef(request.params.s) ? ow.metrics.getSome(request.params.s.split(\",\")) : ow.metrics.getAll()), args.prefix, now(), args.helpmap)); rrr.data = String(rrr.data); return rrr; } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ");
+         args.execURI = args.metrics;
+
    # ---------------------
    - name: HTTP Add Metric
      help: 
