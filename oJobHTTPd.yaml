@@ -179,8 +179,10 @@ jobs:
          ow.loadMetrics();
          args.port    = _$(args.port).isNumber().default(8091);
          args.uri     = _$(args.uri).isString().default("/metrics");
+         args.prefix  = _$(args.prefix).isString().default("metrics");
+         args.helpmap = _$(args.helpmap).isMap().default({});
          
-         args.metrics = _$(args.metrics).isString().default("try { var rrr = ow.server.httpd.reply(ow.metrics.fromObj2OpenMetrics((isDef(request.params.s) ? ow.metrics.getSome(request.params.s.split(\",\")) : ow.metrics.getAll()), args.prefix, now(), args.helpmap)); rrr.data = String(rrr.data); return rrr; } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ");
+         args.metrics = _$(args.metrics).isString().default("try { var rrr = ow.server.httpd.reply(ow.metrics.fromObj2OpenMetrics((isDef(request.params.s) ? ow.metrics.getSome(request.params.s.split(\",\")) : ow.metrics.getAll()), '" + args.prefix + "', now(), " + stringify(args.helpmap, __, "") + ")); rrr.data = String(rrr.data); return rrr; } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ");
          args.execURI = args.metrics;
 
    # ---------------------

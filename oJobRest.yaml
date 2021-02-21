@@ -156,7 +156,7 @@ jobs:
    - name: REST Stop Server
      type: shutdown
      deps:
-        - REST Start Server
+     - REST Start Server
      exec: |
         if (isUnDef(args.port)) args.port = 8091;
         ow.server.httpd.stop(__pmIn.__ojobHttp[args.port]);
@@ -208,7 +208,7 @@ jobs:
    #
    - name: REST Doc Service
      deps:
-        - REST Start Server
+     - REST Start Server
      to  : REST Apply Service
      args:
       baseTemplate: *__oJobRestDocTemplate
@@ -260,7 +260,7 @@ jobs:
    #
    - name: REST Service
      deps: 
-        - REST Start Server
+     - REST Start Server
      to  : REST Apply Service
      help: >
         Provides a REST service definition. The expected arguments are:
@@ -419,8 +419,10 @@ jobs:
 
          args.port    = _$(args.port).isNumber().default(8091);
          args.uri     = _$(args.uri).isString().default("/metrics");
+         args.prefix  = _$(args.prefix).isString().default("metrics");
+         args.helpmap = _$(args.helpmap).isMap().default({});
          
-         args.metrics = _$(args.metrics).isString().default("try { return ow.server.httpd.reply(ow.metrics.fromObj2OpenMetrics((isDef(idxs.s) ? ow.metrics.getSome(idxs.s.split(\",\")) : ow.metrics.getAll()), args.prefix, now(), args.helpmap)); } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ");
+         args.metrics = _$(args.metrics).isString().default("try { var rrr = ow.server.httpd.reply(ow.metrics.fromObj2OpenMetrics((isDef(idxs.s) ? ow.metrics.getSome(idxs.s.split(\",\")) : ow.metrics.getAll()), '" + args.prefix + "', now(), " + stringify(args.helpmap, __, "") + ")); sprint(rrr); rrr.data = String(rrr.data); return rrr; } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ");
          args.execGET = args.metrics;
          args.returnWithParams = true;
 
