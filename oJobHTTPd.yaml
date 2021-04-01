@@ -84,7 +84,7 @@ jobs:
         var fn = void 0;
         if (args.audit) {
            fn = (req, reply) => {
-              var data = merge(req, { 
+               var data = merge(req, { 
                   reply: {
                      status  : reply.status,
                      mimetype: reply.mimetype
@@ -101,6 +101,7 @@ jobs:
         __pmIn.__ojobRoutes[args.port][args.uri] = function(r) {
            try {
              var res = (new Function("var request = arguments[0]; var server = __pmIn.__ojobHttp[" + args.port + "]; var port = " + String(args.port) + "; var uri = '" + args.uri + "'; " + args.execURI))(r);
+             if (!isMap(res)) res = ow.server.httpd.reply(res, void 0, void 0, {});
              fn(r, res);
              return res;
            } catch(e) {
@@ -179,10 +180,8 @@ jobs:
          ow.loadMetrics();
          args.port    = _$(args.port).isNumber().default(8091);
          args.uri     = _$(args.uri).isString().default("/metrics");
-         args.prefix  = _$(args.prefix).isString().default("metrics");
-         args.helpmap = _$(args.helpmap).isMap().default({});
          
-         args.metrics = _$(args.metrics).isString().default("try { var rrr = ow.server.httpd.reply(ow.metrics.fromObj2OpenMetrics((isDef(request.params.s) ? ow.metrics.getSome(request.params.s.split(\",\")) : ow.metrics.getAll()), '" + args.prefix + "', now(), " + stringify(args.helpmap, __, "") + ")); rrr.data = String(rrr.data); return rrr; } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ");
+         args.metrics = _$(args.metrics).isString().default("try { var rrr = ow.server.httpd.reply(ow.metrics.fromObj2OpenMetrics((isDef(request.params.s) ? ow.metrics.getSome(request.params.s.split(\",\")) : ow.metrics.getAll()), args.prefix, now(), args.helpmap)); rrr.data = String(rrr.data); return rrr; } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ");
          args.execURI = args.metrics;
 
    # ---------------------
@@ -295,4 +294,3 @@ jobs:
          TMPLB : ow.template.execCompiled(ow.template.compile(templ)),
          TMPLH : ow.template.execCompiled(ow.template.compile(temph))
        };
-         
