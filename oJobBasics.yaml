@@ -334,6 +334,28 @@ jobs:
       }
 
   ## ------------
+  ## oJob Sec
+  ## ------------
+
+  # Get a SBucket secret
+  - name: oJob Sec Get
+    help: |
+      This job will get a SBucket secret and map it to oJob's args:
+
+        - args.secOut      (string) The args path to be mapped with the secret
+        - args.secKey      (string) The SBucket key
+        - args.secRepo     (string) The SBucket repository
+        - args.secBucket   (string) The SBucket name
+        - args.secPass     (string) The SBucket password
+        - args.secMainPass (string) The SBucket repository password
+    
+    exec: |
+      _$(args.secOut, "secOut").$_();
+      _$(args.secKey, "secKey").$_();
+
+      $$(args).set(args.secOut, $sec(args.secRepo, args.secBucket, args.secPass, args.secMainPass).get(args.secKey));
+
+  ## ------------
   ## oJob shell
   ## ------------
   
