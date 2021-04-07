@@ -353,7 +353,9 @@ jobs:
       _$(args.secOut, "secOut").$_();
       _$(args.secKey, "secKey").$_();
 
-      $$(args).set(args.secOut, $sec(args.secRepo, args.secBucket, args.secPass, args.secMainPass).get(args.secKey));
+      var res = $sec(args.secRepo, args.secBucket, args.secPass, args.secMainPass).get(args.secKey);
+      if (isUnDef(res)) throw "Couldn't retrieve secKey '" + args.secKey + "' from bucket '" + args.secBucket + "'!";
+      $$(args).set(args.secOut, res);
 
   ## ------------
   ## oJob shell
