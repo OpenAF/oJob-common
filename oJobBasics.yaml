@@ -348,11 +348,17 @@ jobs:
         - args.secBucket   (string) The SBucket name
         - args.secPass     (string) The SBucket password
         - args.secMainPass (string) The SBucket repository password
+        - args.secDontAsk  (string) Determine if passwords should be asked from the user (default=false)
     
     exec: |
       _$(args.secOut, "secOut").$_();
       _$(args.secKey, "secKey").$_();
+      args.secDontAsk = toBoolean( _$(args.secDontAsk, "secDontAsk").default(false) );
 
+      if (!args.secDontAsk) {
+         if (isDef(args.secBucket)) args.secPass = askDef(args.secPass, "Sec bucket '" + args.secBucket + "' pass: ", true);
+         if (isDef(args.secRepo))   args.secMainPass = askDef(args.secMainPass, "Sec repo '" + args.secRepo + "' pass: ", true);
+      }
       var res = $sec(args.secRepo, args.secBucket, args.secPass, args.secMainPass).get(args.secKey);
       if (isUnDef(res)) throw "Couldn't retrieve secKey '" + args.secKey + "' from bucket '" + args.secBucket + "'!";
       $$(args).set(args.secOut, res);
