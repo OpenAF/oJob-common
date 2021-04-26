@@ -111,6 +111,24 @@ jobs:
            }
         };
 
+   # ------------------
+   - name: HTTP Default
+     deps:
+     - HTTP Start Server
+     to  : HTTP Service
+     help: >
+        Provides a HTTP default handler. The expected arguments are:
+           - args.port   (Number) The port where the server was made available (default is 8091)
+           - args.uri    (String) The URI where the HTTP default response will be available
+           - args.code   (Number) The default HTTP status code to reply (default is 401)
+     args: 
+       execURI   : |
+         args.code = _$(args.code, "code").isString().default(401);
+
+         return ow.server.httpd.reply("", args.code, __, {});
+     exec: |
+       args.uri = _$(args.uri, "uri").isString().default("/");
+
    # -----------------
    - name: HTTP Upload
      deps:
