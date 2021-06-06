@@ -353,7 +353,7 @@ jobs:
     
     exec: |
       args.secIgnore = _$(args.secIgnore, "secIgnore").isBoolean().default(false);
-      _$(args.secOut, "secOut").$_();
+      args.secOut = _$(args.secOut, "secOut").default(__);
       if (!args.secIgnore) _$(args.secKey, "secKey").$_();
       args.secDontAsk = toBoolean( _$(args.secDontAsk, "secDontAsk").default(false) );
 
@@ -365,7 +365,11 @@ jobs:
       if (isDef(args.secKey)) {
         var res = $sec(args.secRepo, args.secBucket, args.secPass, args.secMainPass).get(args.secKey);
         if (isUnDef(res)) throw "Couldn't retrieve secKey '" + args.secKey + "' from bucket '" + args.secBucket + "'!";
-        $$(args).set(args.secOut, res);
+        if (isDef(args.secOut)) {
+          $$(args).set(args.secOut, res);
+        } else {
+          Object.keys(res).forEach(r => $$(args).set(r, res[r]));
+        }
       }
 
   ## ------------
