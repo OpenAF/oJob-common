@@ -2,15 +2,18 @@
 
 jobs:
 # OJOB DEBUG
+# ----------------
 - name: ojob debug
   exec: |
     ow.loadFormat();
     print("");
-    cprint( ow.format.withSideLine("ARGS:", __, "YELLOW,BOLD,BG(230)", "BOLD", ow.format.withSideLineThemes().openBottomCurvedRect) );
-    cprint( ow.format.withSideLine(colorify(args), __, "YELLOW,BG(230)", __, ow.format.withSideLineThemes().openTopCurvedRect) );
-    cprint( ow.format.withSideLine("RES:", __, "YELLOW,BOLD,BG(229)", "BOLD", ow.format.withSideLineThemes().openBottomCurvedRect) );
-    cprint( ow.format.withSideLine(colorify($get("res")), __, "YELLOW,BOLD,BG(229)", __, ow.format.withSideLineThemes().openTopCurvedRect) );
+    cprint( ow.format.withSideLine("ARGS:", __, "YELLOW", "BOLD", ow.format.withSideLineThemes().openBottomCurvedRect) );
+    cprint( ow.format.withSideLine(colorify(args), __, "YELLOW", __, ow.format.withSideLineThemes().openTopCurvedRect) );
+    cprint( ow.format.withSideLine("RES:", __, "YELLOW,BOLD", "BOLD", ow.format.withSideLineThemes().openBottomCurvedRect) );
+    cprint( ow.format.withSideLine(colorify($get("res")), __, "YELLOW,BOLD", __, ow.format.withSideLineThemes().openTopCurvedRect) );
 
+# OJOB GET
+# --------------
 - name: ojob get
   exec: |
     args.key = _$(args.key, "key").isString().default("res");

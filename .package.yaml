@@ -82,12 +82,12 @@ filesHash:
   oJobHBS.yaml: f314f109494e64e5ef5b24483a96ec59d54d6c11
   oJobCh.yaml: 5f21cc46f4200b5f692bf4034fb4af22c2d7e6fb
   oJobSSH.yaml: 0c283840dcd037fdce5b5bb475b0a70d264df908
-  ojob.json: 0b5300ec8e35338b6f860702a0b4ef3cf0fb28f3
+  ojob.json: f3f8a1e66f78d87b451aed370d960e487e7f5cb3
   oJobRAID.yaml: b4916cff81119a9e626c735abd6426964cdfc17c
   oJobGIT.yaml: 041aa8c4b393d2285a6b765e1ad5d76f59e2f10f
   oJobOPack.yaml: cd9542c6720f38758af1512060be295a8e608184
   oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
-  ojob.yaml: fc4b939c0aada5f338aec63acde6e8bb2b4d9df6
+  ojob.yaml: 1d6b73aaf1c3ad044efc2ed5df661c201cfe1d3c
   oJobRest.yaml: 1e24c5fd1b2fcf1c19cda0cdbe7106fb13718548
   oJobManager.yaml: 52a7bd5e45edd98066ab34d53f9865fe59fc79ba
   oJobSVN.yaml: ecfed00a4fa11b50ebf601168ac1251f7de29bfa
