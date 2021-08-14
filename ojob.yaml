@@ -1,0 +1,246 @@
+# Author: Nuno Aguiar
+
+jobs:
+# OJOB DEBUG
+- name: ojob debug
+  exec: |
+    ow.loadFormat();
+    print("");
+    cprint( ow.format.withSideLine("ARGS:", __, "YELLOW,BOLD,BG(230)", "BOLD", ow.format.withSideLineThemes().openBottomCurvedRect) );
+    cprint( ow.format.withSideLine(colorify(args), __, "YELLOW,BG(230)", __, ow.format.withSideLineThemes().openTopCurvedRect) );
+    cprint( ow.format.withSideLine("RES:", __, "YELLOW,BOLD,BG(229)", "BOLD", ow.format.withSideLineThemes().openBottomCurvedRect) );
+    cprint( ow.format.withSideLine(colorify($get("res")), __, "YELLOW,BOLD,BG(229)", __, ow.format.withSideLineThemes().openTopCurvedRect) );
+
+- name: ojob get
+  exec: |
+    args.key = _$(args.key, "key").isString().default("res");
+    var res = $get(args.key);
+    if (isArray(res)) res = { _list: res };
+    return res;
+
+# OJOB FUNCTION
+# -------------------
+- name: ojob function
+  help: >
+    Executes the provided function mapping any args to the function arguments using the odoc help available for the provided function.
+    Note: accessing odoc might be slow on a first execution.
+
+      __key     (String)  The key string to retrieve previous results (defaults to 'res')
+      __fn      (String)  The function to execute
+      __path    (String)  If defined the args path for the function arguments to consider
+      __fnPath  (String)  If defined the args path where to set the function result
+
+  exec: |
+    _$(args.__fn, "__fn").isString().$_();
+
+    if (args.__fn.indexOf(".") < 0) args.__fn = "global." + args.__fn; 
+    var res = $fnM(args.__fn, (isDef(args.__path) ? $$(args).get(args.__path) : args));
+    if (isString(args.__fnPath)) res = $$({}).set(args.__fnPath, res);
+    if (isString(args.__key)) $set(args.__key, res); else return res;
+
+# OJOB OUTPUT
+# -----------------
+- name: ojob output
+  help: >
+    Prints the current arguments to the console. Optionally expects:
+    
+       key      (String)  The key string to retrieve previous results (defaults to 'res')
+       path     (String)  A path string to a map/array over the results set on key. 
+       format   (String)  The output format (e.g. see ow.oJob.output help)
+       internal (Boolean) If true it will display the internal oJob entries on the arguments (default false)
+ 
+  exec: |
+    args.key = _$(args.key, "key").isString().default("res");
+    var res = $get(args.key);
+    if (!toBoolean(args.internal)) {
+       delete res.objId;
+       delete res.execid;
+       delete res.id;
+    }
+
+    if (isDef(args.format)) { args.__format = args.format; delete args.format; }
+    if (isDef(args.path)) res = $$(res).get(args.path);
+    if (isMap(res) && isDef(res._list)) res = res._list;
+    if (isMap(res) && isDef(res._map))  res = res._map;
+    ow.oJob.output(res, args);
+
+# OJOB FINAL REPORT
+# -------------------------------
+- name        : ojob final report
+  to          : ojob report
+  type        : shutdown
+  help        : >
+    Outputs a jobs report (e.g. job name, status, number of executions, total time, avg time and last execution) upon ojob termination
+
+      __format  (String)  Can be json, yaml, table (default) or any other ow.oJob.output format
+
+# OJOB REPORT
+# -------------------------
+- name        : ojob report
+  help        : >
+    Outputs a jobs report (e.g. job name, status, number of executions, total time, avg time and last execution)
+
+      __format  (String)  Can be json, yaml, table (default) or any other ow.oJob.output format
+
+  exec        : |
+    ow.loadFormat(); print("\n");
+
+    var logs = $ch("oJob::log").getAll();
+    var report = $from(logs)
+                 .notEquals("name", "ojob report")
+                 .notEquals("name", "ojob final report")
+                 .select(r => ({
+          "Job name"  : r.name,
+          "Status"    : (r.start ? (r.success ? "OK" : (r.deps ? (r.error ? "NOT OK!" : "executing") : "failed deps")) : "not started"),
+          "# execs"   : r.count,
+          "Total time": ow.format.elapsedTime4ms(r.totalTime, { abrev: true }),
+          "Avg time"  : ow.format.elapsedTime4ms(r.avgTime, { abrev: true }),
+          "Last exec" : (r.log.length > 0 ? ow.format.timeago($from(r.log).sort("-endTime").at(0).endTime) : "n/a")
+      }));
+
+    report.push({
+      "Job name"  : "TOTAL:",
+      "Status"    : "",
+      "# execs"   : "",
+      "Total time": ow.format.elapsedTime4ms((now() - $from(logs).sort("createDate").at(0).createDate)),
+      "Avg time"  : "",
+      "Last exec" : ""
+    });
+
+    args.__format = _$(args.__format).default("table");
+    ow.oJob.output(report, args);
+
+# OJOB SWITCH
+# ------------------
+- name: ojob options
+  help: |
+    Adds new "todo" entries depending on the value of a provided args variable. Expects:
+
+      optionOn      (String)  The variable in args that will define which set of "todo"s will be added (trimmed)
+      lowerCase     (Boolean) Compare the switchOn in lower case (defaults to false)
+      todos.[value] (Map)     Map of "todo"s
+      default       (Array)   Default map of "todo"s
+
+      Example:
+
+        optionOn : mode
+        lowerCase: true
+        todos    :
+          mode1:
+          - Job 1
+          - Job 2
+          mode2:
+          - Job 2
+          - Job 3
+        default:
+        - Job 2
+
+  exec: |
+    _$(args.switchOn, "switchOn").isString().$_();
+    _$(args.todos, "todos").isMap().$_();
+    args.lowerCase = _$(args.lowerCase, "lowerCase").isBoolean().default(false);
+    args.default   = _$(args.default, "default").isArray().default([]);
+    args.end       = _$(args.end, "end").isArray().default([]);
+
+    var todoValue = String(args[args.switchOn]).trim();
+    if (args.lowerCase) todoValue = todoValue.toLowerCase();
+
+    var res = args;
+    var rj = job => (isMap(job) ? $job(job.name, merge(job.args, res)) : $job(job, res));
+    if (isDef(args.todos[todoValue]) && isArray(args.todos[todoValue])) {
+      args.todos[todoValue].forEach(j => res = rj(j));
+    } else {
+      args.default.map(j => res = rj(j));
+    }
+    
+# OJOB SEC GET
+# ------------------
+- name: ojob sec get
+  help: |
+    This job will get a SBucket secret and map it to oJob's args:
+
+      - secOut      (string)  The args path to be mapped with the secret
+      - secKey      (string)  The SBucket key
+      - secRepo     (string)  The SBucket repository
+      - secBucket   (string)  The SBucket name
+      - secPass     (string)  The SBucket password
+      - secMainPass (string)  The SBucket repository password
+      - secDontAsk  (string)  Determine if passwords should be asked from the user (default=false)
+      - secIgnore   (boolean) If true will ignore errors of sec parameters not being provided (default=false)
+   
+  exec: |
+    args.secIgnore = _$(args.secIgnore, "secIgnore").isBoolean().default(false);
+    args.secOut = _$(args.secOut, "secOut").default(__);
+    if (!args.secIgnore) _$(args.secKey, "secKey").$_();
+    args.secDontAsk = toBoolean( _$(args.secDontAsk, "secDontAsk").default(false) );
+
+    if (!args.secDontAsk && isDef(args.secKey)) {
+       args.secBucket = askDef(args.secBucket, "Sec bucket: ");
+       if (isDef(args.secBucket)) args.secPass = askDef(args.secPass, "Sec bucket '" + args.secBucket + "' pass: ", true);
+       if (isDef(args.secRepo))   args.secMainPass = askDef(args.secMainPass, "Sec repo '" + args.secRepo + "' pass: ", true);
+    }
+    if (isDef(args.secKey)) {
+       var res = $sec(args.secRepo, args.secBucket, args.secPass, args.secMainPass).get(args.secKey);
+       if (isUnDef(res)) throw "Couldn't retrieve secKey '" + args.secKey + "' from bucket '" + args.secBucket + "'!";
+       if (isDef(args.secOut)) {
+         $$(args).set(args.secOut, res);
+       } else {
+         Object.keys(res).forEach(r => $$(args).set(r, res[r]));
+       }
+    } 
+
+# OJOB SPLIT TO ITEMS
+# -------------------------
+- name: ojob split to items
+  help: |
+    Splits an args source into an array of maps (_list). Expects:
+
+      source    (String)  A object path to the string source to split
+      separator (String)  The separator for the source string (defaults to \n)
+
+    Example:
+
+      a source string with the value "abc, xyz, 1"
+      + separator = ','
+      transforms into:
+
+      - item: abc
+      - item: xyz
+      - item: 1
+  exec: |
+    _$(args.source, "source").isString().$_();
+    args.separator = _$(args.separator, "separator").isString().default("\n");
+
+    ow.loadObj();
+    args._list = String(ow.obj.getPath(args, args.source)).split(args.separator).map(r => {
+      return { item: r };
+    });
+
+# OJOB QUERY
+# ----------------
+- name: ojob query
+  exec: |
+    args.where     = _$(args.where, "where").isArray().default([]);
+    args.select    = _$(args.select, "select").default(__);
+    args.transform = _$(args.transform, "transform").isArray().default([]);
+    args.selector  = _$(args.selector, "selector").isMap().default(__);
+
+    args.fromKey = _$(args.fromKey, "fromKey").isString().default("res");
+
+    var f = isDef(args.from) ? $from($$($get(args.fromKey)).get(args.from)) : $from($get(args.fromKey));
+    args.where.forEach(w => (isString(w.cond) ? f = f[w.cond].apply(f, w.args) : w));
+    args.transform.forEach(t => (isString(t.func) ? f = f[t.func].apply(f, t.args) : t));
+ 
+    var res; 
+    if (isString(args.select)) res = f.select(new Function("elem", "index", "array", args.select));
+    if (isMap(args.select))    res = f.select(args.select);
+
+    if (isUnDef(res) && isMap(args.selector)) res = (isString(args.selector.func) ? $$({}).set(args.selector.func, f[args.selector.func].apply(f, args.selector.args)) : res);
+
+    if (isUnDef(res) && isUnDef(args.select)) res = f.select();
+
+    if (isString(args.key)) { 
+      $set(args.key, res);
+    } else { 
+      return isArray(res) ? { _list: res } : res 
+    }
