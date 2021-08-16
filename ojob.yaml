@@ -50,12 +50,14 @@ jobs:
        key      (String)  The key string to retrieve previous results (defaults to 'res')
        path     (String)  A path string to a map/array over the results set on key. 
        format   (String)  The output format (e.g. see ow.oJob.output help)
+       title    (String)  Encapsulates the output map/array with a title key.
        internal (Boolean) If true it will display the internal oJob entries on the arguments (default false)
  
   exec: |
     args.key = _$(args.key, "key").isString().default("res");
     var res = $get(args.key);
-    if (!toBoolean(args.internal)) {
+    if (isUnDef(res)) res = args;
+    if (isDef(res) && !toBoolean(args.internal)) {
        delete res.objId;
        delete res.execid;
        delete res.id;
@@ -65,7 +67,13 @@ jobs:
     if (isDef(args.path)) res = $$(res).get(args.path);
     if (isMap(res) && isDef(res._list)) res = res._list;
     if (isMap(res) && isDef(res._map))  res = res._map;
-    ow.oJob.output(res, args);
+
+    if (isDef(args.title)) {
+      var r = {}; r[args.title] = res;
+      ow.oJob.output(r, args);
+    } else {
+      ow.oJob.output(res, args);
+    }
 
 # OJOB FINAL REPORT
 # -------------------------------
@@ -139,13 +147,13 @@ jobs:
         - Job 2
 
   exec: |
-    _$(args.switchOn, "switchOn").isString().$_();
+    _$(args.optionOn, "optionOn").isString().$_();
     _$(args.todos, "todos").isMap().$_();
     args.lowerCase = _$(args.lowerCase, "lowerCase").isBoolean().default(false);
     args.default   = _$(args.default, "default").isArray().default([]);
     args.end       = _$(args.end, "end").isArray().default([]);
 
-    var todoValue = String(args[args.switchOn]).trim();
+    var todoValue = String(args[args.optionOn]).trim();
     if (args.lowerCase) todoValue = todoValue.toLowerCase();
 
     var res = args;
