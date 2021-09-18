@@ -69,7 +69,7 @@ jobs:
         Provides a HTTP service definition. The expected arguments are:
            - args.port          (Number)   The port where the server was made available (default is 8091)
            - args.uri           (String)   The URI where the HTTP service will be available.
-           - args.execURI       (Function) The GET function. Receives a request map and a server object.
+           - args.execURI       (Function) The URI execution function. Receives a request map and a server object.
            - args.audit         (Boolean)  Turns request audit logging on (default true)
            - args.auditTemplate (String)   Provide an audit logging template based on the request argument.           
            - args.error         (Boolean)  If true will return the error in case of exception.
@@ -118,9 +118,12 @@ jobs:
      to  : HTTP Service
      help: >
         Provides a HTTP default handler. The expected arguments are:
-           - args.port   (Number) The port where the server was made available (default is 8091)
-           - args.uri    (String) The URI where the HTTP default response will be available
-           - args.code   (Number) The default HTTP status code to reply (default is 401)
+           - args.port          (Number)  The port where the server was made available (default is 8091)
+           - args.uri           (String)  The URI where the HTTP default response will be available (defaults to /)
+           - args.code          (Number)  The default HTTP status code to reply (default is 401)
+           - args.audit         (Boolean) Turns request audit logging on (default true)
+           - args.auditTemplate (String)  Provide an audit logging template based on the request argument.           
+           - args.error         (Boolean) If true will return the error in case of exception.
      exec: |
        args.code = _$(args.code, "code").isNumber().default(401);
        args.uri  = _$(args.uri, "uri").isString().default("/");
@@ -131,6 +134,15 @@ jobs:
      deps:
      - HTTP Start Server
      to  : HTTP Service
+     help: >
+        Provides a HTTP upload handler. The expected arguments are:
+           - args.port          (Number)   The port where the server was made available (default is 8091)
+           - args.uri           (String)   The URI where the HTTP default response will be available (defaults to /upload)
+           - args.path          (String)   The local path where uploaded files will be saved
+           - args.execURI       (Function) The URI execution function. Receives a request map and a server object. If doesn't return any value it will proceed to save the file on the corresponding path after code execution.
+           - args.audit         (Boolean)  Turns request audit logging on (default true)
+           - args.auditTemplate (String)   Provide an audit logging template based on the request argument.           
+           - args.error         (Boolean)  If true will return the error in case of exception.
      args:
        eURI: |
          if (isDef(request.params) && isDef(request.params.data) && request.method == "POST") {
@@ -145,7 +157,7 @@ jobs:
        args.uri  = _$(args.uri).isString().default("/upload");
 
        io.mkdir(args.path);
-       args.execURI = templify(args.eURI, { path: args.path });
+       args.execURI = (isDef(args.execURI) ? args.execURI : "") + "\n" + templify(args.eURI, { path: args.path });
  
    # ------------------
    - name: HTTP Healthz
