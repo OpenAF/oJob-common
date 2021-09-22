@@ -15,11 +15,76 @@ jobs:
 # OJOB GET
 # --------------
 - name: ojob get
+  help: >
+    Retrieves a specific map key (or path) using $get
+
+      key  (String)  Map key or path
+
   exec: |
     args.key = _$(args.key, "key").isString().default("res");
     var res = $get(args.key);
     if (isArray(res)) res = { _list: res };
     return res;
+
+# OJOB FILE GET
+# -------------------
+- name: ojob file get
+  help: >
+    Retrieves a specific map key (or path) from an YAML or JSON file provided.
+
+      __file  (String)  The file path to an YAML or JSON file
+      __key   (String)  Map key or path on the file contents
+      __cache (Boolean) If false it won't cache the file contents (default: true)
+      __ttl   (Number)  If cache is enabled lets you definea ttl
+      __out   (String)  The path on args to set the map key/path contents
+
+  exec: |
+    args.__file  = _$(args.__file, "__file").isString().$_();
+    args.__key   = _$(args.__key, "__key").isString().default("res");
+    args.__cache = toBoolean(_$(args.__cache, "__cache").default("true"));
+    args.__ttl   = _$(args.__ttl, "__ttl").isNumber().default(__);
+    args.__out   = _$(args.__out, "__out").isString().default(__);
+
+    var res;
+    if (args.__cache) {
+      var c = $cache("__ojob_file_get");
+      if (isDef(args.__ttl)) c= c.ttl(args.__ttl);
+      c = c.fn(aK => {
+        if (isDef(aK.file)) {
+          if (aK.file.endsWith(".json")) {
+            return io.readFileJSON(aK.file);
+          } else {
+            if (/\.ya?ml$/.test(aK.file)) {
+              return io.readFileYAML(aK.file);
+            } else {
+              return { error: "Not an yaml, yml or json file."};
+            }
+          }
+        } else {
+          return {}
+        }
+      })
+      .create();
+
+      res = c.get({ file: args.__file });
+    } else {
+      if (args.__file.endsWith(".json")) {
+        res = io.readFileJSON(args.__file);
+      } else {
+        if (/\.ya?ml$/.test(args.__file)) {
+          res = io.readFileYAML(args.__file);
+        } else {
+          res = { error: "Not an yaml, yml or json file."};
+        }
+      }
+    }
+
+    res = $$(res).get(args.__key);
+    if (isDef(args.__out)) {
+      $$(args).set(args.__out, res);
+    } else {
+      Object.keys(res).forEach(r => $$(args).set(r, res[r]));
+    }
 
 # OJOB FUNCTION
 # -------------------
