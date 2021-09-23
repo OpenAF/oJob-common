@@ -348,6 +348,7 @@ jobs:
         - args.secBucket   (string)  The SBucket name
         - args.secPass     (string)  The SBucket password
         - args.secMainPass (string)  The SBucket repository password
+        - args.secFile     (string)  Optional provide a specific sbucket file
         - args.secDontAsk  (string)  Determine if passwords should be asked from the user (default=false)
         - args.secIgnore   (boolean) If true will ignore errors of sec parameters not being provided (default=false)
     
@@ -359,11 +360,11 @@ jobs:
 
       if (!args.secDontAsk && isDef(args.secKey)) {
          args.secBucket = askDef(args.secBucket, "Sec bucket: ");
-         if (isDef(args.secBucket)) args.secPass = askDef(args.secPass, "Sec bucket '" + args.secBucket + "' pass: ", true);
+         if (isDef(args.secBucket) && isUnDef(args.secFile)) args.secPass = askDef(args.secPass, "Sec bucket '" + args.secBucket + "' pass: ", true);
          if (isDef(args.secRepo))   args.secMainPass = askDef(args.secMainPass, "Sec repo '" + args.secRepo + "' pass: ", true);
       }
       if (isDef(args.secKey)) {
-        var res = $sec(args.secRepo, args.secBucket, args.secPass, args.secMainPass).get(args.secKey);
+        var res = $sec(args.secRepo, args.secBucket, args.secPass, args.secMainPass, args.secFile).get(args.secKey);
         if (isUnDef(res)) throw "Couldn't retrieve secKey '" + args.secKey + "' from bucket '" + args.secBucket + "'!";
         if (isDef(args.secOut)) {
           $$(args).set(args.secOut, res);
