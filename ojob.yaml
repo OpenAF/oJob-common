@@ -321,3 +321,50 @@ jobs:
     } else { 
       return isArray(res) ? { _list: res } : res 
     }
+
+# OJOB STATE
+# --------------------
+- name: ojob set state
+  help: |
+    Changes the current state. Expects:
+
+      state  (String) The state to change to (to execute todo.when)
+  exec: |
+    _$(args.state, "state").isString().$_();
+    ow.oJob.setState(args.state);
+
+# --------------------
+- name: ojob get state
+  help: |
+    Gets the current state into args.state.
+  exec: |
+    args.state = ow.oJob.getState();
+
+# ----------------
+- name: ojob state
+  help: |
+    Changes the current state depending on the value of a provided args variable. Expects:
+
+      stateOn     (String)  The variable in args that will define the current global set (to execute todo.when)
+      lowerCase   (Boolean) Compare the stateOn in lower case (defaults to false)
+      validStates (Array)   An array of valid states to change to. If not included the default will be choosen (or none).
+      default     (Array)   Default map of "todo"s
+
+      Example:
+
+        stateOn  : mode
+        lowerCase: true
+        default  : Help
+
+  exec: |
+    args.stateOn   = _$(args.stateOn, "stateOn").default("state");
+    args.lowerCase = _$(args.lowerCase, "lowerCase").isBoolean().default(false);
+    args.state     = _$(args[args.stateOn], args.stateOn).default(args.default);
+    if (args.lowerCase && isString(args.state)) args.state = args.state.toLowerCase();
+    if (isArray(args.validStates)) {
+      if (args.validStates.indexOf(args.state) < 0) {
+        if (isDef(args.default)) args.state = args.default; else args.state = __;
+      }
+    }
+
+    if (isString(args.state) && isDef(ow.oJob.setState)) ow.oJob.setState(args.state);
