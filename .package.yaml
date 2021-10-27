@@ -77,7 +77,7 @@ filesHash:
   oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
   oJobEmail.yaml: 366597e3f42975ed432a5f02b05463fe90415f3b
   oJobDebug.yaml: 556cf30c9b6108fe9e9228a470a43039b7550a1c
-  ojob.yaml: 465fc7664adc39df049c3b4b3ddad8ff26406bec
+  ojob.yaml: f012fadb7c445e939b3742900490d79374d07bcd
   oJobHBS.yaml: f314f109494e64e5ef5b24483a96ec59d54d6c11
   oJobSSH.yaml: 0c283840dcd037fdce5b5bb475b0a70d264df908
   oJobSQL.yaml: 1028052c21de4dc10aff07d5716a774df0aef29d
@@ -91,7 +91,7 @@ filesHash:
   oJobOPack.yaml: cd9542c6720f38758af1512060be295a8e608184
   oJobXLS.yaml: 97c309095e07e0b7d86c6f1cb9fb383ddf204e6d
   oJobManager.yaml: 52a7bd5e45edd98066ab34d53f9865fe59fc79ba
-  ojob.json: 9ad4b6cd77450881363c51a85035a13e0f10ee73
+  ojob.json: 2d205a664b63e4d9ebb06b7a20fb7611ef897931
   oJobRAID.yaml: b4916cff81119a9e626c735abd6426964cdfc17c
   oJobWatchDog.yaml: 1c4523666b603ee3cfcf70d322c136224b9dbd13
   oJobQueue.yaml: 7f08700877c8b5018fab572e1871f25725eb8f61
