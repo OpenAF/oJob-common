@@ -236,7 +236,7 @@ jobs:
     This job will get a SBucket secret and map it to oJob's args:
 
       - secIn               (String)  The args path where all the remaining sec arguments should be read from (defaults to no path)
-      - [secIn].secOut      (string)  The args path to be mapped with the secret
+      - [secIn].secOut      (string)  The args path to be mapped with the secret (defaults to secIn)
       - [secIn].secKey      (string)  The SBucket key
       - [secIn].secRepo     (string)  The SBucket repository
       - [secIn].secBucket   (string)  The SBucket name
@@ -251,7 +251,7 @@ jobs:
     if (secIn != "") secIn += ".";
 
     var secIgnore   = _$($$(args).get(secIn + "secIgnore"), "secIgnore").isBoolean().default(false);
-    var secOut      = _$($$(args).get(secIn + "secOut"), "secOut").default(__);
+    var secOut      = _$($$(args).get(secIn + "secOut"), "secOut").default(secIn != "" ? secIn : __);
     if (!secIgnore) _$($$(args).get(secIn + "secKey"), "secKey").$_();
     var secDontAsk  = toBoolean( _$($$(args).get(secIn + "secDontAsk"), "secDontAsk").default(false) );
     var secKey      = _$($$(args).get(secIn + "secKey"), "secKey").default(__);
