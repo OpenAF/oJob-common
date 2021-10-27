@@ -235,32 +235,42 @@ jobs:
   help: |
     This job will get a SBucket secret and map it to oJob's args:
 
-      - secOut      (string)  The args path to be mapped with the secret
-      - secKey      (string)  The SBucket key
-      - secRepo     (string)  The SBucket repository
-      - secBucket   (string)  The SBucket name
-      - secPass     (string)  The SBucket password
-      - secMainPass (string)  The SBucket repository password
-      - secFile     (string)  Optional provide a specific sbucket file
-      - secDontAsk  (string)  Determine if passwords should be asked from the user (default=false)
-      - secIgnore   (boolean) If true will ignore errors of sec parameters not being provided (default=false)
+      - secIn               (String)  The args path where all the remaining sec arguments should be read from (defaults to no path)
+      - [secIn].secOut      (string)  The args path to be mapped with the secret
+      - [secIn].secKey      (string)  The SBucket key
+      - [secIn].secRepo     (string)  The SBucket repository
+      - [secIn].secBucket   (string)  The SBucket name
+      - [secIn].secPass     (string)  The SBucket password
+      - [secIn].secMainPass (string)  The SBucket repository password
+      - [secIn].secFile     (string)  Optional provide a specific sbucket file
+      - [secIn].secDontAsk  (string)  Determine if passwords should be asked from the user (default=false)
+      - [secIn].secIgnore   (boolean) If true will ignore errors of sec parameters not being provided (default=false)
    
   exec: |
-    args.secIgnore = _$(args.secIgnore, "secIgnore").isBoolean().default(false);
-    args.secOut = _$(args.secOut, "secOut").default(__);
-    if (!args.secIgnore) _$(args.secKey, "secKey").$_();
-    args.secDontAsk = toBoolean( _$(args.secDontAsk, "secDontAsk").default(false) );
+    var secIn     = _$(args.secIn, "secIn").isString().default("");
+    if (secIn != "") secIn += ".";
 
-    if (!args.secDontAsk && isDef(args.secKey)) {
-       args.secBucket = askDef(args.secBucket, "Sec bucket: ");
-       if (isDef(args.secBucket) && isUnDef(args.secFile)) args.secPass = askDef(args.secPass, "Sec bucket '" + args.secBucket + "' pass: ", true);
-       if (isDef(args.secRepo))   args.secMainPass = askDef(args.secMainPass, "Sec repo '" + args.secRepo + "' pass: ", true);
+    var secIgnore   = _$($$(args).get(secIn + "secIgnore"), "secIgnore").isBoolean().default(false);
+    var secOut      = _$($$(args).get(secIn + "secOut"), "secOut").default(__);
+    if (!secIgnore) _$($$(args).get(secIn + "secKey"), "secKey").$_();
+    var secDontAsk  = toBoolean( _$($$(args).get(secIn + "secDontAsk"), "secDontAsk").default(false) );
+    var secKey      = _$($$(args).get(secIn + "secKey"), "secKey").default(__);
+    var secBucket   = _$($$(args).get(secIn + "secBucket"), "secBucket").default(__);
+    var secPass     = _$($$(args).get(secIn + "secPass"), "secPass").default(__);
+    var secFile     = _$($$(args).get(secIn + "secFile"), "secFile").default(__);
+    var secRepo     = _$($$(args).get(secIn + "secRepo"), "secRepo").default(__);
+    var secMainPass = _$($$(args).get(secIn + "secMainPass"), "secMainPass").default(__);
+
+    if (!secDontAsk && isDef(secKey)) {
+       secBucket = askDef(secBucket, "Sec bucket: ");
+       if (isDef(secBucket) && isUnDef(secFile)) secPass = askDef(secPass, "Sec bucket '" + secBucket + "' pass: ", true);
+       if (isDef(secRepo))                       secMainPass = askDef(secMainPass, "Sec repo '" + secRepo + "' pass: ", true);
     }
-    if (isDef(args.secKey)) {
-       var res = $sec(args.secRepo, args.secBucket, args.secPass, args.secMainPass, args.secFile).get(args.secKey);
-       if (isUnDef(res)) throw "Couldn't retrieve secKey '" + args.secKey + "' from bucket '" + args.secBucket + "'!";
-       if (isDef(args.secOut)) {
-         $$(args).set(args.secOut, res);
+    if (isDef(secKey)) {
+       var res = $sec(secRepo, secBucket, secPass, secMainPass, secFile).get(secKey);
+       if (isUnDef(res)) throw "Couldn't retrieve secKey '" + secKey + "' from bucket '" + secBucket + "'!";
+       if (isDef(secOut)) {
+         $$(args).set(secOut, res);
        } else {
          Object.keys(res).forEach(r => $$(args).set(r, res[r]));
        }
