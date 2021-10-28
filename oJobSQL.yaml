@@ -5,7 +5,7 @@ jobs:
   - name: SQL Result
     help: 
       Use internally by oJobSQL
-    exec: >
+    exec: |
       if (isUnDef(args.sql))     throw "Please specify a query to run with sql=select\ user\ from\ dual";
       args.format = _$(args.format, "format").default("pm");
 
@@ -47,12 +47,13 @@ jobs:
         DBPass      (String)  The database user password
         sql         (String)  The SQL to execute/query 
         execute     (Boolean) If true if will execute the sql statement instead of querying (e.g. update, truncate, ...)
+        format      (String)  The format on which to output data (default: json)
 
       Provides:
 
         output      (Object)  In the default format it will be the resulting array. 
                               In tabular format it will return a string.
-    exec: >
+    exec: |
       args.DBDriver = _$(args.DBDriver, "DBDriver").isString().default(void 0);
       _$(args.DBURL, "DBURL").isString().$_();
       _$(args.DBUser, "DBUser").isString().$_();
@@ -129,7 +130,7 @@ jobs:
 
         output      (Object)  In the default format it will be the resulting array. 
                               In tabular format it will return a string.
-    exec: >
+    exec: |
       if (isUnDef(args.raidURL)) throw "Please specify a raidURL=http://user:pass@1.2.3.4:8080";
       if (isUnDef(args.raidDB))  throw "Please specify a raidDB=Adm";
       
