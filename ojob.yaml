@@ -270,7 +270,8 @@ jobs:
        var res = $sec(secRepo, secBucket, secPass, secMainPass, secFile).get(secKey);
        if (isUnDef(res)) throw "Couldn't retrieve secKey '" + secKey + "' from bucket '" + secBucket + "'!";
        if (isDef(secOut)) {
-         $$(args).set(secOut, res);
+         var prev = $$(args).get(secOut);
+         $$(args).set(secOut, (isDef(prev) ? merge(prev, res) : res));
        } else {
          Object.keys(res).forEach(r => $$(args).set(r, res[r]));
        }
