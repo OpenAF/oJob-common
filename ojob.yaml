@@ -333,6 +333,22 @@ jobs:
       return isArray(res) ? { _list: res } : res 
     }
 
+# OJOB ENV
+# --------
+- name: ojob set envs
+  help: |
+    Sets job args based on environment variables. Expects:
+
+      envs  (Map) A map where each key corresponds to an environment variable and the value to the args path where it should be placed
+  exec: |
+    _$(args.envs, "envs").isMap().$_();
+
+    Object.keys(args.envs).forEach(key => {
+      var p = args.envs[key];
+      var v = getEnv(key);
+      if (isDef(v) && !isNull(v)) $$(args).set(String(p), String(v));
+    });
+
 # OJOB STATE
 # --------------------
 - name: ojob set state
