@@ -269,7 +269,7 @@ jobs:
     if (isDef(secKey)) {
        var res = $sec(secRepo, secBucket, secPass, secMainPass, secFile).get(secKey);
        if (isUnDef(res)) throw "Couldn't retrieve secKey '" + secKey + "' from bucket '" + secBucket + "'!";
-       if (isDef(secOut)) {
+       if (isDef(secOut) && secOut.length > 0) {
          var prev = $$(args).get(secOut);
          $$(args).set(secOut, (isDef(prev) ? merge(prev, res) : res));
        } else {
