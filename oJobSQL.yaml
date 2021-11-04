@@ -9,24 +9,54 @@ jobs:
       if (isUnDef(args.sql))     throw "Please specify a query to run with sql=select\ user\ from\ dual";
       args.format = _$(args.format, "format").default("pm");
 
-      var _res;
+      var _res, _met = { }
+      if (isDef(args.metric)) {
+        _met = _$(ow.oJob.getMetric(args.metric)).isMap().default({})
+      }
+
       if (args.execute) {
          args._db.rollback();
          try {
+           var t = now()
            _res = args._db.u(args.sql);
            args._db.commit();
+           _met.updateAccTimeMs = _$(_met.updateAccTimeMs).isNumber().default(0) + 1
+           _met.updateRows      = _$(_met.updateRows).isNumber().default(0) + Number(_res)
+           _met.updateSQL       = _$(_met.updateSQL).isNumber().default(0) + 1
+           _met.successful      = _$(_met.successful).isNumber().default(0) + 1
          } catch(e) {
            args._db.rollback();
+           _met.error = _$(_met.error).isNumber().default(0) + 1
+           _met.exception   = String(e)
            throw e;
+         } finally {
+            if (isDef(args.metric)) {
+              _met.id          = args.metric
+              _met.type        = "sql"
+              ow.oJob.setMetric(args.metric, _met)
+            }
          }
       } else {
          args._db.rollback();
          try {
-          _res = args._db.q(args.sql).results;
+           var t = now()
+           _res = args._db.q(args.sql).results;
            args._db.commit();
+           _met.queryAccTimeMs = _$(_met.queryAccTimeMs).isNumber().default(0) + 1
+           _met.queryRows      = _$(_met.queryRows).isNumber().default(0) + (isArray(_res) ? _res.length : 0)
+           _met.querySQL       = _$(_met.querySQL).isNumber().default(0) + 1
+           _met.successful     = _$(_met.successful).isNumber().default(0) + 1
          } catch(e) {
            args._db.rollback();
+           _met.error = _$(_met.error).isNumber().default(0) + 1
+           _met.exception   = String(e)
            throw e;
+         } finally {
+            if (isDef(args.metric)) {
+              _met.id          = args.metric
+              _met.type        = "sql"
+              ow.oJob.setMetric(args.metric, _met)
+            }
          }
       }
 
@@ -58,14 +88,36 @@ jobs:
       _$(args.DBURL, "DBURL").isString().$_();
       _$(args.DBUser, "DBUser").isString().$_();
       _$(args.DBPass, "DBPass").isString().$_();
+      args.metric   = _$(args.metric).isString().default(__);
 
       if (isUnDef(args.sql))     throw "Please specify a query to run with sql=select\ user\ from\ dual";
       if (isUnDef(args.format))  args.format = "json";
 
-      if (isDef(args.DBDriver)) 
-        args._db = new DB(args.DBDriver, args.DBURL, args.DBUser, args.DBPass);
-      else
-        args._db = new DB(args.DBURL, args.DBUser, args.DBPass);
+      var t = now(), _met = { }
+      if (isDef(args.metric)) {
+        _met = _$(ow.oJob.getMetric(args.metric)).isMap().default({})
+      }
+
+      try {
+        if (isDef(args.DBDriver)) 
+          args._db = new DB(args.DBDriver, args.DBURL, args.DBUser, args.DBPass);
+        else
+          args._db = new DB(args.DBURL, args.DBUser, args.DBPass);
+        
+        _met.connTime   = now() - t
+        _met.successful = _$(_met.successful).isNumber().default(0) + 1
+      } catch(e) {
+        _met.error       = _$(_met.error).isNumber().default(0) + 1
+        _met.exception   = String(e)
+      } finally {
+        if (isDef(args.metric)) {
+          _met.id          = args.metric
+          _met.type        = "sql"
+          ow.oJob.setMetric(args.metric, _met)
+        }
+      }
+
+      if (isDef(_met.exception)) throw _met.exception
 
   # ---------------
   - name: SQL Batch
