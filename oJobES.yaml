@@ -18,6 +18,8 @@ jobs:
       args.stamp = _$(args.stamp).isMap().default(void 0);
       
       startLog();
+      if (isDef(args.pass) && isUnDef(args.password)) args.password = args.pass
+      
       $ch("__es").create(void 0, "elasticsearch", {
          url  : args.url,
          idKey: "id",
