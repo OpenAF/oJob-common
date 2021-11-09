@@ -266,6 +266,10 @@ jobs:
        if (isDef(secBucket) && isUnDef(secFile)) secPass = askDef(secPass, "Sec bucket '" + secBucket + "' pass: ", true);
        if (isDef(secRepo))                       secMainPass = askDef(secMainPass, "Sec repo '" + secRepo + "' pass: ", true);
     }
+
+    if (isUnDef(secPass) && isDef(args.secPass))         secPass = args.secPass
+    if (isUnDef(secMainPass) && isDef(args.secMainPass)) secMainPass = args.secMainPass
+
     if (isDef(secKey)) {
        var res = $sec(secRepo, secBucket, secPass, secMainPass, secFile).get(secKey);
        if (isUnDef(res)) throw "Couldn't retrieve secKey '" + secKey + "' from bucket '" + secBucket + "'!";
