@@ -67,7 +67,7 @@ jobs:
       ow.loadFormat()
       var ch = ow.oJob.getJobsCh()
 
-      if (args.jobs.length == 0) args.jobs = ch.getKeys().filter(j => j.name != "Debug").map(j => j.name)
+      if (args.jobs.length == 0) args.jobs = ch.getKeys().filter(j => j.name != "ojob job debug").map(j => j.name)
 
       args.jobs.forEach(jj => {
         var job = ch.get({ name: jj })
