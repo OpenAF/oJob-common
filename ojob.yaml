@@ -12,6 +12,132 @@ jobs:
     cprint( ow.format.withSideLine("RES:", __, "YELLOW,BOLD", "BOLD", ow.format.withSideLineThemes().openBottomCurvedRect) );
     cprint( ow.format.withSideLine(colorify($get("res")), __, "YELLOW,BOLD", __, ow.format.withSideLineThemes().openTopCurvedRect) );
 
+# --------------------
+- name: ojob job debug
+  help: >
+    Provides an alternative to print based debug
+
+      job         (String)  The job to change to include debug
+      jobs        (Array)   The jobs to change to include debug
+      lineColor   (String)  The line color around the debug info
+      textColor   (String)  The text color around the debug info
+      theme       (String)  The withSideLineThemes theme to use
+      emoticons   (String)  If emoticons should be used or not
+      signs       (Map)     A custom list of emoticons (keys: checkpoint, assert and print)
+      includeTime (Boolean) If a time indication should be included
+
+    Example:
+      # ----------------
+      - name: Sample job
+        exec: |
+          //@ Declaring array
+          var ar = [ 0, 1, 2, 3, 4, 5 ]
+
+          //@ Start cycle
+          var ii = 0;
+          while(ii < ar.length) {
+            print("II = " + ii)
+            ii++
+            //# ii == 3
+          }
+          //@ End cycle
+          //? ii
+
+          //?s args
+          //?y args
+
+  exec: |
+    args.job  = _$(args.job, "job").isString().default(__)
+    args.jobs = _$(args.jobs, "jobs").isArray().default([])
+    args.lineColor = _$(args.lineColor, "lineColor").isString().default("FG(220)")
+    args.textColor = _$(args.textColor, "textColor").isString().default("BG(230)")
+    args.theme     = _$(args.theme, "theme").isString().default("closedCurvedRect")
+    args.emoticons = _$(args.emoticons, "emoticons").isBoolean().default(true)
+    args.signs     = _$(args.signs, "signs").isMap().default({
+      checkpoint: 0x1F37A,
+      assert    : 0x1F44D,
+      print     : 0x1F50E
+    })
+    args.includeTime = _$(args.includeTime, "includeTime").isBoolean().default(false)
+
+    
+    if (isDef(args.job) && args.jobs.length == 0) args.jobs.push(args.job)
+
+    if (isUnDef(getEnv("OJOB_DEBUG")) || toBoolean(getEnv("OJOB_DEBUG"))) {
+      ow.loadFormat()
+      var ch = ow.oJob.getJobsCh()
+
+      if (args.jobs.length == 0) args.jobs = ch.getKeys().filter(j => j.name != "Debug").map(j => j.name)
+
+      args.jobs.forEach(jj => {
+        var job = ch.get({ name: jj })
+        
+        var _m = (s, c) => {
+          var _s = ";"
+          if (isDef(c)) _s += "if(" + c + ") {"
+          var _t = (args.includeTime ? "(new Date()).toISOString() +\" | \" + " : "")
+          _s += "cprint(ow.format.withSideLine(" + _t + s + ", __, \"" + args.lineColor + "\", \"" + args.textColor + "\", ow.format.withSideLineThemes()." + args.theme + ")) "
+          if (isDef(c)) _s += "}"
+          _s += ";"
+          return _s
+        }
+
+        var sign
+        if (args.emoticons) {
+          sign = args.signs
+          if (isNumber(sign.checkpoint)) sign.checkpoint = ow.format.string.unicode(sign.checkpoint)
+          if (isNumber(sign.assert)) sign.assert = ow.format.string.unicode(sign.assert)
+          if (isNumber(sign.print)) sign.print = ow.format.string.unicode(sign.print)
+        }
+        sign.checkpoint = _$(sign.checkpoint).default("@")
+        sign.assert     = _$(sign.assert).default("#")
+        sign.print      = _$(sign.print).default("?")
+
+        job.exec = job.exec.split("\n").map(line => {
+          var l
+
+          // checkpoint equivalent
+          l = line.trim().match(/\/\/\@ (.+)$/)
+          if (isArray(l)) {
+            var s = l[1]
+            line = line.replace(/\/\/\@ (.+)$/, _m("\"" + sign.checkpoint + " " + s.replace(/\"/g, "\\\"") + "\""))
+          }
+
+          // assert equivalent
+          l = line.trim().match(/\/\/\# (.+)$/)
+          if (isArray(l)) {
+            var s = l[1]
+            line = line.replace(/\/\/\# (.+)$/, _m("\"" + sign.assert + " " + s + "\"", s))
+          }
+
+          // print equivalent
+          l = line.trim().match(/\/\/\? (.+)$/)
+          if (isArray(l)) {
+            var s = l[1]
+            line = line.replace(/\/\/\? (.+)$/, _m("\""+ sign.print + " " + s + " = \" + stringify(" + s + ") + \"\""))
+          }
+
+          // slon print equivalent
+          l = line.trim().match(/\/\/\?s (.+)$/)
+          if (isArray(l)) {
+            var s = l[1]
+            line = line.replace(/\/\/\?s (.+)$/, _m("\"" + sign.print + " " + s + " = \" + af.toSLON(" + s + ") + \"\""))
+          }
+
+          // yaml print equivalent
+          l = line.trim().match(/\/\/\?y (.+)$/)
+          if (isArray(l)) {
+            var s = l[1]
+            line = line.replace(/\/\/\?y (.+)$/, _m("\"" + sign.print + " " + s + " = \" + af.toYAML(" + s + ") + \"\""))
+          }
+
+          return line
+        }).join("\n")
+
+        ch.set({ name: jj }, job)
+      })
+    }
+
 # OJOB GET
 # --------------
 - name: ojob get

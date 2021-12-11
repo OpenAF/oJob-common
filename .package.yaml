@@ -35,63 +35,63 @@ name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20211108'
+version: '20211210'
 dependencies:
   openaf: '>=20201111'
 files:
-- oJobES.yaml
-- oJobGIT.yaml
-- LICENSE
-- oJobCh.yaml
-- oJobNet.yaml
-- oJobSVN.yaml
-- oJobTest.yaml
 - oJobEmail.yaml
-- oJobDebug.yaml
-- ojob.yaml
-- oJobHBS.yaml
-- oJobSSH.yaml
-- .package.yaml
-- oJobSQL.yaml
-- oJobBasics.yaml
-- oJobDirector.yaml
-- oJobs.yaml
-- oJobRest.yaml
-- oJobIO.yaml
-- README.md
-- oJobHTTPd.yaml
-- oJobOPack.yaml
-- oJobXLS.yaml
 - oJobManager.yaml
 - ojob.json
-- oJobRAID.yaml
-- oJobWatchDog.yaml
+- oJobHBS.yaml
+- oJobGIT.yaml
+- oJobSVN.yaml
+- oJobDebug.yaml
+- oJobs.yaml
+- .package.yaml
 - oJobQueue.yaml
+- oJobIO.yaml
+- oJobNet.yaml
+- oJobBasics.yaml
+- oJobCh.yaml
+- oJobTest.yaml
+- oJobXLS.yaml
+- oJobRest.yaml
+- oJobSQL.yaml
+- oJobDirector.yaml
+- README.md
+- oJobWatchDog.yaml
+- LICENSE
+- oJobRAID.yaml
+- oJobES.yaml
+- oJobHTTPd.yaml
+- oJobSSH.yaml
+- oJobOPack.yaml
+- ojob.yaml
 filesHash:
-  oJobES.yaml: 3a29356a4bdb8ca12e96f8e8e202d237e59ca3d5
-  oJobGIT.yaml: 041aa8c4b393d2285a6b765e1ad5d76f59e2f10f
-  LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
-  oJobCh.yaml: 5f21cc46f4200b5f692bf4034fb4af22c2d7e6fb
-  oJobNet.yaml: a744fb83a9430ca9e34356bede5b0df8f2d48367
-  oJobSVN.yaml: ecfed00a4fa11b50ebf601168ac1251f7de29bfa
-  oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
   oJobEmail.yaml: 366597e3f42975ed432a5f02b05463fe90415f3b
-  oJobDebug.yaml: 556cf30c9b6108fe9e9228a470a43039b7550a1c
-  ojob.yaml: 8340fa0df22745c7bcec4f1f41c8c8c6577c09a9
-  oJobHBS.yaml: f314f109494e64e5ef5b24483a96ec59d54d6c11
-  oJobSSH.yaml: 0c283840dcd037fdce5b5bb475b0a70d264df908
-  oJobSQL.yaml: 01c389006737c279c85fbeff682b81071fb2f518
-  oJobBasics.yaml: 47d991de0da80426ec4e48669674d0feb6bd93c5
-  oJobDirector.yaml: 30009ded4b9c56fa1bbdda04f4d23d2db33c1151
-  oJobs.yaml: 83d8406c43b4a5325686467ed80911a9c1e26d49
-  oJobRest.yaml: 1e24c5fd1b2fcf1c19cda0cdbe7106fb13718548
-  oJobIO.yaml: 117a48b6c73a32b906dd05f9f085b37c4013ed92
-  README.md: 52e273d18449e905afa7bcf088dcce4ff76b0470
-  oJobHTTPd.yaml: b210a7d9d63c7c61ad9e958454587f84bf04d3e0
-  oJobOPack.yaml: cd9542c6720f38758af1512060be295a8e608184
-  oJobXLS.yaml: 97c309095e07e0b7d86c6f1cb9fb383ddf204e6d
   oJobManager.yaml: 52a7bd5e45edd98066ab34d53f9865fe59fc79ba
-  ojob.json: 82e836b7ffd49853e3ebcd8b41bb2e60902fff5a
-  oJobRAID.yaml: b4916cff81119a9e626c735abd6426964cdfc17c
-  oJobWatchDog.yaml: 1c4523666b603ee3cfcf70d322c136224b9dbd13
+  ojob.json: ac9a6db3e263b0f7c405b558f62ccec7854b08b8
+  oJobHBS.yaml: f314f109494e64e5ef5b24483a96ec59d54d6c11
+  oJobGIT.yaml: 041aa8c4b393d2285a6b765e1ad5d76f59e2f10f
+  oJobSVN.yaml: ecfed00a4fa11b50ebf601168ac1251f7de29bfa
+  oJobDebug.yaml: 556cf30c9b6108fe9e9228a470a43039b7550a1c
+  oJobs.yaml: 83d8406c43b4a5325686467ed80911a9c1e26d49
   oJobQueue.yaml: 7f08700877c8b5018fab572e1871f25725eb8f61
+  oJobIO.yaml: 117a48b6c73a32b906dd05f9f085b37c4013ed92
+  oJobNet.yaml: a744fb83a9430ca9e34356bede5b0df8f2d48367
+  oJobBasics.yaml: 47d991de0da80426ec4e48669674d0feb6bd93c5
+  oJobCh.yaml: 5f21cc46f4200b5f692bf4034fb4af22c2d7e6fb
+  oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
+  oJobXLS.yaml: 97c309095e07e0b7d86c6f1cb9fb383ddf204e6d
+  oJobRest.yaml: 1e24c5fd1b2fcf1c19cda0cdbe7106fb13718548
+  oJobSQL.yaml: 01c389006737c279c85fbeff682b81071fb2f518
+  oJobDirector.yaml: 30009ded4b9c56fa1bbdda04f4d23d2db33c1151
+  README.md: 52e273d18449e905afa7bcf088dcce4ff76b0470
+  oJobWatchDog.yaml: 1c4523666b603ee3cfcf70d322c136224b9dbd13
+  LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
+  oJobRAID.yaml: b4916cff81119a9e626c735abd6426964cdfc17c
+  oJobES.yaml: 3a29356a4bdb8ca12e96f8e8e202d237e59ca3d5
+  oJobHTTPd.yaml: b210a7d9d63c7c61ad9e958454587f84bf04d3e0
+  oJobSSH.yaml: 0c283840dcd037fdce5b5bb475b0a70d264df908
+  oJobOPack.yaml: cd9542c6720f38758af1512060be295a8e608184
+  ojob.yaml: 42cd64e6d41060d0f228c58d7d37fe2c1ac02ee8
