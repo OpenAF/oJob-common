@@ -49,7 +49,6 @@ files:
 - oJobTest.yaml
 - oJobOPack.yaml
 - oJobSSH.yaml
-- .vscode/extensions.json
 - oJobGIT.yaml
 - .package.yaml
 - oJobHTTPd.yaml
@@ -79,7 +78,6 @@ filesHash:
   oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
   oJobOPack.yaml: cd9542c6720f38758af1512060be295a8e608184
   oJobSSH.yaml: 0c283840dcd037fdce5b5bb475b0a70d264df908
-  .vscode/extensions.json: b3942e4a2a0ef0912af0856d6b8a56d4535b17c0
   oJobGIT.yaml: 041aa8c4b393d2285a6b765e1ad5d76f59e2f10f
   oJobHTTPd.yaml: b210a7d9d63c7c61ad9e958454587f84bf04d3e0
   oJobEmail.yaml: 366597e3f42975ed432a5f02b05463fe90415f3b
