@@ -35,63 +35,65 @@ name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20211210'
+version: '20220124'
 dependencies:
   openaf: '>=20201111'
 files:
-- oJobEmail.yaml
-- oJobManager.yaml
-- ojob.json
-- oJobHBS.yaml
-- oJobGIT.yaml
-- oJobSVN.yaml
-- oJobDebug.yaml
-- oJobs.yaml
-- .package.yaml
-- oJobQueue.yaml
-- oJobIO.yaml
-- oJobNet.yaml
-- oJobBasics.yaml
-- oJobCh.yaml
-- oJobTest.yaml
-- oJobXLS.yaml
-- oJobRest.yaml
-- oJobSQL.yaml
-- oJobDirector.yaml
-- README.md
-- oJobWatchDog.yaml
 - LICENSE
-- oJobRAID.yaml
+- oJobWatchDog.yaml
+- ojob.json
 - oJobES.yaml
-- oJobHTTPd.yaml
-- oJobSSH.yaml
+- oJobXLS.yaml
+- oJobBasics.yaml
+- oJobManager.yaml
+- oJobTest.yaml
 - oJobOPack.yaml
+- oJobSSH.yaml
+- .vscode/extensions.json
+- oJobGIT.yaml
+- .package.yaml
+- oJobHTTPd.yaml
+- oJobEmail.yaml
+- oJobNet.yaml
+- oJobCh.yaml
+- oJobDebug.yaml
+- oJobSQL.yaml
+- README.md
+- oJobs.yaml
+- oJobIO.yaml
+- oJobQueue.yaml
+- oJobRest.yaml
+- oJobSVN.yaml
 - ojob.yaml
+- oJobHBS.yaml
+- oJobDirector.yaml
+- oJobRAID.yaml
 filesHash:
-  oJobEmail.yaml: 366597e3f42975ed432a5f02b05463fe90415f3b
-  oJobManager.yaml: 52a7bd5e45edd98066ab34d53f9865fe59fc79ba
-  ojob.json: 2e2d2e23cdd3de7aed23a206a3d8ba1ef9493f79
-  oJobHBS.yaml: f314f109494e64e5ef5b24483a96ec59d54d6c11
-  oJobGIT.yaml: 041aa8c4b393d2285a6b765e1ad5d76f59e2f10f
-  oJobSVN.yaml: ecfed00a4fa11b50ebf601168ac1251f7de29bfa
-  oJobDebug.yaml: 556cf30c9b6108fe9e9228a470a43039b7550a1c
-  oJobs.yaml: 83d8406c43b4a5325686467ed80911a9c1e26d49
-  oJobQueue.yaml: 7f08700877c8b5018fab572e1871f25725eb8f61
-  oJobIO.yaml: 117a48b6c73a32b906dd05f9f085b37c4013ed92
-  oJobNet.yaml: a744fb83a9430ca9e34356bede5b0df8f2d48367
-  oJobBasics.yaml: 47d991de0da80426ec4e48669674d0feb6bd93c5
-  oJobCh.yaml: 5f21cc46f4200b5f692bf4034fb4af22c2d7e6fb
-  oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
-  oJobXLS.yaml: 97c309095e07e0b7d86c6f1cb9fb383ddf204e6d
-  oJobRest.yaml: 1e24c5fd1b2fcf1c19cda0cdbe7106fb13718548
-  oJobSQL.yaml: 01c389006737c279c85fbeff682b81071fb2f518
-  oJobDirector.yaml: 30009ded4b9c56fa1bbdda04f4d23d2db33c1151
-  README.md: 52e273d18449e905afa7bcf088dcce4ff76b0470
-  oJobWatchDog.yaml: 1c4523666b603ee3cfcf70d322c136224b9dbd13
   LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
-  oJobRAID.yaml: b4916cff81119a9e626c735abd6426964cdfc17c
+  oJobWatchDog.yaml: 1c4523666b603ee3cfcf70d322c136224b9dbd13
+  ojob.json: 2e2d2e23cdd3de7aed23a206a3d8ba1ef9493f79
   oJobES.yaml: 3a29356a4bdb8ca12e96f8e8e202d237e59ca3d5
-  oJobHTTPd.yaml: b210a7d9d63c7c61ad9e958454587f84bf04d3e0
-  oJobSSH.yaml: 0c283840dcd037fdce5b5bb475b0a70d264df908
+  oJobXLS.yaml: 97c309095e07e0b7d86c6f1cb9fb383ddf204e6d
+  oJobBasics.yaml: 47d991de0da80426ec4e48669674d0feb6bd93c5
+  oJobManager.yaml: 52a7bd5e45edd98066ab34d53f9865fe59fc79ba
+  oJobTest.yaml: 684560356b6e60c85c7230dd90c69c78fdd649f5
   oJobOPack.yaml: cd9542c6720f38758af1512060be295a8e608184
-  ojob.yaml: 2f77f1edd96a19e6a48411a15b8033ae9bf9ae0c
+  oJobSSH.yaml: 0c283840dcd037fdce5b5bb475b0a70d264df908
+  .vscode/extensions.json: b3942e4a2a0ef0912af0856d6b8a56d4535b17c0
+  oJobGIT.yaml: 041aa8c4b393d2285a6b765e1ad5d76f59e2f10f
+  oJobHTTPd.yaml: b210a7d9d63c7c61ad9e958454587f84bf04d3e0
+  oJobEmail.yaml: 366597e3f42975ed432a5f02b05463fe90415f3b
+  oJobNet.yaml: a744fb83a9430ca9e34356bede5b0df8f2d48367
+  oJobCh.yaml: 5f21cc46f4200b5f692bf4034fb4af22c2d7e6fb
+  oJobDebug.yaml: 556cf30c9b6108fe9e9228a470a43039b7550a1c
+  oJobSQL.yaml: 01c389006737c279c85fbeff682b81071fb2f518
+  README.md: 52e273d18449e905afa7bcf088dcce4ff76b0470
+  oJobs.yaml: 83d8406c43b4a5325686467ed80911a9c1e26d49
+  oJobIO.yaml: 117a48b6c73a32b906dd05f9f085b37c4013ed92
+  oJobQueue.yaml: 7f08700877c8b5018fab572e1871f25725eb8f61
+  oJobRest.yaml: 1e24c5fd1b2fcf1c19cda0cdbe7106fb13718548
+  oJobSVN.yaml: ecfed00a4fa11b50ebf601168ac1251f7de29bfa
+  ojob.yaml: f0190ddf2120dd636f5d5f582ffffecf5976b18f
+  oJobHBS.yaml: f314f109494e64e5ef5b24483a96ec59d54d6c11
+  oJobDirector.yaml: 30009ded4b9c56fa1bbdda04f4d23d2db33c1151
+  oJobRAID.yaml: b4916cff81119a9e626c735abd6426964cdfc17c
