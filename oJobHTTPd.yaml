@@ -295,7 +295,12 @@ jobs:
             if (request.uri.endsWith(".md")) {
                return ow.server.httpd.replyFileMD(server, path, uri, request.uri); 
             } else {
-               return ow.server.httpd.replyFile(server, path, uri, request.uri);
+               if (request.uri.endsWith(".adoc") && isDef(getOPackPath("Asciidoc"))) {
+                  loadLib("asciidoc.js")
+                  return ow.server.httpd.replyAsciidoc(server, path, uri, request.uri)
+               } else {
+                  return ow.server.httpd.replyFile(server, path, uri, request.uri);
+               }
             }
          }
          
