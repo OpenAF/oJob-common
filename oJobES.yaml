@@ -31,6 +31,7 @@ jobs:
          sprintErr(e);
       }, void 0, args.stamp);
       $ch("__log").subscribe(global.__esSubs);
+      addOnOpenAFShutdown(() => ($ch().list().indexOf("__log") ? $ch("__log").waitForJobs(2500) : __))
       
   - name: Stop ES logging
     help: >
