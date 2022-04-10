@@ -500,6 +500,74 @@ jobs:
       if (isDef(v) && !isNull(v)) $$(args).set(String(p), String(v));
     });
 
+# OJOB JOB
+# --------
+
+# ---------------
+- name : ojob job
+  help : |
+    Provides a way to organize idempotent jobs. One or more "checks" jobs will be called to determine an args._action.
+    Initially the args._action is set to "none". If the "checks" jobs determine an action it will call the corresponding
+    jobs on "actions" jobs. If "_go=true" is not provided, instead of running, it will only return a plan of actions. 
+    For example:
+
+       - name: Write Hello World
+         to  : ojob job
+         args:
+           _checks : Check Hello World
+           _actions:
+             create   : Create Hello World
+             overwrite: Overwrite Hello World
+             delete   : Delete Hello World
+  check:
+    in:
+      _go: toBoolean.isBoolean.default(false)
+  exec : |
+    if (isString(args._checks))  args._checks  = [ args._checks ]
+    if (isMap(args._actions))    args._actions = [ args._actions ]
+    
+    var hideArgs = ar => {
+      var nar = clone(ar)
+      delete nar._checks
+      delete nar._actions
+      return nar
+    }
+
+    args._action = "none"
+    args._checks.forEach(r => {
+      if (isString(r)) {
+        var res = $job(r, hideArgs(args))
+        if (isMap(res) && isString(res._action)) args._action = res._action 
+      } else {
+        logErr("oJob Job 'checks' must be job names")
+      }
+    })
+
+    var plan = []
+    args._actions.forEach(r => {
+      if (isMap(r)) {
+        if (args._action == "none" || isUnDef(Object.keys(r).indexOf(args._action) < 0)) {
+          // Do nothing
+        } else {
+          // Do the action(s)
+          var acts
+          if (isArray(r[args._action]))  acts = r[args._action]
+          if (isString(r[args._action])) acts = [ r[args._action] ]
+          acts.forEach(s => {
+            if (args._go) {
+              $job(s, hideArgs(args))
+            } else {
+              plan.push(s)
+            }
+          })
+        }
+      } else {
+        logErr("oJob Job 'actions' must be a map (actionName: jobName)")
+      }
+    })
+
+    return plan
+
 # OJOB STATE
 # --------------------
 - name: ojob set state
