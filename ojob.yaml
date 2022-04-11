@@ -525,6 +525,9 @@ jobs:
   exec : |
     if (isString(args._checks))  args._checks  = [ args._checks ]
     if (isMap(args._actions))    args._actions = [ args._actions ]
+
+    args._checks  = _$(args._checks).isArray().default([])
+    args._actions = _$(args._actions).isArray().default([])
     
     var hideArgs = ar => {
       var nar = clone(ar)
