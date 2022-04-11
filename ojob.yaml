@@ -524,10 +524,7 @@ jobs:
       _go: toBoolean.isBoolean.default(false)
   exec : |
     if (isString(args._checks))  args._checks  = [ args._checks ]
-    if (isMap(args._actions))    args._actions = [ args._actions ]
-
-    args._checks  = _$(args._checks).isArray().default([])
-    args._actions = _$(args._actions).isArray().default([])
+    if (isString(args._actions)) args._actions = { none: args._actions }
     
     var hideArgs = ar => {
       var nar = clone(ar)
@@ -547,29 +544,21 @@ jobs:
     })
 
     var plan = []
-    args._actions.forEach(r => {
-      if (isMap(r)) {
-        if (args._action == "none" || isUnDef(Object.keys(r).indexOf(args._action) < 0)) {
-          // Do nothing
-        } else {
-          // Do the action(s)
-          var acts
-          if (isArray(r[args._action]))  acts = r[args._action]
-          if (isString(r[args._action])) acts = [ r[args._action] ]
-          acts.forEach(s => {
-            if (args._go) {
-              $job(s, hideArgs(args))
-            } else {
-              plan.push(s)
-            }
-          })
-        }
-      } else {
-        logErr("oJob Job 'actions' must be a map (actionName: jobName)")
-      }
-    })
+    if (isDef(args._actions[args._action])) {
+       // Do the action(s)
+       var acts
+       if (isArray(args._actions[args._action]))  acts = args._actions[args._action]
+       if (isString(args._actions[args._action])) acts = [ args._actions[args._action] ]
+       acts.forEach(s => {
+         if (args._go) {
+           $job(s, hideArgs(args))
+         } else {
+           plan.push(s)
+         }
+       })
+    }
 
-    return plan
+    args._plan = plan    
 
 # OJOB STATE
 # --------------------
