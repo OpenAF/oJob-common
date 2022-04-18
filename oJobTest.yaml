@@ -18,12 +18,19 @@ jobs:
  #
  - name: oJob Test
    help: >
-     This job will test a args.func (function) provided. The test will use the current
-     oJob job name.
-   exec: >
-     if (isUnDef(args.func)) throw "Please define args.func.";
-     if (!(isFunction(args.func))) args.func = new Function(args.func);
-     ow.loadTest().test(job.name, args.func);   
+     This job will test an args.func (function) or an args.job provided. The test will use the current
+     oJob job name. Optionally you can specify args.count (defaults to 1) to test more than one time.
+   exec: |
+     if (isUnDef(args.func) && isUnDef(args.job)) throw "Please define args.func or an args.job."
+     var count = _$(args.count, "count").toNumber().isNumber().default(1)
+     if (isDef(args.func)) {
+        if (!(isFunction(args.func))) args.func = new Function(args.func)
+        for(var c = 0; c < count; c++) ow.loadTest().test(job.name, args.func) 
+     } else {
+        if (isDef(args.job)) {
+          for(var c = 0; c < count; c++) ow.loadTest().test(job.name, () => $job(args.job) )
+        }
+     }
 
  # test outside commands
  #
@@ -41,14 +48,23 @@ jobs:
  - name: oJob Test Results
    help: |
      Prints or outputs (if args.quiet = true) a args.results with: count of tests, tests passed, tests failed and all profile information.
-   exec: >
+   exec: |
+     var prof = ow.loadTest().__profile
      args.results = {
         count: ow.loadTest().getCountTest(),
         pass: ow.loadTest().getCountPass(),
         fail: ow.loadTest().getCountFail(),
-        profile: ow.loadTest().__profile
+        profile: Object.keys(prof).map(r => ({
+          name: r,
+          hits: prof[r].hits,
+          sum : prof[r].sum,
+          last: prof[r].last,
+          max : prof[r].max,
+          min : prof[r].min,
+          avg : prof[r].sum / prof[r].hits
+        }))
      };
-     if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) print(af.toYAML(args.results));
+     if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) ow.oJob.output(args.results)
 
  - name: oJob Test Todo results
    help: |
@@ -59,7 +75,7 @@ jobs:
         pass: $from($ch("oJob::logs").getAll()).equals("success", true).count(),
         fail: $from($ch("oJob::logs").getAll()).equals("error", true).count()
      };
-     if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) print(af.toYAML(args.results));
+     if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) ow.oJob.output(args.results)
 
 # JUnit results
 #
