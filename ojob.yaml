@@ -340,7 +340,8 @@ jobs:
     Adds new "todo" entries depending on the value of a provided args variable. Expects:
 
       optionOn      (String)  The variable in args that will define which set of "todo"s will be added (trimmed)
-      lowerCase     (Boolean) Compare the switchOn in lower case (defaults to false)
+      lowerCase     (Boolean) Compare the optionOn in lower case (defaults to false)
+      upperCase     (Boolean) Compare the optionOn in upper case (defaults to false)
       todos.[value] (Map)     Map of "todo"s
       default       (Array)   Default map of "todo"s
 
@@ -362,11 +363,13 @@ jobs:
     _$(args.optionOn, "optionOn").isString().$_();
     _$(args.todos, "todos").isMap().$_();
     args.lowerCase = _$(args.lowerCase, "lowerCase").isBoolean().default(false);
+    args.upperCase = _$(args.upperCase, "upperCase").isBoolean().default(false);
     args.default   = _$(args.default, "default").isArray().default([]);
     args.end       = _$(args.end, "end").isArray().default([]);
 
     var todoValue = String(args[args.optionOn]).trim();
     if (args.lowerCase) todoValue = todoValue.toLowerCase();
+    if (args.upperCase) todoValue = todoValue.toUpperCase()
 
     var res = args;
     var rj = job => (isMap(job) ? $job(job.name, merge(job.args, res)) : $job(job, res));
@@ -585,6 +588,7 @@ jobs:
 
       stateOn     (String)  The variable in args that will define the current global set (to execute todo.when)
       lowerCase   (Boolean) Compare the stateOn in lower case (defaults to false)
+      upperCase   (Boolean) Compare the stateOn in upper case (defaults to false)
       validStates (Array)   An array of valid states to change to. If not included the default will be choosen (or none).
       default     (Array)   Default map of "todo"s
 
@@ -597,8 +601,10 @@ jobs:
   exec: |
     args.stateOn   = _$(args.stateOn, "stateOn").default("state");
     args.lowerCase = _$(args.lowerCase, "lowerCase").isBoolean().default(false);
+    args.upperCase = _$(args.upperCase, "upperCase").isBoolean().default(false)
     args.state     = _$(args[args.stateOn], args.stateOn).default(args.default);
     if (args.lowerCase && isString(args.state)) args.state = args.state.toLowerCase();
+    if (args.upperCase && isString(args.state)) args.state = args.state.toUpperCase()
     if (isArray(args.validStates)) {
       if (args.validStates.indexOf(args.state) < 0) {
         if (isDef(args.default)) args.state = args.default; else args.state = __;
