@@ -343,7 +343,7 @@ jobs:
       lowerCase     (Boolean) Compare the optionOn in lower case (defaults to false)
       upperCase     (Boolean) Compare the optionOn in upper case (defaults to false)
       todos.[value] (Map)     Map of "todo"s
-      default       (Array)   Default map of "todo"s
+      default       (Array)   Default array of "todo"s
 
       Example:
 
@@ -364,8 +364,9 @@ jobs:
     _$(args.todos, "todos").isMap().$_();
     args.lowerCase = _$(args.lowerCase, "lowerCase").isBoolean().default(false);
     args.upperCase = _$(args.upperCase, "upperCase").isBoolean().default(false);
-    args.default   = _$(args.default, "default").isArray().default([]);
-    args.end       = _$(args.end, "end").isArray().default([]);
+    args.default   = _$(args.default, "default").default([]);
+
+    if (isString(args.default)) args.default = [ args.default ]
 
     var todoValue = String(args[args.optionOn]).trim();
     if (args.lowerCase) todoValue = todoValue.toLowerCase();
@@ -373,6 +374,7 @@ jobs:
 
     var res = args;
     var rj = job => (isMap(job) ? $job(job.name, merge(job.args, res)) : $job(job, res));
+    if (isDef(args.todos[todoValue]) && isString(args.todos[todoValue])) args.todos[todoValue] = [ args.todos[todoValue] ]
     if (isDef(args.todos[todoValue]) && isArray(args.todos[todoValue])) {
       args.todos[todoValue].forEach(j => res = rj(j));
     } else {
