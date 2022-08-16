@@ -399,6 +399,7 @@ jobs:
       - [secIn].secIgnore   (boolean) If true will ignore errors of sec parameters not being provided (default=false)
    
   exec: |
+    ow.loadSec()
     var secIn     = _$(args.secIn, "secIn").isString().default("");
     if (secIn != "") secIn += ".";
 

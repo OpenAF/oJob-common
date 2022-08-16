@@ -353,6 +353,7 @@ jobs:
         - args.secIgnore   (boolean) If true will ignore errors of sec parameters not being provided (default=false)
     
     exec: |
+      ow.loadSec()
       args.secIgnore = _$(args.secIgnore, "secIgnore").isBoolean().default(false);
       args.secOut = _$(args.secOut, "secOut").default(__);
       if (!args.secIgnore) _$(args.secKey, "secKey").$_();
