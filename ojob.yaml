@@ -160,18 +160,38 @@ jobs:
     }
 
 # OJOB GET
-# --------------
-- name: ojob get
-  help: >
+# -----.---------
+- name : ojob get
+  help : >
     Retrieves a specific map key (or path) using $get
 
-      key  (String)  Map key or path
+      __key  (String)  Map key or path (key is also checked for compatibility)
+  check:
+    in:
+      __key: isString.default("res")
+  exec : |
+    if (isUnDef(args.__key) && isDef(args.key)) args.__key = args.key
+  
+    var res = $get(args.__key)
+    if (isArray(res)) res = { _list: res }
+    return res
 
-  exec: |
-    args.key = _$(args.key, "key").isString().default("res");
-    var res = $get(args.key);
-    if (isArray(res)) res = { _list: res };
-    return res;
+# OJOB SET
+# ------------
+- name: ojob set
+  help: >
+    Sets a "key" with the current value on a "path" using $set
+
+      __key  (String)  Map key
+      __path (String)  A key or path to a value from the current args
+  check:
+    in:
+      __key : isString.default("res")
+      __path: isString
+  exec : |
+    var r = $$(args).get(args.__path)
+  
+    if (isDef(r)) $set(args.__key, r)
 
 # OJOB FILE GET
 # -------------------
@@ -505,6 +525,100 @@ jobs:
       var v = getEnv(key);
       if (isDef(v) && !isNull(v)) $$(args).set(String(p), String(v));
     });
+
+# OJOB CONTROL
+# ------------
+
+# --------------
+- name : ojob if
+  help : |
+    If the provided "condition" is evaluated as true it will execute the "then" jobs otherwise it will execute the "else" jobs
+
+      __condition  (String)       An OpenAF code condition with templating functionality
+      __then       (String/List)  One job or a list of jobs to execute if the "condition" is true
+      __else       (String/List)  One job or a list of jobs to execute if the "condition" is false
+      __debug      (Boolean)      Will log the original condition and the parsed condition for debug proposes
+  check:
+    in:
+      __condition: isString
+      __then     : default([])
+      __else     : default([])
+      __debug    : toBoolean.isBoolean.default(false)
+  exec : |
+    if (isString(args.__then)) args.__then = [ args.__then ]
+    if (isString(args.__else)) args.__else = [ args.__else ]
+
+    var c = String(args.__condition)
+    delete args.__condition
+
+    var t = clone(args.__then)
+    delete args.__then
+
+    var e = clone(args.__else)
+    delete args.__else
+
+    var d = Boolean(args.__debug)
+    delete args.__debug
+
+    var expr = templify(c, args).replace(/\n/g, "")
+    if (d) log(" DEBUG | " + af.toSLON({ origCondition: " "+c+" ", parsedCondition: " "+expr+" " }))
+
+    var res = af.eval(expr)
+    if (d) log(" DEBUG | " + af.toSLON({ origCondition: " "+c+" ", result: res }))
+
+    if (res) t.forEach(j => $job(j, args)); else e.forEach(j => $job(j, args))
+
+# ------------------
+- name : ojob repeat
+  help : |
+    Repeats sequentially, for a specific number of "times", the provided list of "jobs" (one or more)
+
+      __times  (Number)       The number of times to repeat the provided list of jobs
+      __jobs   (String/List)  One job or a list of jobs to execute each time
+  check:
+    in:
+      __times: toNumber.isNumber
+  exec : |
+    if (!(isString(args.__jobs) || isArray(args.__jobs))) throw "The provided 'jobs' need to be one or a list of jobs."
+    if (isUnDef(args.__jobs)) throw "No 'jobs' list was provided."
+
+    if (isString(args.__jobs)) args.__jobs = [ args.__jobs ]
+    var njobs = clone(args.__jobs)
+    delete args.__jobs
+
+    var ntimes = Number(args.__times)
+    delete args.__times
+
+    for(var n = 0; n < ntimes; n++) {
+      njobs.forEach(j => $job(j, args))
+    }
+
+# ----------------------------
+- name : ojob repeat with each
+  help : |
+    Repeats the configured "jobs" (one or more jobs) sequentially for each element of the provided "key" list.
+
+      __key  (String)       The key or path for an existing list in args
+      __jobs (String/List)  One job or a list of jobs to execute each time
+  check:
+    in:
+      __key: isString
+  exec : |
+    if (!(isString(args.__jobs) || isArray(args.__jobs))) throw "The provided 'jobs' need to be one or a list of jobs."
+    if (isUnDef(args.__jobs)) throw "No 'jobs' list was provided."
+
+    var ak = String(args.__key)
+    delete args.__key
+
+    if (isString(args.__jobs)) args.__jobs = [ args.__jobs ]
+    var njobs = clone(args.__jobs)
+    delete args.__jobs
+
+    var arr = $$(args).get(ak)
+    if (!isArray(arr)) throw "The key/path '" + ak + "' is not an array/list."
+    arr.forEach(elem => {
+      njobs.forEach(j => $job(j, merge(args, elem)))
+    })
 
 # OJOB JOB
 # --------
