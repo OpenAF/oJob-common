@@ -189,7 +189,7 @@ jobs:
       __key : isString.default("res")
       __path: isString
   exec : |
-    var r = $$(args).get(args.__path)
+    var r = $path(args, args.__path)
   
     if (isDef(r)) $set(args.__key, r)
 
@@ -246,7 +246,7 @@ jobs:
       }
     }
 
-    res = $$(res).get(args.__key);
+    res = $path(res, args.__key)
     if (isDef(args.__out)) {
       $$(args).set(args.__out, res);
     } else {
@@ -269,7 +269,7 @@ jobs:
     _$(args.__fn, "__fn").isString().$_();
 
     if (args.__fn.indexOf(".") < 0) args.__fn = "global." + args.__fn; 
-    var res = $fnM(args.__fn, (isDef(args.__path) ? $$(args).get(args.__path) : args));
+    var res = $fnM(args.__fn, (isDef(args.__path) ? $path(args, args.__path) : args));
     if (isString(args.__fnPath)) res = $$({}).set(args.__fnPath, res);
     if (isString(args.__key)) $set(args.__key, res); else return res;
 
@@ -279,13 +279,19 @@ jobs:
   help: >
     Prints the current arguments to the console. Optionally expects:
     
-       key      (String)  The key string to retrieve previous results (defaults to 'res')
-       path     (String)  A path string to a map/array over the results set on key. 
-       format   (String)  The output format (e.g. see ow.oJob.output help)
-       title    (String)  Encapsulates the output map/array with a title key.
-       internal (Boolean) If true it will display the internal oJob entries on the arguments (default false)
+      __key      (String)  The key string to retrieve previous results (defaults to 'res')
+      __path     (String)  A path string to a map/array over the results set on key. 
+      __format   (String)  The output format (e.g. see ow.oJob.output help)
+      __title    (String)  Encapsulates the output map/array with a title key.
+      __internal (Boolean) If true it will display the internal oJob entries on the arguments (default false)
  
   exec: |
+    if (isUnDef(args.__key) && isDef(args.key)) args.__key = args.key
+    if (isUnDef(args.__path) && isDef(args.path)) args.__path = args.path
+    if (isUnDef(args.__format) && isDef(args.format)) args.__format = args.format
+    if (isUnDef(args.__title) && isDef(args.title)) args.__title = args.title
+    if (isUnDef(args.__internal) && isDef(args.internal)) args.__internal = args.internal
+
     args.key = _$(args.key, "key").isString().default("res");
     var res = $get(args.key);
     if (isUnDef(res)) res = args;
@@ -296,7 +302,7 @@ jobs:
     }
 
     if (isDef(args.format)) { args.__format = args.format; delete args.format; }
-    if (isDef(args.path)) res = $$(res).get(args.path);
+    if (isDef(args.path)) res = $path(res, args.path);
     if (isMap(res) && isDef(res._list)) res = res._list;
     if (isMap(res) && isDef(res._map))  res = res._map;
 
@@ -482,32 +488,37 @@ jobs:
     });
 
 # OJOB QUERY
-# ----------------
-- name: ojob query
-  exec: |
-    args.where     = _$(args.where, "where").isArray().default([]);
-    args.select    = _$(args.select, "select").default(__);
-    args.transform = _$(args.transform, "transform").isArray().default([]);
-    args.selector  = _$(args.selector, "selector").isMap().default(__);
+# -----------------
+- name : ojob query
+  help : |
+    Performs a query (using ow.obj.filter) to the existing args.
 
-    args.fromKey = _$(args.fromKey, "fromKey").isString().default("res");
+      __query   (Map)     The query map for ow.obj.filter
+      __from    (String)  The path to the args key to perform the query
+      __to      (String)  The path to where the results should be stores
+      __key     (String)  If __from and __to not provided defaults to $get/$set on the provided key
+  exec : |
+    if (isUnDef(args.__from) && isDef(args.from)) args.__from = args.from
+    if (isUnDef(args.__key) && isDef(args.key)) args.__key = args.key
+    if (isUnDef(args.__query)) args.__query = {}
 
-    var f = isDef(args.from) ? $from($$($get(args.fromKey)).get(args.from)) : $from($get(args.fromKey));
-    args.where.forEach(w => (isString(w.cond) ? f = f[w.cond].apply(f, w.args) : w));
-    args.transform.forEach(t => (isString(t.func) ? f = f[t.func].apply(f, t.args) : t));
- 
-    var res; 
-    if (isString(args.select)) res = f.select(new Function("elem", "index", "array", args.select));
-    if (isMap(args.select))    res = f.select(args.select);
-
-    if (isUnDef(res) && isMap(args.selector)) res = (isString(args.selector.func) ? $$({}).set(args.selector.func, f[args.selector.func].apply(f, args.selector.args)) : res);
-
-    if (isUnDef(res) && isUnDef(args.select)) res = f.select();
-
-    if (isString(args.key)) { 
-      $set(args.key, res);
+    if (isUnDef(args.__from) && isUnDef(args.__key)) args.__key = "res"
+    var f = isDef(args.__from) ? $path(args, args.__from) : $get(args.__key)
+   
+    ow.loadObj()
+    var res = ow.obj.filter(f, args.__query)
+    if (isUnDef(args.__from) && isDef(args.__key)) { 
+      $set(args.__key, res)
     } else { 
-      return isArray(res) ? { _list: res } : res 
+      if (isDef(args.__to)) {
+        $$(args).set(args.__to, res)
+      } else {
+        if (isDef(args.__from)) {
+          $$(args).set(args.__from, res)
+        } else {
+          return isArray(res) ? { _list: res } : res 
+        }
+      }
     }
 
 # OJOB ENV
@@ -686,8 +697,10 @@ jobs:
   help: |
     Changes the current state. Expects:
 
-      state  (String) The state to change to (to execute todo.when)
+      __state  (String) The state to change to (to execute todo.when)
   exec: |
+    if (isUnDef(args.__state) && isDef(args.state)) args.__state = args.state
+
     _$(args.state, "state").isString().$_();
     ow.oJob.setState(args.state);
 
