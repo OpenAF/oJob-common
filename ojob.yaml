@@ -365,46 +365,71 @@ jobs:
   help: |
     Adds new "todo" entries depending on the value of a provided args variable. Expects:
 
-      optionOn      (String)  The variable in args that will define which set of "todo"s will be added (trimmed)
-      lowerCase     (Boolean) Compare the optionOn in lower case (defaults to false)
-      upperCase     (Boolean) Compare the optionOn in upper case (defaults to false)
-      todos.[value] (Map)     Map of "todo"s
-      default       (Array)   Default array of "todo"s
+      __optionOn      (String)  The variable in args that will define which set of "todo"s will be added (trimmed)
+      __lowerCase     (Boolean) Compare the optionOn in lower case (defaults to false)
+      __upperCase     (Boolean) Compare the optionOn in upper case (defaults to false)
+      __todos.[value] (Map)     Map of "todo"s
+      __default       (Array)   Default array of "todo"s
+      __async         (Boolean) If true, run the todos in async mode
 
       Example:
 
-        optionOn : mode
-        lowerCase: true
-        todos    :
+        __optionOn : mode
+        __lowerCase: true
+        __todos    :
           mode1:
           - Job 1
           - Job 2
           mode2:
           - Job 2
           - Job 3
-        default:
+        __default:
         - Job 2
 
   exec: |
-    _$(args.optionOn, "optionOn").isString().$_();
-    _$(args.todos, "todos").isMap().$_();
-    args.lowerCase = _$(args.lowerCase, "lowerCase").isBoolean().default(false);
-    args.upperCase = _$(args.upperCase, "upperCase").isBoolean().default(false);
-    args.default   = _$(args.default, "default").default([]);
+    if (isUnDef(args.__optionOn) && isDef(args.optionOn)) args.__optionOn = args.optionOn
+    if (isUnDef(args.__todos) && isDef(args.todos)) args.__todos = args.todos
+    if (isUnDef(args.__lowerCase) && isDef(args.lowerCase)) args.__lowerCase = args.lowerCase
+    if (isUnDef(args.__upperCase) && isDef(args.upperCase)) args.__upperCase = args.upperCase
+    if (isUnDef(args.__default) && isDef(args.default)) args.__default = args.default
 
-    if (isString(args.default)) args.default = [ args.default ]
+    _$(args.__optionOn, "optionOn").isString().$_()
+    _$(args.__todos, "todos").isMap().$_()
+    args.__lowerCase = _$(args.__lowerCase, "lowerCase").isBoolean().default(false)
+    args.__upperCase = _$(args.__upperCase, "upperCase").isBoolean().default(false)
+    args.__default   = _$(args.__default, "default").default([])
+    args.__async     = _$(args.__async, "async").isBoolean().default(false)
 
-    var todoValue = String(args[args.optionOn]).trim();
-    if (args.lowerCase) todoValue = todoValue.toLowerCase();
-    if (args.upperCase) todoValue = todoValue.toUpperCase()
+    if (isString(args.__default)) args.__default = [ args.__default ]
 
-    var res = args;
-    var rj = job => (isMap(job) ? $job(job.name, merge(job.args, res)) : $job(job, res));
-    if (isDef(args.todos[todoValue]) && isString(args.todos[todoValue])) args.todos[todoValue] = [ args.todos[todoValue] ]
-    if (isDef(args.todos[todoValue]) && isArray(args.todos[todoValue])) {
-      args.todos[todoValue].forEach(j => res = rj(j));
+    var todoValue = String(args[args.__optionOn]).trim();
+    if (args.__lowerCase) todoValue = todoValue.toLowerCase()
+    if (args.__upperCase) todoValue = todoValue.toUpperCase()
+
+    var res = {}, iargs = clone(args)
+    delete iargs.__default
+    delete iargs.__lowerCase
+    delete iargs.__upperCase
+    delete iargs.__todos
+    delete iargs.__optionOn
+    delete iargs.__async
+
+    var rj = job => (isMap(job) ? $job(job.name, merge(job.args, merge(iargs, res))) : $job(job, merge(iargs, res)))
+    if (isDef(args.__todos[todoValue]) && isString(args.__todos[todoValue])) args.__todos[todoValue] = [ args.__todos[todoValue] ]
+    if (isDef(args.__todos[todoValue]) && isArray(args.__todos[todoValue])) {
+      args.__todos[todoValue].forEach(j => {
+        if (args.__async) 
+          $do(() => res = rj(j) )
+        else 
+          res = rj(j)
+      })
     } else {
-      args.default.map(j => res = rj(j));
+      args.__default.map(j => {
+        if (args.__async) 
+          $do(() => res = rj(j) )
+        else 
+          res = rj(j)
+      })
     }
     
 # OJOB SEC GET
