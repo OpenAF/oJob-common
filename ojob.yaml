@@ -602,7 +602,11 @@ jobs:
     var res = af.eval(expr)
     if (d) log(" DEBUG | " + af.toSLON({ origCondition: " "+c+" ", result: res }))
 
-    if (res) t.forEach(j => $job(j, args)); else e.forEach(j => $job(j, args))
+    var fn = j => {
+      if (isString(j))               $job(j, args)
+      if (isMap(j) && isDef(j.name)) $job(j.name, j.args)
+    }
+    if (res) t.forEach(fn); else e.forEach(fn)
 
 # ------------------
 - name : ojob repeat
