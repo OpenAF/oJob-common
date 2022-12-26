@@ -295,19 +295,19 @@ jobs:
     args.__key = _$(args.__key, "key").isString().default("res");
     var res    = $get(args.__key);
     if (isUnDef(res)) res = args;
-    if (isDef(res) && !toBoolean(args.internal)) {
+    if (isDef(res) && !toBoolean(args.__internal)) {
        delete res.objId;
        delete res.execid;
        delete res.id;
     }
 
     if (isDef(args.format)) { args.__format = args.format; delete args.format; }
-    if (isDef(args.path)) res = $path(res, args.path);
+    if (isDef(args.__path)) { res = $path(res, args.__path); delete args.__path; }
     if (isMap(res) && isDef(res._list)) res = res._list;
     if (isMap(res) && isDef(res._map))  res = res._map;
 
-    if (isDef(args.title)) {
-      var r = {}; r[args.title] = res;
+    if (isDef(args.__title)) {
+      var r = {}; r[args.__title] = res;
       ow.oJob.output(r, args);
     } else {
       ow.oJob.output(res, args);
