@@ -292,8 +292,8 @@ jobs:
     if (isUnDef(args.__title) && isDef(args.title)) args.__title = args.title
     if (isUnDef(args.__internal) && isDef(args.internal)) args.__internal = args.internal
 
-    args.key = _$(args.key, "key").isString().default("res");
-    var res = $get(args.key);
+    args.__key = _$(args.__key, "key").isString().default("res");
+    var res    = $get(args.__key);
     if (isUnDef(res)) res = args;
     if (isDef(res) && !toBoolean(args.internal)) {
        delete res.objId;
