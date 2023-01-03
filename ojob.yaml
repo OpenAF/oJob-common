@@ -703,7 +703,10 @@ jobs:
       }
     })
 
+    $ch("_ojob_plan").create()
+    $ch("_ojob_plan").get({ name: job.name })
     var plan = []
+
     if (isDef(args._actions[args._action])) {
        // Do the action(s)
        var acts
@@ -718,7 +721,30 @@ jobs:
        })
     }
 
-    args._plan = plan    
+    $ch("_ojob_plan").set({ name: job.name }, { 
+      name: job.name,
+      action: args._action,
+      "go?": args._go,
+      plan: plan
+    })
+
+# ----------------------
+- name : ojob job report
+  help : |
+    Outputs a job jobs report (e.g. job name, action and plan)
+
+      __format  (String)  Can be json, yaml, table (default) or any other ow.oJob.output format
+  exec : |
+    ow.oJob.output($ch("_ojob_plan").getAll(), { __format: _$(args.__format).default("table") })
+    
+# ----------------------------
+- name : ojob job final report
+  type : shutdown
+  to   : ojob job report
+  help : |
+    Outputs a job jobs report (e.g. job name, action and plan) upon ojob termination
+
+      __format  (String)  Can be json, yaml, table (default) or any other ow.oJob.output format
 
 # OJOB STATE
 # --------------------
