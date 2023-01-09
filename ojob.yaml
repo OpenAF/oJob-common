@@ -851,6 +851,7 @@ jobs:
       secIn: isString.default("")
   exec : |
     ow.loadSec()
+    var secIn = args.secIn
     if (secIn != "") secIn += ".";
 
     var secIgnore   = _$($$(args).get(secIn + "secIgnore"), "secIgnore").isBoolean().default(false);

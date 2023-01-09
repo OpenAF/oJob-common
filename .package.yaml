@@ -35,7 +35,7 @@ name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20230107'
+version: '20230108'
 dependencies:
   openaf: '>=20211229'
 files:
@@ -86,12 +86,12 @@ filesHash:
   oJobSQL.yaml: 01c389006737c279c85fbeff682b81071fb2f518
   oJobQueue.yaml: 7f08700877c8b5018fab572e1871f25725eb8f61
   oJobCh.yaml: 5f21cc46f4200b5f692bf4034fb4af22c2d7e6fb
-  ojob.json: d92cffee1f9dd958c5f1edf1c63c6deea9449361
+  ojob.json: 894758ff51ebc3600c25c6eb3f880b6bc9557cf8
   oJobOPack.yaml: cd9542c6720f38758af1512060be295a8e608184
   oJobES.yaml: c66cb85da174407895dc9da58b09fd6a2a3d2b3d
   oJobGIT.yaml: 041aa8c4b393d2285a6b765e1ad5d76f59e2f10f
   oJobHBS.yaml: f314f109494e64e5ef5b24483a96ec59d54d6c11
-  ojob.yaml: 949f53660c381c32b6b689072dc1ccb38d1c0038
+  ojob.yaml: c55ae66522b8e19090c0b52fcd5064e71fd7e571
   oJobIO.yaml: 117a48b6c73a32b906dd05f9f085b37c4013ed92
   oJobTest.yaml: db7d7defd29078be9ac173ff1958fa9f21aa9319
   oJobDebug.yaml: 556cf30c9b6108fe9e9228a470a43039b7550a1c
