@@ -1329,6 +1329,8 @@ jobs:
       desc: Boolean, false by default, to indicate that the job should run in a different scope (e.g. deps will not work)
     - name: templateArgs
       desc: Boolean, true by default, to indicate to apply template to each string of the provided args (use only if typeArgs.noTemplateArgs = false OR job.templateArgs = true)
+    - name: shareArgs
+      desc: Boolean, false by default, to indicate that args should be shared between all todo's jobs sequentially.
     - name: __debug
       desc: Boolean to indicate that each job execution parameters should be printed before executing
   check: 
