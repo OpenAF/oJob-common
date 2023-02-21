@@ -68,21 +68,26 @@ jobs:
   # ---------
   - name: SQL 
     to  : SQL Result
-    help: > 
-      Executes a DB SQL query. Expects:
-       
-        DBDriver    (String)  The JDBC driver to use (defaults to Oracle)
-        DBURL       (String)  A JDBC URL to access the database
-        DBUser      (String)  The database user login
-        DBPass      (String)  The database user password
-        sql         (String)  The SQL to execute/query 
-        execute     (Boolean) If true if will execute the sql statement instead of querying (e.g. update, truncate, ...)
-        format      (String)  The format on which to output data (default: json)
-
-      Provides:
-
-        output      (Object)  In the default format it will be the resulting array. 
-                              In tabular format it will return a string.
+    help: 
+      text: Executes a DB SQL query.
+      expects: 
+      - name: DBDriver
+        desc: (String) The JDBC driver to use (defaults to Oracle)
+      - name: DBURL
+        desc: (String) A JDBC URL to access the database
+      - name: DBUser
+        desc: (String) The database user login
+      - name: DBPass 
+        desc: (String) The database user password
+      - name: sql
+        desc: (String) The SQL to execute/query 
+      - name: execute 
+        desc: (Boolean) If true if will execute the sql statement instead of querying (e.g. update, truncate, ...)
+      - name: format
+        desc: "(String) The format on which to output data (default: json)"
+      returns:
+      - name: output 
+        desc: (Object) In the default format it will be the resulting array. In tabular format it will return a string.
     exec: |
       args.DBDriver = _$(args.DBDriver, "DBDriver").isString().default(void 0);
       _$(args.DBURL, "DBURL").isString().$_();
@@ -121,19 +126,24 @@ jobs:
 
   # ---------------
   - name: SQL Batch
-    help: >
-      Executes a series of DB SQLs. Expects:
-        
-        DBDriver        (String)  The JDBC driver to use (defaults to Oracle)
-        DBURL           (String)  A JDBC URL to access the database
-        DBUser          (String)  The database user login
-        DBPass          (String)  The database user password
-        sqls            (Array)   The SQLs to execute/query 
-        continueOnError (Boolean) If continueOnError = true it won't stop on exceptions
-
-      Provides:
-
-        output      (Array)   An array of maps with each SQL statement and the corresponding number of affected lines
+    help: 
+      text   : Executes a series of DB SQLs.
+      expects:
+      - name: DBDriver
+        desc: (String) The JDBC driver to use (defaults to Oracle)
+      - name: DBURL 
+        desc: (String) A JDBC URL to access the database
+      - name: DBUser
+        desc: (String) The database user login
+      - name: DBPass
+        desc: (String) The database user password
+      - name: SQLs
+        desc: (Array) The SQLs to execute/query 
+      - name: continueOnError
+        desc: (Boolean) If continueOnError = true it won't stop on exceptions
+      returns:
+      - name: output
+        desc: (Array) An array of maps with each SQL statement and the corresponding number of affected lines
     exec: |
       args.DBDriver = _$(args.DBDriver, "DBDriver").isString().default(void 0);
       _$(args.DBURL, "DBURL").isString().$_();
@@ -167,21 +177,26 @@ jobs:
   # --------------
   - name: SQL RAID
     to  : SQL Result
-    help: > 
-      Executes a RAID SQL query. Expects:
-
-        raidURL     (String)  A RAID AF connection URL 
-        raidDB      (String)  A RAID connection name (e.g. Adm, App, Dat)
-        raidDBURL   (String)  A JDBC URL for customization of the access to a raid database
-        raidDBPass  (String)  Using a specific RAID database password if one can't be determined
-        raidUseCIR  (Boolean) Determines if the use of CIR should be forced for database parameters detection
-        sql         (String)  The SQL to execute/query
-        execute     (Boolean) If true if will execute the sql statement instead of querying (e.g. update, truncate, ...)
-
-      Provides:
-
-        output      (Object)  In the default format it will be the resulting array. 
-                              In tabular format it will return a string.
+    help: 
+      text: Executes a RAID SQL query.
+      expects:
+      - name: raidURL     
+        desc: (String) A RAID AF connection URL 
+      - name: raidDB      
+        desc: (String) A RAID connection name (e.g. Adm, App, Dat)
+      - name: raidDBURL   
+        desc: (String) A JDBC URL for customization of the access to a raid database
+      - name: raidDBPass  
+        desc: (String) Using a specific RAID database password if one can't be determined
+      - name: raidUseCIR  
+        desc: (Boolean) Determines if the use of CIR should be forced for database parameters detection
+      - name: sql         
+        desc: (String) The SQL to execute/query
+      - name: execute   
+        desc: (Boolean) If true if will execute the sql statement instead of querying (e.g. update, truncate, ...)
+      returns:
+      - name: output
+        desc: (Object) In the default format it will be the resulting array. In tabular format it will return a string.
     exec: |
       if (isUnDef(args.raidURL)) throw "Please specify a raidURL=http://user:pass@1.2.3.4:8080";
       if (isUnDef(args.raidDB))  throw "Please specify a raidDB=Adm";

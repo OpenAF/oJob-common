@@ -7,26 +7,45 @@ jobs:
   ## ------------
   
   - name       : oJob Send email
-    help       : |
-      This job tries to send an email. Expects:
-        - args.server         (String)  The email server to use
-        - args.port           (Number)  The email server port to use
-        - args.from           (String)  The email from address
-        - args.to             (Array)   The email to addresses
-        - args.cc             (Array)   The email cc addresses
-        - args.bcc            (Array)   The email bcc addresses
-        - args.isHTML         (Boolean) Specifies if the email is in HTML format
-        - args.output         (String)  The email body message (a hbs template using args as data)
-        - args.altOutput      (String)  The email body alternative message (defaults to message)
-        - args.credentials    (Map)     The email server credentials (user and pass)
-        - args.useSSL         (Boolean) If the email server uses SSL
-        - args.useTLS         (Boolean) If the email server uses TLS
-        - args.embedFiles     (Array)   Array of maps (with file and name) to embeded on the email
-        - args.addAttachments (Array)   Array of maps (with file, isInLine, name) to attach on the email
-        - args.addImages      (Array)   Array of urls to images (only available if isHTML = true)
-        - args.embedURLs      (Array)   Array of maps (with url and name) to embeded on the email
-        - args.subject        (String)  The email subject (a hbs template using args as data)
-        - args.debug          (Boolean) Determines if it should debug the process
+    help       :
+      text   : This job tries to send an email.
+      expects:
+      - name: server
+        desc: (String) The email server to use
+      - name: port           
+        desc: (Number) The email server port to use
+      - name: from           
+        desc: (String) The email from address
+      - name: to             
+        desc: (Array) The email to addresses
+      - name: cc             
+        desc: (Array) The email cc addresses
+      - name: bcc            
+        desc: (Array) The email bcc addresses
+      - name: isHTML         
+        desc: (Boolean) Specifies if the email is in HTML format
+      - name: output         
+        desc: (String) The email body message (a hbs template using args as data)
+      - name: altOutput      
+        desc: (String) The email body alternative message (defaults to message)
+      - name: credentials    
+        desc: (Map) The email server credentials (user and pass)
+      - name: useSSL         
+        desc: (Boolean) If the email server uses SSL
+      - name: useTLS         
+        desc: (Boolean) If the email server uses TLS
+      - name: embedFiles     
+        desc: (Array) Array of maps (with file and name) to embeded on the email
+      - name: addAttachments 
+        desc: (Array) Array of maps (with file, isInLine, name) to attach on the email
+      - name: addImages      
+        desc: (Array) Array of urls to images (only available if isHTML = true)
+      - name: embedURLs      
+        desc: (Array) Array of maps (with url and name) to embeded on the email
+      - name: subject        
+        desc: (String) The email subject (a hbs template using args as data)
+      - name: debug          
+        desc: (Boolean) Determines if it should debug the process
     exec       : |
       if (isString(args.to)) args.to = [ String(args.to) ];
       if (isString(args.cc)) args.cc = [ args.cc ];
