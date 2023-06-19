@@ -1,0 +1,75 @@
+name: Update package
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+
+  updateOPack:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      
+    steps  :
+    # --------------------------
+    - name: Cache OpenAF runtime
+      uses: actions/cache@v3
+      with:
+        key : oaf-nightly
+        path: /tmp/oaf
+        
+    # -------------------------
+    - uses: actions/checkout@v2
+        
+    # ------------------
+    - name: Generate oPack
+      uses: openaf/ojob-action@v4
+      with:
+        script: oPack("genpack . --exclude .github")
+        dist  : nightly
+        
+    # --------------------------
+    - name: Update version badge
+      uses: openaf/ojob-action@v4
+      with:
+        def : |
+          todo:
+          - Update badge with version
+
+          ojob:
+            opacks:
+            - Badgen
+
+          include:
+          - badgen.yaml
+
+          jobs:
+          # -------------------------------
+          - name: Update badge with version
+            from: Get version
+            to  :
+            - name: Badgen generate file
+              args: 
+                labelColor: grey3
+                color     : blue
+                icon      : "openaf.svg"
+                label     : "repo opack version"
+                file      : ".github/version.svg"
+
+          # -----------------
+          - name: Get version
+            exec: args.status = io.readFileYAML(".package.yaml").version
+        dist: nightly
+        
+    # -------------
+    - name: Checkin
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: openaf/ojob-action@v4
+      with:
+        ojob: 'ojob.io/git/hub/contentIn'
+        args: 'message="Update\ package" title="Update\ package" paths=.github/version.svg,.package.yaml'
+        dist: nightly
