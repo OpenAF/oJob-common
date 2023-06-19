@@ -1,4 +1,7 @@
 # oJob-common
+
+![version](.github/version.svg)
+
 A set of base oJobs as common building blocks for custom oJobs.
 
 Check the documentation for some of them:
