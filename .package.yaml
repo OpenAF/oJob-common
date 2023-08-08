@@ -35,7 +35,7 @@ name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20230704'
+version: '20230808'
 dependencies:
   openaf: '>=20211229'
 files:
@@ -93,5 +93,5 @@ filesHash:
   oJobWatchDog.yaml: 1c4523666b603ee3cfcf70d322c136224b9dbd13
   oJobXLS.yaml: 97c309095e07e0b7d86c6f1cb9fb383ddf204e6d
   oJobs.yaml: 83d8406c43b4a5325686467ed80911a9c1e26d49
-  ojob.json: 9ab3a5f59ad619464beb47bf4606a46a3f9bec30
-  ojob.yaml: 02cfebec8614d70c394b81bc2f2f5ddd3d6d435c
+  ojob.json: e1211f5b51a270f2ed45767b3b955ccde7206005
+  ojob.yaml: 13922286e5ff67c823899c3cee2034cc61f14d59
