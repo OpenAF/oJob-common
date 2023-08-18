@@ -1,5 +1,5 @@
 # SVN oJob functionality
-# Author: Nuno Aguiar
+# Copyright 2023 Nuno Aguiar
 
 jobs:
   - name: SVN checkout

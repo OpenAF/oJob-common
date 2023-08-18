@@ -1,5 +1,5 @@
 # GIT oJob functionality
-# Author: Nuno Aguiar
+# Copyright 2023 Nuno Aguiar
 
 jobs:
   - name: GIT Copy Repository

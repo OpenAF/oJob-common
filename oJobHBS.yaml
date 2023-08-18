@@ -1,5 +1,5 @@
 # Template oJob functionality
-# Author: Nuno Aguiar
+# Copyright 2023 Nuno Aguiar
 
 jobs:
   - name: oJob HBS Add helpers
