@@ -14,7 +14,7 @@ Check the documentation for some of them:
 | [oJobSQL](#ojobsql) | Query or execute SQL to a JDBC database. |
 | [oJobES](#ojobes) | Logging to ElasticSearch |
 | [oJobNet](#ojobnet) | Testing network connectivity | 
-| [oJobHTTPd](#ojobhttpd) | Building a simple HTTP(s) server |
+| [oJob](#ojob) | Building a simple HTTP(s) server |
 | [oJobRest](#ojobrest) | Building a simple REST server |
 | [oJobOPack](#ojobopack) | Simplified OPack creation |
 | [oJobRAID](#ojobraid) | Simplified RAID AF operation execution. |
@@ -806,3 +806,69 @@ jobs:
 todo:
   - nAttrMon watchdog
 ````
+
+---
+
+## Shortcuts examples:
+
+### oJobHTTPd.yaml
+
+```yaml
+todo:
+# Starts the server
+- (httpdStart  ): &PORT 12345
+
+# Setups the default answer, /healthz, /livez and /metrics
+- (httpdDefault): *PORT
+  ((uri       )): /
+- (httpdHealthz): *PORT 
+- (httpdMetrics): *PORT
+  ((prefix    )): mytest
+
+# Allows browsing of files
+- (httpdFileBrowse): *PORT
+  ((uri          )): /browse
+  ((path         )): .
+
+# Allows for the upload of files
+- (httpdUpload): *PORT
+  ((uri      )): /upload
+  ((path     )): .
+
+# Adds a custom metric
+- (httpdAddMetric): global-counter
+  ((fn          )): | 
+    // Sets an atomic counter if one does not exist and returns a counter increment
+    if (isUnDef(global.counter)) global.counter = $atomic()
+    return global.counter.inc()
+
+# /test calls the 'test' job
+- (httpdService): *PORT
+  ((uri       )): /test
+  ((execURI   )): |
+    // Shows all request components for debug
+    cprint(request)
+    // Returns the result of calling the job 'test' passing the request and expecting an ANSWER to be returned
+    return ow.server.httpd.reply($job("test", request).ANSWER)
+
+jobs:
+# ---------------------------------
+# Job test is written in shell code
+- name: test
+  lang: shell
+  exec: |
+    # Sets ANSWER in shell script
+    ANSWER="Echo from the shell (a: {{params.a}})"
+
+    # return ANSWER
+
+# Includes the http server functionality
+include:
+- oJobHTTPd.yaml
+
+# Makes sures it runs forever and oJob-common is included
+ojob:
+  daemon: true
+  opacks:
+    oJob-common
+```
