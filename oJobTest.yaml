@@ -2,92 +2,223 @@
 # Copyright 2023 Nuno Aguiar
 
 jobs:
- # Test assert
- #
- - name: oJob Assert
-   help: >
-     This job will assert that args.a and args.b provided are equal. Otherwise it will 
-     display the args.msg message.
-   exec: >
-     if(isUnDef(args.a) || isUnDef(args.b)) throw "Please define args.a and args.b.";
-     if(isUnDef(args.msg)) args.msg = "A is different from B";
+# Test assert
+# -----------------
+- name: oJob Assert
+  typeArgs:
+    noLog: false 
+    shortcut:
+      name  : testAssert
+      keyArg: msg
+      args  :
+        a: a
+        b: b
+  help: 
+    text   : This job will assert that args.a and args.b provided are equal. Otherwise it will display the args.msg message.
+    expects:
+    - name: a
+      desc: The 'a' value.
+    - name: b
+      desc: The 'b' value.
+    - name: msg
+      desc: The message to display if the assert fails.
+  exec: |
+    if(isUnDef(args.a) || isUnDef(args.b)) throw "Please define args.a and args.b."
+    if(isUnDef(args.msg)) args.msg = "A is different from B"
 
-     ow.loadTest().assert(args.a, args.b, args.msg); 
+    ow.loadTest().assert(isString(args.a) ? templify(args.a, args) : args.a, isString(args.b) ? templify(args.b, args) : args.b, args.msg)
 
- # Test functions
- #
- - name: oJob Test
-   help: >
-     This job will test an args.func (function) or an args.job provided. The test will use the current
-     oJob job name. Optionally you can specify args.count (defaults to 1) to test more than one time.
-   exec: |
-     if (isUnDef(args.func) && isUnDef(args.job)) throw "Please define args.func or an args.job."
-     var count = _$(args.count, "count").toNumber().isNumber().default(1)
-     if (isDef(args.func)) {
-        if (!(isFunction(args.func))) args.func = new Function(args.func)
-        for(var c = 0; c < count; c++) ow.loadTest().test(job.name, args.func) 
-     } else {
-        if (isDef(args.job)) {
-          for(var c = 0; c < count; c++) ow.loadTest().test(job.name, () => $job(args.job) )
-        }
-     }
+# Test functions
+#
+# ---------------
+- name: oJob Test
+  typeArgs:
+    noLog: false 
+    shortcut:
+      name  : test
+      keyArg: name
+      args  :
+        func : func
+        job  : job
+        count: count
+  help: 
+    text   : This job will test an args.func (function) or an args.job provided. The test will use the current oJob job name. Optionally you can specify args.count (defaults to 1) to test more than one time.
+    expects:
+    - name: name
+      desc: If defined will use as the test name instead of the oJob job name.
+    - name: func
+      desc: The function to execute and test.
+    - name: job
+      desc: The ojob to execute and test.
+    - name: count
+      desc: The number of test repeats (defaults to 1).
+  exec: |
+    if (isUnDef(args.func) && isUnDef(args.job)) throw "Please define args.func or an args.job."
+    var count = _$(args.count, "count").toNumber().isNumber().default(1)
+    var jname = _$(args.name, "name").isString().default(job.name)
 
- # test outside commands
- #
- - name: oJob Test sh
-   help: >
-     This job will test a args.cmd (shell command) provided. The test will use the current
-     oJob job name.
-   exec: >
-     if (isUnDef(args.cmd)) throw "Please define args.cmd.";
-     ow.loadTest().test(job.name, args.cmd); 
+    if (isDef(args.func)) {
+      if (!(isFunction(args.func))) args.func = new Function(args.func)
+      for(var c = 0; c < count; c++) ow.loadTest().test(jname, args.func) 
+    } else {
+      if (isDef(args.job)) {
+        for(var c = 0; c < count; c++) ow.loadTest().test(jname, () => {
+          id = "|" + genUUID()
+          var _r = $job(args.job, __, id)
 
- # Test results jobs
- #
+          if (!isMap(_r)) throw $from( ow.oJob.getLogCh().get({ ojobId: ow.oJob.getID() + id, name: args.job }).log ).last().error
+        })
+      }
+    }
 
- - name: oJob Test Results
-   help: |
-     Prints or outputs (if args.quiet = true) a args.results with: count of tests, tests passed, tests failed and all profile information.
-   exec: |
-     var prof = ow.loadTest().__profile
-     args.results = {
-        count: ow.loadTest().getCountTest(),
-        pass: ow.loadTest().getCountPass(),
-        fail: ow.loadTest().getCountFail(),
-        profile: Object.keys(prof).map(r => ({
-          name: r,
-          hits: prof[r].hits,
-          sum : prof[r].sum,
-          last: prof[r].last,
-          max : prof[r].max,
-          min : prof[r].min,
-          avg : prof[r].sum / prof[r].hits
-        }))
-     };
-     if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) ow.oJob.output(args.results)
+# test outside commands
+#
+# ------------------
+- name: oJob Test sh
+  typeArgs:
+    noLog: false 
+    shortcut:
+      name  : testSh
+      keyArg: name
+      args  :
+        cmd : cmd
+  help: 
+    text   : This job will test a args.cmd (shell command) provided. The test will use the current oJob job name.
+    expects:
+    - name: name
+      desc: If defined will use as the test name instead of the oJob job name.
+    - name: cmd
+      desc: The shell command to test.
+  exec: |
+    var jname = _$(args.name, "name").isString().default(job.name)
 
- - name: oJob Test Todo results
-   help: |
-     Prints or outputs (if args.quiet = true) a args.results with: count of tests, tests passed and tests failed.
-   exec: >
-     args.results = {
-        count: $ch("oJob::logs").size(),
-        pass: $from($ch("oJob::logs").getAll()).equals("success", true).count(),
-        fail: $from($ch("oJob::logs").getAll()).equals("error", true).count()
-     };
-     if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) ow.oJob.output(args.results)
+    if (isUnDef(args.cmd)) throw "Please define args.cmd."
+    ow.loadTest().test(jname, args.cmd)
+
+# Test results jobs
+#
+# ------------------------
+- name : oJob Test Results
+  typeArgs:
+    noLog: false 
+    shortcut:
+      name  : testResults
+      keyArg: quiet
+      args  : 
+        noprofile: noprofile
+  help : 
+    text   : "Prints or outputs (if args.quiet = true) a args.results with: count of tests, tests passed, tests failed and all profile information."
+    expects:
+    - name: quiet
+      desc: Boolean flag that if true wont output any test results to stdout.
+    - name: noprofile
+      desc: Boolean flag that if true will not include profile results
+  check:
+    in:
+      quiet    : toBoolean.isBoolean.default(false)
+      noprofile: toBoolean.isBoolean.default(false)
+  exec : |
+    var prof = ow.loadTest().__profile
+    args.results = {
+      count: ow.loadTest().getCountTest(),
+      pass: ow.loadTest().getCountPass(),
+      fail: ow.loadTest().getCountFail(),
+      asserts: ow.loadTest().getCountAssert(),
+      profile: Object.keys(prof).map(r => ({
+        name: r,
+        hits: prof[r].hits,
+        sum : prof[r].sum,
+        last: prof[r].last,
+        max : prof[r].max,
+        min : prof[r].min,
+        avg : prof[r].sum / prof[r].hits
+      }))
+    }
+    if (args.noprofile) delete args.results.profile
+    if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) ow.oJob.output(args.results, args)
+
+# ----------------------------
+- name: oJob Test Todo results
+  typeArgs:
+    noLog: false 
+    shortcut:
+      name  : testTodoResults
+      keyArg: quiet
+      args  : {}
+  help: 
+    text   : "Prints or outputs (if args.quiet = true) a args.results with: count of tests, tests passed and tests failed."
+    expects:
+    - name: quiet
+      desc: Boolean flag that if true wont output any test results to stdout.
+  exec: |
+    args.results = {
+      count: $ch("oJob::logs").size(),
+      pass: $from($ch("oJob::logs").getAll()).equals("success", true).count(),
+      fail: $from($ch("oJob::logs").getAll()).equals("error", true).count()
+    };
+    if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) ow.oJob.output(args.results)
+
+# -----------------------------
+- name : oJob Generate Markdown
+  typeArgs:
+    noLog: false 
+    shortcut:
+      name  : testGenMD
+      keyArg: key
+      args  : 
+        path: path
+        file: file
+  help : 
+    text   : "This job will generate a Markdown with the current test results."
+    expects: 
+    - name: key
+      desc: If a 'file' is not defined will output to provided 'key' (including 'args') and 'path'
+    - name: path
+      desc: The path withing the provided 'key' to store the markdown output
+    - name: file
+      desc: If defined will output the markdown content to the provided file.
+  check:
+    in:
+      key : isString.default(__)
+      path: isString.default(__)
+      file: isString.default(__)
+  exec : |
+    var _r = ow.loadTest().toMarkdown()
+    if (isDef(args.file)) {
+      io.writeFileString(args.file, _r)
+    } else {
+      if (args.key == "args") {
+        $$(args).set(args.path, _r)
+      } else {
+        var _c = $get(args.key) || {}
+        $$(_c).set(args.path, _r)
+        $set(args.key, _c)
+      }
+    }
 
 # JUnit results
 #
-
- - name: oJob Generate JUnit XML
-   help: >
-     This job will generate a JUnit XML with the current test results. You can provide:
-       - suitesId    (String)   The JUnit suites id 
-       - suitesName  (String)   The JUnit suites name
-       - resultsFile (String)   The filename and path where to store the JUnit results.
-   exec: |
-     if (isUnDef(args.suitesId)) args.suitesId = "test";
-     if (isUnDef(args.suitesName)) args.suitesName = "test";
-     if (isUnDef(args.resultsFile)) args.resultsFile = "testResults.xml";
-     io.writeFileString(args.resultsFile, ow.loadTest().toJUnitXML(args.suitesId, args.suitesName)); 
+# -----------------------------
+- name: oJob Generate JUnit XML
+  typeArgs:
+    noLog: false 
+    shortcut:
+      name  : testGenJUnit
+      keyArg: suitesId
+      args  : 
+        suitesName : suitesName
+        resultsFile: resultsFile
+  help: 
+    text   : "This job will generate a JUnit XML with the current test results."
+    expects:
+    - name: suitesId
+      desc: (String) The JUnit suites id 
+    - name: suitesName
+      desc: (String) The JUnit suites name
+    - name: resultsFile
+      desc: (String) The filename and path where to store the JUnit results.
+  exec: |
+    if (isUnDef(args.suitesId)) args.suitesId = "test";
+    if (isUnDef(args.suitesName)) args.suitesName = "test";
+    if (isUnDef(args.resultsFile)) args.resultsFile = "testResults.xml";
+    io.writeFileString(args.resultsFile, ow.loadTest().toJUnitXML(args.suitesId, args.suitesName)); 

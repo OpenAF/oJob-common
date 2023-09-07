@@ -811,6 +811,37 @@ todo:
 
 ## Shortcuts examples:
 
+### oJobTest.yaml
+
+```yaml
+include:
+- oJobTest.yaml
+
+todo:
+- (test      ): oJob::a
+  ((job     )): a
+- (test      ): oJob::b
+  ((job     )): b
+- (test      ): Script::Test
+  ((func    )): |
+    sleep(1500, true)
+    ow.test.assert(1, 1, "Problem with assert in script test")
+- (testAssert): Problem with a and b
+  ((a       )): 123
+  ((b       )): 124
+- (testGenMD ): __
+  ((file    )): results.md
+
+jobs:
+- name: a
+  exec: |
+    sleep(1500, true)
+
+- name: b
+  exec: |
+    throw "MY error!"
+```
+
 ### oJobHTTPd.yaml
 
 ```yaml
