@@ -7,6 +7,29 @@ jobs:
   ## ------------
   
   - name       : oJob Send email
+    typeArgs   :
+      noLog   : false 
+      shortcut:
+        name  : email
+        keyArg: subject
+        args  :
+          server        : server
+          port          : port
+          from          : from
+          to            : to
+          cc            : cc
+          bcc           : bcc
+          isHTML        : isHTML
+          output        : output
+          altOutput     : altOutput
+          credentials   : credentials
+          useSSL        : useSSL
+          useTLS        : useTLS
+          embedFiles    : embedFiles
+          addAttachments: addAttachments
+          addImages     : addImages
+          embedURLs     : embedURLs
+          debug         : debug
     help       :
       text   : This job tries to send an email.
       expects:
