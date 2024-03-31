@@ -38,9 +38,10 @@ jobs:
       name  : test
       keyArg: name
       args  :
-        func : func
-        job  : job
-        count: count
+        func   : func
+        job    : job
+        count  : count
+        asserts: asserts
   help: 
     text   : This job will test an args.func (function) or an args.job provided. The test will use the current oJob job name. Optionally you can specify args.count (defaults to 1) to test more than one time.
     expects:
@@ -52,6 +53,8 @@ jobs:
       desc: The ojob to execute and test.
     - name: count
       desc: The number of test repeats (defaults to 1).
+    - name: asserts
+      desc: Array of asserts maps to test the results (composed of 'path', 'value' and 'msg')
   exec: |
     if (isUnDef(args.func) && isUnDef(args.job)) throw "Please define args.func or an args.job."
     var count = _$(args.count, "count").toNumber().isNumber().default(1)
@@ -59,7 +62,16 @@ jobs:
 
     if (isDef(args.func)) {
       if (!(isFunction(args.func))) args.func = new Function(args.func)
-      for(var c = 0; c < count; c++) ow.loadTest().test(jname, args.func) 
+      ow.loadTest()
+      args.asserts = _$(args.asserts, "asserts").isArray().default([])
+      for(var c = 0; c < count; c++) {
+        var _r = ow.test.test(jname, args.func) 
+        args.asserts.forEach(a => {
+          a.path = _$(a.path, "path").isString().default("@")
+          a.msg  = _$(a.msg, "msg").isString().default("Assert failed " + af.toSLON(a))
+          ow.test.assert($path(_r, a.path), a.value, a.msg)
+        })
+      }
     } else {
       if (isDef(args.job)) {
         for(var c = 0; c < count; c++) ow.loadTest().test(jname, () => {
@@ -67,6 +79,12 @@ jobs:
           var _r = $job(args.job, __, id)
 
           if (!isMap(_r)) throw $from( ow.oJob.getLogCh().get({ ojobId: ow.oJob.getID() + id, name: args.job }).log ).last().error
+
+          args.asserts.forEach(a => {
+            a.path = _$(a.path, "path").isString().default("@")
+            a.msg  = _$(a.msg, "msg").isString().default("Assert failed " + af.toSLON(a))
+            ow.test.assert($path(_r, a.path), a.value, a.msg)
+          })
         })
       }
     }
@@ -106,6 +124,7 @@ jobs:
       keyArg: quiet
       args  : 
         noprofile: noprofile
+        key      : key
   help : 
     text   : "Prints or outputs (if args.quiet = true) a args.results with: count of tests, tests passed, tests failed and all profile information."
     expects:
@@ -113,6 +132,8 @@ jobs:
       desc: Boolean flag that if true wont output any test results to stdout.
     - name: noprofile
       desc: Boolean flag that if true will not include profile results
+    - name: key
+      desc: If defined will output the results to the provided key.
   check:
     in:
       quiet    : toBoolean.isBoolean.default(false)
@@ -135,6 +156,7 @@ jobs:
       }))
     }
     if (args.noprofile) delete args.results.profile
+    if (isDef(args.key)) $set(args.key, args.results)
     if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) ow.oJob.output(args.results, args)
 
 # ----------------------------
@@ -152,11 +174,11 @@ jobs:
       desc: Boolean flag that if true wont output any test results to stdout.
   exec: |
     args.results = {
-      count: $ch("oJob::logs").size(),
-      pass: $from($ch("oJob::logs").getAll()).equals("success", true).count(),
-      fail: $from($ch("oJob::logs").getAll()).equals("error", true).count()
+      count: $ch("oJob::log").size(),
+      pass: $from($ch("oJob::log").getAll()).equals("success", true).count(),
+      fail: $from($ch("oJob::log").getAll()).equals("error", true).count()
     };
-    if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) ow.oJob.output(args.results)
+    if ((isDef(args.quiet) && !args.quiet) || isUnDef(args.quiet)) ow.oJob.output(args.results, args)
 
 # -----------------------------
 - name : oJob Generate Markdown
@@ -168,8 +190,9 @@ jobs:
       args  : 
         path: path
         file: file
+        includeLogs: includeLogs
   help : 
-    text   : "This job will generate a Markdown with the current test results."
+    text   : "This job will generate a Markdown with the current test results and optionally logs."
     expects: 
     - name: key
       desc: If a 'file' is not defined will output to provided 'key' (including 'args') and 'path'
@@ -177,13 +200,22 @@ jobs:
       desc: The path withing the provided 'key' to store the markdown output
     - name: file
       desc: If defined will output the markdown content to the provided file.
+    - name: includeLogs
+      desc: If ojob.channels.recordLog is true will include the logs in the markdown.
   check:
     in:
       key : isString.default(__)
       path: isString.default(__)
       file: isString.default(__)
+      includeLogs: isBoolean.default(false)
   exec : |
     var _r = ow.loadTest().toMarkdown()
+    if (args.includeLogs && $ch().list().indexOf("__log") >= 0)
+      _r += "\n## Logs\n\n" + ow.template.md.table($ch("__log").getAll().map(r => ({
+        timestamp: r.d,
+        level    : r.t,
+        message  : r.m
+      })))
     if (isDef(args.file)) {
       io.writeFileString(args.file, _r)
     } else {
@@ -194,6 +226,66 @@ jobs:
         $$(_c).set(args.path, _r)
         $set(args.key, _c)
       }
+    }
+
+# JSON results
+# ------------
+- name: oJob Generate JSON results
+  typeArgs:
+    noLog: false
+    shortcut:
+      name  : testGenJSON
+      keyArg: file
+      args  : 
+        includeLogs: includeLogs
+        noProfile  : noProfile
+  help:
+    text   : "This job will generate a JSON with the current test results and optionally logs." 
+    expects:
+    - name: file
+      desc: If defined will output the JSON content to the provided file (if '-' will output to stdout).
+    - name: noprofile
+      desc: Boolean flag that if true will not include profile results
+    - name: includeLogs
+      desc: If ojob.channels.recordLog is true will include the logs in the markdown.
+  check:
+    in:
+      file: isString.default("-")
+      includeLogs: isBoolean.default(false)
+      noProfile: isBoolean.default(false)
+  exec : |
+    var prof = ow.loadTest().__profile
+    args.results = {
+      count: ow.loadTest().getCountTest(),
+      pass: ow.loadTest().getCountPass(),
+      fail: ow.loadTest().getCountFail(),
+      asserts: ow.loadTest().getCountAssert(),
+      profile: Object.keys(prof).map(r => ({
+        name: r,
+        hits: prof[r].hits,
+        sum : prof[r].sum,
+        last: prof[r].last,
+        max : prof[r].max,
+        min : prof[r].min,
+        avg : prof[r].sum / prof[r].hits
+      }))
+    }
+    if (args.noprofile) delete args.results.profile
+
+    var _r = args.results
+    if (args.includeLogs && $ch().list().indexOf("__log") >= 0) {
+      _r = merge(_r, {
+        logs: $ch("__log").getAll().map(r => ({
+          timestamp: r.d,
+          level    : r.t,
+          message  : r.m
+        }))
+      })
+    }
+    if (args.file == "-") {
+      sprint(_r, "")
+    } else {
+      io.writeFileJSON(args.file, _r, "")
     }
 
 # JUnit results
