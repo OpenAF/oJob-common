@@ -42,6 +42,7 @@ jobs:
         job    : job
         count  : count
         asserts: asserts
+        debug  : debug
   help: 
     text   : This job will test an args.func (function) or an args.job provided. The test will use the current oJob job name. Optionally you can specify args.count (defaults to 1) to test more than one time.
     expects:
@@ -55,6 +56,8 @@ jobs:
       desc: The number of test repeats (defaults to 1).
     - name: asserts
       desc: Array of asserts maps to test the results (composed of 'path', 'value' and 'msg')
+    - name: debug
+      desc: If true will output debug information.
   exec: |
     if (isUnDef(args.func) && isUnDef(args.job)) throw "Please define args.func or an args.job."
     var count = _$(args.count, "count").toNumber().isNumber().default(1)
@@ -66,6 +69,10 @@ jobs:
       args.asserts = _$(args.asserts, "asserts").isArray().default([])
       for(var c = 0; c < count; c++) {
         var _r = ow.test.test(jname, args.func) 
+        if (args.debug) {
+          print("DEBUG | test function:")
+          cprint(_r)
+        }
         args.asserts.forEach(a => {
           a.path = _$(a.path, "path").isString().default("@")
           a.msg  = _$(a.msg, "msg").isString().default("Assert failed " + af.toSLON(a))
@@ -77,6 +84,11 @@ jobs:
         for(var c = 0; c < count; c++) ow.loadTest().test(jname, () => {
           id = "|" + genUUID()
           var _r = $job(args.job, __, id)
+
+          if (args.debug) {
+            print("DEBUG | test function:")
+            cprint(_r)
+          }
 
           if (!isMap(_r)) throw $from( ow.oJob.getLogCh().get({ ojobId: ow.oJob.getID() + id, name: args.job }).log ).last().error
 
