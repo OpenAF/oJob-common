@@ -68,16 +68,19 @@ jobs:
       ow.loadTest()
       args.asserts = _$(args.asserts, "asserts").isArray().default([])
       for(var c = 0; c < count; c++) {
-        var _r = ow.test.test(jname, args.func) 
-        if (args.debug) {
-          print("DEBUG | test function:")
-          cprint(_r)
-        }
-        args.asserts.forEach(a => {
-          a.path = _$(a.path, "path").isString().default("@")
-          a.msg  = _$(a.msg, "msg").isString().default("Assert failed " + af.toSLON(a))
-          ow.test.assert($path(_r, a.path), a.value, a.msg)
-        })
+        ow.test.test(jname, () => {
+          var _r = args.func()
+
+          if (args.debug) {
+            print("DEBUG | test function:")
+            cprint(_r)
+          }
+          args.asserts.forEach(a => {
+            a.path = _$(a.path, "path").isString().default("@")
+            a.msg  = _$(a.msg, "msg").isString().default("Assert failed " + af.toSLON(a))
+            ow.test.assert($path(_r, a.path), a.value, a.msg)
+          })
+        }) 
       }
     } else {
       if (isDef(args.job)) {
