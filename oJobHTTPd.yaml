@@ -433,14 +433,44 @@ jobs:
             content += tmplb(theList)
          }
       } else {
-         if (request.uri.endsWith(".md")) {
-            return ow.server.httpd.replyFileMD(server, path, uri, request.uri) 
+         if (request.params.raw == "true") {
+            return ow.server.httpd.replyFile(server, path, uri, request.uri)
          } else {
-            if (request.uri.endsWith(".adoc") && isDef(getOPackPath("Asciidoc"))) {
-               loadLib("asciidoc.js")
-               return ow.server.httpd.replyAsciidoc(server, path, uri, request.uri)
-            } else {
-               return ow.server.httpd.replyFile(server, path, uri, request.uri)
+            var ext = String(furi).replace(/^.*\./, "")
+            var fn = () => ow.server.httpd.replyFileMD(server, path, uri, request.uri)
+            var fnLang = lang => {
+               ow.loadTemplate()
+               return server.reply( ow.template.parseMD2HTML("## " + request.uri.replace(/^\//, "") + "\n\n```" + lang + "\n" + io.readFileString(furi) + "\n```\n", true, true), "text/html", 200)
+            }
+            switch(ext) {
+            case "md"  : return fn()
+            case "yml" :
+            case "yaml": return fnLang("yaml")
+            case "sh"  : return fnLang("sh")
+            case "css" : return fnLang("css")
+            case "sh"  : return fnLang("sh")
+            case "js"  : return fnLang("js")
+            case "java": return fnLang("java")
+            case "py"  : return fnLang("python")
+            case "toml": return fnLang("toml")
+            case "hbs" : return fnLang("handlebars")
+            case "json":
+              if (request.params.parse == "false") {
+                return fnLang("json")
+              } else {
+                var _d = io.readFileJSON(furi)
+                if (isMap(_d) || isArray(_d))
+                  return ow.server.httpd.replyJSMap(server, _d)
+                else
+                  return fn()           
+              }        
+            case "adoc":
+              if (isDef(getOPackPath("Asciidoc"))) {
+                loadLib("asciidoc.js")
+                return ow.server.httpd.replyAsciidoc(server, path, uri, request.uri)
+              }              
+            default: 
+              return ow.server.httpd.replyFile(server, path, uri, request.uri)
             }
          }
       }
