@@ -396,12 +396,15 @@ jobs:
      desc: (String) The canonical path (real path) to the folder that contains the file to be browsed.
    - name: browse
      desc: (String) If "false" no browsing interface is included.
+   - name: default
+     desc: (String) The markdown or html filename to consider default (e.g. index.md)
   args : 
    execURI   : |
       var shouldBrowse = global.__MHTTPD[String(port) + uri].BROWSE
       var path         = global.__MHTTPD[String(port) + uri].PATH
       var tmplb        = global.__MHTTPD[String(port) + uri].TMPLB
       var tmplh        = global.__MHTTPD[String(port) + uri].TMPLH
+      var fdefault     = global.__MHTTPD[String(port) + uri].DEFAULT
 
       var content = ""
       var puri = String(request.uri).replace(new RegExp("^" + uri), (uri == "/" ? "" : "/")).replace(/\/+/g, "/")
@@ -413,24 +416,29 @@ jobs:
       } catch(e) {
          return server.replyOKHTML("")
       }
-      
-      if (finfo.isDirectory) { 
-         if (shouldBrowse) { 
-            content += tmplh({ puri: (puri == "" ? "/" : puri) })
-            content += "| Filename | Last modified | Size | Size in bytes |\n"
-            content += "|----------|:-------------:|-----:|--------------:|\n"
-            if (puri != "/" && puri != "") 
-               content += "| __[..](" + uri + puri.replace(/[^\/]+\/$/, "") + ")__ | | |\n"
 
-            var theList = $from(io.listFiles(furi).files).sort("-isDirectory", "filename").select((f) => {
-            return merge(f, {
-               fLastModified: ow.format.fromDate(new Date(f.lastModified), 'yyyy-MM-dd HH:mm:ss'),
-               fSize        : ow.format.toBytesAbbreviation(f.size),
-               puri         : puri,
-               uri          : uri
-            });
-            });
-            content += tmplb(theList)
+      if (finfo.isDirectory) { 
+         if (isDef(fdefault) && io.fileExists(furi + "/" + fdefault)) {
+            return (fdefault.endsWith(".md") ? 
+                    ow.server.httpd.replyFileMD(server, path, uri, request.uri + "/" + fdefault) : ow.server.httpd.replyFile(server, path, uri, request.uri + "/" + fdefault))
+         } else {
+            if (shouldBrowse) { 
+              content += tmplh({ puri: (puri == "" ? "/" : puri) })
+              content += "| Filename | Last modified | Size | Size in bytes |\n"
+              content += "|----------|:-------------:|-----:|--------------:|\n"
+              if (puri != "/" && puri != "") 
+                content += "| __[..](" + uri + puri.replace(/[^\/]+\/$/, "") + ")__ | | |\n"
+
+              var theList = $from(io.listFiles(furi).files).sort("-isDirectory", "filename").select((f) => {
+                return merge(f, {
+                  fLastModified: ow.format.fromDate(new Date(f.lastModified), 'yyyy-MM-dd HH:mm:ss'),
+                  fSize        : ow.format.toBytesAbbreviation(f.size),
+                  puri         : puri,
+                  uri          : uri
+                })
+              })
+              content += tmplb(theList)
+            }
          }
       } else {
          if (request.params.raw == "true") {
@@ -492,8 +500,9 @@ jobs:
 
       global.__MHTTPD = _$(global.__MHTTPD).isMap().default({})
       global.__MHTTPD[String(args.port) + args.uri] = {
-        BROWSE: _$(args.browse).isString().default("true") === 'true',
-        PATH  : String( (new java.io.File( args.path )).getCanonicalPath() ),
-        TMPLB : ow.template.execCompiled(ow.template.compile(templ)),
-        TMPLH : ow.template.execCompiled(ow.template.compile(temph))
+        BROWSE : _$(args.browse).isString().default("true") === 'true',
+        PATH   : String( (new java.io.File( args.path )).getCanonicalPath() ),
+        TMPLB  : ow.template.execCompiled(ow.template.compile(templ)),
+        TMPLH  : ow.template.execCompiled(ow.template.compile(temph)),
+        DEFAULT: _$(args.default).isString().default(__)
       }
