@@ -39,8 +39,6 @@ version: '20250126'
 dependencies:
   openaf: '>=20211229'
 files:
-- .github/version.svg
-- .github/workflows/updatePacks.yml
 - .package.yaml
 - LICENSE
 - README.md
@@ -70,8 +68,6 @@ files:
 - ojob.json
 - ojob.yaml
 filesHash:
-  .github/version.svg: 0c07decad9b26ea06d4d703ad9c6a6d0469566b5
-  .github/workflows/updatePacks.yml: 7b0925dbcb05fa1b07f5268e621ab13b1a1a5c1f
   LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
   README.md: 390af07744301413415a75ef85464fced704935c
   oJobBasics.yaml: 3178f72c3826bd9514cbd5c15bc3399821191f3c
