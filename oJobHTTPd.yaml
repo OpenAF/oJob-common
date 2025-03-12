@@ -398,6 +398,8 @@ jobs:
      desc: (String) If "false" no browsing interface is included.
    - name: default
      desc: (String) The markdown or html filename to consider default (e.g. index.md)
+   - name: logo
+     desc: (String) The logo to include on the top right corner
   args : 
    execURI   : |
       var shouldBrowse = global.__MHTTPD[String(port) + uri].BROWSE
@@ -424,10 +426,10 @@ jobs:
          } else {
             if (shouldBrowse) { 
               content += tmplh({ puri: (puri == "" ? "/" : puri) })
-              content += "| Filename | Last modified | Size | Size in bytes |\n"
-              content += "|----------|:-------------:|-----:|--------------:|\n"
+              content += "|   | Filename | Last modified | Size | Size in bytes |\n"
+              content += "|---|----------|:-------------:|-----:|--------------:|\n"
               if (puri != "/" && puri != "") 
-                content += "| __[..](" + uri + puri.replace(/[^\/]+\/$/, "") + ")__ | | |\n"
+                content += "|  | __[..](<" + uri + puri.replace(/[^\/]+\/$/, "") + ">)__ | | |\n"
 
               var theList = $from(io.listFiles(furi).files).sort("-isDirectory", "filename").select((f) => {
                 return merge(f, {
@@ -492,8 +494,10 @@ jobs:
       ow.loadTemplate(); ow.loadFormat()
       ow.template.addHelper("encodeURI", encodeURI)
 
-      var temph = _$(args.templateHead).isString().default("## {{puri}}<img align=\"right\" src=\"/fonts/openaf_small.png\">\n")
-      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}__[{{filename}}/]({{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}/)__ | {{fLastModified}} | | {{else}} [{{filename}}]({{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
+      args.logo = _$(args.logo, "logo").isString().default("/fonts/openaf_small.png")
+
+      var temph = _$(args.templateHead).isString().default("## {{puri}}<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + args.logo + "\">\n")
+      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}{{else}}<a href=\"{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{filename}}/](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}/>)__ | {{fLastModified}} | | {{else}} [{{filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
 
       args.uri  = _$(args.uri).isString().default("/")
       args.path = _$(args.path).isString().default(".")
