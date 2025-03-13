@@ -412,7 +412,7 @@ jobs:
       var puri = String(request.uri).replace(new RegExp("^" + uri), (uri == "/" ? "" : "/")).replace(/\/+/g, "/")
       var furi = String((new java.io.File(new java.io.File(String((new java.io.File(path + "/" + puri)).getCanonicalFile()).replace(/\\+/g, "/")))))
 
-      if (!puri.endsWith("/")) puri += "/"
+      //if (!puri.endsWith("/")) puri += "/"
 
       var finfo
       try { 
