@@ -46,7 +46,7 @@ jobs:
       if (isDef(args.keystore)) ks = args.keystore
       args.mapLibs = _$(args.mapLibs).isBoolean().default(false)
 
-      if (isUnDef(global.__ojobHttp[args.port])) global.__ojobHttp[args.port] = (isDef(args.hs) ? hs : ow.server.httpd.start(args.port, args.host, ks, args.pass))
+      if (isUnDef(global.__ojobHttp[args.port])) global.__ojobHttp[args.port] = (isDef(args.hs) ? args.hs : ow.server.httpd.start(args.port, args.host, ks, args.pass))
 
       if (args.mapLibs) {
          global.__ojobRoutes[args.port] = ow.server.httpd.mapRoutesWithLibs(global.__ojobHttp[args.port], {})
@@ -450,7 +450,7 @@ jobs:
             var fn = () => ow.server.httpd.replyFileMD(server, path, uri, request.uri)
             var fnLang = lang => {
                ow.loadTemplate()
-               return server.reply( ow.template.parseMD2HTML("## " + request.uri.replace(/^\//, "") + "\n\n```" + lang + "\n" + io.readFileString(furi) + "\n```\n", true, true), "text/html", 200)
+               return server.reply( ow.template.parseMD2HTML("## " + request.uri.replace(/^\//, "") + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\">&larr;</span>\n\n```" + lang + "\n" + io.readFileString(furi) + "\n```\n", true, true), "text/html", 200)
             }
             switch(ext) {
             case "md"  : return fn()
