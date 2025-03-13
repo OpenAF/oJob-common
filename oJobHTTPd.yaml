@@ -1,4 +1,4 @@
-# Copyright 2023 Nuno Aguiar
+# Copyright 2025 Nuno Aguiar
 
 jobs:
 # Prepares a HTTP server
@@ -61,7 +61,7 @@ jobs:
   exec : |
    if (isUnDef(args.port)) args.port = 8091
 
-   ow.server.httpd.route(global.__ojobHttp[args.port], global.__ojobRoutes[args.port], function(r) { return hs.reply("", "", 401, {}); })
+   ow.server.httpd.route(global.__ojobHttp[args.port], global.__ojobRoutes[args.port], function(r) { return global.__ojobHttp[args.port].reply("", "", 401, {}); })
    log("READY [" + args.port + "]")
 
 # Stopping the HTTP server
@@ -194,6 +194,46 @@ jobs:
       args.code = _$(args.code, "code").isNumber().default(401)
       args.uri  = _$(args.uri, "uri").isString().default("/")
       args.execURI = "return ow.server.httpd.reply(\"\", " + args.code + ", __, {});"
+
+# --------------------
+- name : HTTP Redirect
+  deps :
+  - HTTP Start Server
+  to   : HTTP Service
+  typeArgs:
+    noLog: false 
+    shortcut:
+      name  : httpdRedirect
+      keyArg: port
+      args  : 
+        uri          : uri
+        targetURI    : targetURI
+        code         : code
+        audit        : audit
+        auditTemplate: auditTemplate
+        error        : error
+  help :
+   text   : Provides a HTTP default handler.
+   expects:
+   - name: port
+     desc: (Number) The port where the server was made available (default is 8091)
+   - name: uri
+     desc: (String) The URI where the HTTP default response will be available (defaults to /)
+   - name: code
+     desc: (Number) The default HTTP status code to reply (default is 401)
+   - name: audit
+     desc: (Boolean) Turns request audit logging on (default true)
+   - name: auditTemplate
+     desc: (String) Provide an audit logging template based on the request argument.           
+   - name: error
+     desc: (Boolean) If true will return the error in case of exception.
+   - name: targetURI
+     desc: (String) The target URI to redirect to
+  exec : |
+      args.code = _$(args.code, "code").isNumber().default(401)
+      args.uri  = _$(args.uri, "uri").isString().default("/")
+      args.targetURI = _$(args.targetURI, "targetURI").isString().$_("You need to provide a target URI.")
+      args.execURI = "return ow.server.httpd.replyRedirect(server, \"" + args.targetURI + "\", {});"
 
 # ------------------
 - name : HTTP Upload
