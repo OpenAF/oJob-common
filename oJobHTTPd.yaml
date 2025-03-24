@@ -422,9 +422,12 @@ jobs:
       name  : httpdFileBrowse
       keyArg: port
       args  : 
-        uri   : uri
-        path  : path
-        browse: browse
+        uri      : uri
+        path     : path
+        browse   : browse
+        default  : default
+        logo     : logo
+        incURI   : incURI
   help : 
    text   : Provides a HTTP file browse definition. 
    expects:
@@ -440,8 +443,19 @@ jobs:
      desc: (String) The markdown or html filename to consider default (e.g. index.md)
    - name: logo
      desc: (String) The logo to include on the top right corner
+   - name: incURI
+     desc: (Boolean) If true includes the URI in the breadcrumbs
+  check:
+    in:
+      port     : toNumber.isNumber.default(8091)
+      uri      : isString.default("/")
+      path     : isString.default(".")
+      browse   : toBoolean.isBoolean.default(true)
+      default  : isString.default(__)
+      logo     : isString.default("/fonts/openaf_small.png")
+      incURI   : toBoolean.isBoolean.default(false)
   args : 
-   execURI   : |
+   execURI   : | #js
       var shouldBrowse = global.__MHTTPD[String(port) + uri].BROWSE
       var path         = global.__MHTTPD[String(port) + uri].PATH
       var tmplb        = global.__MHTTPD[String(port) + uri].TMPLB
@@ -532,21 +546,47 @@ jobs:
       else
          return server.replyOKHTML("")
 
-  exec : |
+  exec : | #js
       ow.loadTemplate(); ow.loadFormat()
       ow.template.addHelper("encodeURI", encodeURI)
-
-      args.logo = _$(args.logo, "logo").isString().default("/fonts/openaf_small.png")
-
-      var temph = _$(args.templateHead).isString().default("## {{puri}}<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + args.logo + "\">\n")
-      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}{{else}}<a href=\"{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{filename}}/](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}/>)__ | {{fLastModified}} | | {{else}} [{{filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
 
       args.uri  = _$(args.uri).isString().default("/")
       args.path = _$(args.path).isString().default(".")
 
+      ow.template.addHelper("escapeMDTable", str => str.replace(/\|/g, "\\|"))
+      ow.template.addHelper("buildBreadcrumbs", path => {
+        // Remove any leading or trailing slashes and split into segments.
+        const trimmedPath = path.replace(/^\/|\/$/g, '')
+        const segments = trimmedPath ? trimmedPath.split('/') : []
+        
+        // Start with the clickable root.
+        let html = `<a href="${args.uri}" title="Navigate to root">${args.incURI ? args.uri.replace(/\/*$/, "/") : "/"}</a>`
+        
+        let currentPath = args.uri
+        segments.forEach((segment, index) => {
+          currentPath += "/" + segment  // Build up the path.
+          // Add separator before each segment.
+          if (index > 0) html += '/'
+          
+          // If it's the last segment (current location), show as plain text.
+          if (index === segments.length - 1) {
+            html += `<span>${segment}</span>`
+          } else {
+            html += `<a href="${currentPath}/" title="Navigate to ${currentPath}/">${segment}</a>`
+          }
+        })
+
+        return html
+      })
+
+      args.logo = _$(args.logo, "logo").isString().default("/fonts/openaf_small.png")
+
+      var temph = _$(args.templateHead).isString().default("## {{{buildBreadcrumbs puri}}}<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + args.logo + "\">\n")
+      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}{{else}}<a href=\"{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{escapeMDTable filename}}/](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}/>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
+
       global.__MHTTPD = _$(global.__MHTTPD).isMap().default({})
       global.__MHTTPD[String(args.port) + args.uri] = {
-        BROWSE : _$(args.browse).isString().default("true") === 'true',
+        BROWSE : args.browse,
         PATH   : String( (new java.io.File( args.path )).getCanonicalPath() ),
         TMPLB  : ow.template.execCompiled(ow.template.compile(templ)),
         TMPLH  : ow.template.execCompiled(ow.template.compile(temph)),
