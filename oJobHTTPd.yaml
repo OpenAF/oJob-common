@@ -34,7 +34,7 @@ jobs:
      desc: (String) Optionally providing the classpath URL to include the keystore file
    - name: mapLibs
      desc: (boolean) Map also internal libs (e.g. jquery, css, etc...)
-  exec : |
+  exec : | #js
       ow.loadServer()
 
       var ks
@@ -58,7 +58,7 @@ jobs:
 #
 # -------------------------
 - name : HTTP Apply Service 
-  exec : |
+  exec : | #js
    if (isUnDef(args.port)) args.port = 8091
 
    ow.server.httpd.route(global.__ojobHttp[args.port], global.__ojobRoutes[args.port], function(r) { return global.__ojobHttp[args.port].reply("", "", 401, {}); })
@@ -82,7 +82,7 @@ jobs:
       desc: (Number) The port where the server was made available (default is 8091)
   deps:
   - HTTP Start Server
-  exec: |
+  exec: | #js
       if (isUnDef(args.port)) args.port = 8091
       ow.server.httpd.stop(global.__ojobHttp[args.port])
       delete global.__ojobHttp[args.port]
@@ -123,7 +123,7 @@ jobs:
       desc: (String) Provide an audit logging template based on the request argument.           
     - name: error
       desc: (Boolean) If true will return the error in case of exception.
-  exec : |
+  exec : | #js
       args.port    = _$(args.port).isNumber().default(8091)
       args.uri     = _$(args.uri).isString().default("/")
       args.audit   = _$(args.audit).default(true)
@@ -190,7 +190,7 @@ jobs:
      desc: (String) Provide an audit logging template based on the request argument.           
    - name: error
      desc: (Boolean) If true will return the error in case of exception.
-  exec : |
+  exec : | #js
       args.code = _$(args.code, "code").isNumber().default(401)
       args.uri  = _$(args.uri, "uri").isString().default("/")
       args.execURI = "return ow.server.httpd.reply(\"\", " + args.code + ", __, {});"
@@ -229,7 +229,7 @@ jobs:
      desc: (Boolean) If true will return the error in case of exception.
    - name: targetURI
      desc: (String) The target URI to redirect to
-  exec : |
+  exec : | #js
       args.code = _$(args.code, "code").isNumber().default(401)
       args.uri  = _$(args.uri, "uri").isString().default("/")
       args.targetURI = _$(args.targetURI, "targetURI").isString().$_("You need to provide a target URI.")
@@ -278,7 +278,7 @@ jobs:
       } else {
          return server.replyOKHTML("<html><body><form action=\"" + request.uri + "\" enctype=\"multipart/form-data\" method=\"POST\"><input type=\"file\" name=\"data\" value=\"data\" id=\"data\"/><input type=\"submit\" value=\"submit\"/></form></body></html>")
       }
-  exec: |
+  exec: | #js
       args.path = _$(args.path, "path").default(".")
       args.uri  = _$(args.uri).isString().default("/upload")
 
@@ -311,7 +311,7 @@ jobs:
      desc: A custom function to return the /healthz result (defaults to ow.metrics.getAll with status 200 or "error" with status 500 if an exception is thrown)
    - name: openmetrics
      desc: If openmetrics = true the output will be in openmetrics/prometheus instead of json
-  exec: |
+  exec: | #js
       ow.loadMetrics()
       args.port    = _$(args.port).isNumber().default(8091)
       args.uri     = _$(args.uri).isString().default("/healthz")
@@ -349,13 +349,13 @@ jobs:
      desc: OpenMetrics/Prometheus metrics' name prefix
    - name: helpmap
      desc: OpenMetrics/Prometheus metrics' help map (see help ow.metrics.fromObj2OpenMetrics)
-  exec : |
-      ow.loadMetrics()
-      args.port    = _$(args.port).isNumber().default(8091)
-      args.uri     = _$(args.uri).isString().default("/metrics")
-      
-      args.metrics = _$(args.metrics).isString().default("try { var rrr = ow.server.httpd.reply(ow.metrics.fromObj2OpenMetrics((isDef(request.params.s) ? ow.metrics.getSome(request.params.s.split(\",\")) : ow.metrics.getAll()), " + stringify(args.prefix) + ", now(), " + stringify(args.helpmap,__,'') + ")); rrr.data = String(rrr.data); return rrr; } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ")
-      args.execURI = args.metrics
+  exec : | #js
+    ow.loadMetrics()
+    args.port    = _$(args.port).isNumber().default(8091)
+    args.uri     = _$(args.uri).isString().default("/metrics")
+    
+    args.metrics = _$(args.metrics).isString().default("try { var rrr = ow.server.httpd.reply(ow.metrics.fromObj2OpenMetrics((isDef(request.params.s) ? ow.metrics.getSome(request.params.s.split(\",\")) : ow.metrics.getAll()), " + stringify(args.prefix) + ", now(), " + stringify(args.helpmap,__,'') + ")); rrr.data = String(rrr.data); return rrr; } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ")
+    args.execURI = args.metrics
 
 # ----------------------
 - name : HTTP Add Metric
@@ -373,11 +373,43 @@ jobs:
      desc: Metric name
    - name: fn 
      desc: Metric function code returning a map
-  exec: |
-      _$(args.metric, "metric").$_()
-      _$(args.fn, "fn").$_()
-      ow.loadMetrics()
-      ow.metrics.add(args.metric, new Function(args.fn))
+  exec: | #js
+    _$(args.metric, "metric").$_()
+    _$(args.fn, "fn").$_()
+    ow.loadMetrics()
+    ow.metrics.add(args.metric, new Function(args.fn))
+
+# Defines an inline markdown response
+#
+# --------------------
+- name : HTTP markdown
+  deps :
+  - HTTP Start Server
+  to   : HTTP Service
+  typeArgs:
+    noLog: false 
+    shortcut:
+      name  : httpdMD
+      keyArg: port
+      args  : 
+        uri    : uri
+        md     : md
+  help :
+   text: Adds a markdown URI
+   expects:
+   - name: port
+     desc: The port of the HTTP Start Server (default to 8091)
+   - name: uri
+     desc: The uri to use (default /metrics)
+   - name: md
+     desc: The markdown content to be returned
+  exec : | #js
+    args.port    = _$(args.port).isNumber().default(8091)
+    args.uri     = _$(args.uri).isString().default("/")
+    args.md      = _$(args.md).isString().default("You need to provide a markdown content.")
+
+    args.execURI = "try { return server.replyOKHTML(ow.template.parseMD2HTML(`" + args.md.replace(/\`/g, "\\`") + "`, true)) } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" } }"
+    print(args.execURI)
 
 # Defines a classic HTTP file browse
 #
@@ -402,12 +434,12 @@ jobs:
       desc: (String) The URI where the HTTP File Browse will be available.
     - name: path
       desc: (String) The canonical path (real path) to the folder that contains the file to be browsed.
-  exec: |
-      args.port    = _$(args.port).isNumber().default(8091)
-      args.uri     = _$(args.uri).isString().default("/")
-      _$(args.path).isString().$_("You need to provide a path.")
+  exec: | #js
+    args.port    = _$(args.port).isNumber().default(8091)
+    args.uri     = _$(args.uri).isString().default("/")
+    _$(args.path).isString().$_("You need to provide a path.")
 
-      global.__ojobHttp[args.port].addFileBrowse(args.uri, args.path)
+    global.__ojobHttp[args.port].addFileBrowse(args.uri, args.path)
 
 # Defines a HTTP file browse
 #
@@ -427,6 +459,7 @@ jobs:
         browse   : browse
         default  : default
         logo     : logo
+        restrict : restrict
         incURI   : incURI
   help : 
    text   : Provides a HTTP file browse definition. 
@@ -443,6 +476,8 @@ jobs:
      desc: (String) The markdown or html filename to consider default (e.g. index.md)
    - name: logo
      desc: (String) The logo to include on the top right corner
+   - name: restrict
+     desc: (String) A comma separated list of regular expressions to restrict the access to the files
    - name: incURI
      desc: (Boolean) If true includes the URI in the breadcrumbs
   check:
@@ -453,6 +488,7 @@ jobs:
       browse   : toBoolean.isBoolean.default(true)
       default  : isString.default(__)
       logo     : isString.default("/fonts/openaf_small.png")
+      restrict : isString.default(__)
       incURI   : toBoolean.isBoolean.default(false)
   args : 
    execURI   : | #js
@@ -461,6 +497,8 @@ jobs:
       var tmplb        = global.__MHTTPD[String(port) + uri].TMPLB
       var tmplh        = global.__MHTTPD[String(port) + uri].TMPLH
       var fdefault     = global.__MHTTPD[String(port) + uri].DEFAULT
+      var restrict     = global.__MHTTPD[String(port) + uri].RESTRICT
+      var incuri       = global.__MHTTPD[String(port) + uri].INCURI
 
       var content = ""
       var puri = String(request.uri).replace(new RegExp("^" + uri), (uri == "/" ? "" : "/")).replace(/\/+/g, "/")
@@ -495,6 +533,9 @@ jobs:
                   uri          : uri
                 })
               })
+              if (isDef(restrict)) {
+                  theList = theList.filter(f => f.filename.match(new RegExp(restrict.join("|"))))
+              }
               content += tmplb(theList)
             }
          }
@@ -506,7 +547,10 @@ jobs:
             var fn = () => ow.server.httpd.replyFileMD(server, path, uri, request.uri)
             var fnLang = lang => {
                ow.loadTemplate()
-               return server.reply( ow.template.parseMD2HTML("## " + request.uri.replace(/^\//, "") + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\">&larr;</span>\n\n```" + lang + "\n" + io.readFileString(furi) + "\n```\n", true, true), "text/html", 200)
+               var _displayURI = uri.replace(/\/$/, "")
+               if (!incuri) _displayURI = _displayURI.replace(new RegExp("^" + origuri), "")
+               _displayURI += puri
+               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs '" + _displayURI + "' '" + incuri + "'}}}") + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\">&larr;</span>\n\n```" + lang + "\n" + io.readFileString(furi) + "\n```\n", true, true), "text/html", 200)
             }
             switch(ext) {
             case "md"  : return fn()
@@ -554,15 +598,19 @@ jobs:
       args.path = _$(args.path).isString().default(".")
 
       ow.template.addHelper("escapeMDTable", str => str.replace(/\|/g, "\\|"))
-      ow.template.addHelper("buildBreadcrumbs", path => {
+      ow.template.addHelper("ojh-buildBreadcrumbs", (path, _uri, _incURI) => {
         // Remove any leading or trailing slashes and split into segments.
         const trimmedPath = path.replace(/^\/|\/$/g, '')
         const segments = trimmedPath ? trimmedPath.split('/') : []
         
         // Start with the clickable root.
-        let html = `<a href="${args.uri}" title="Navigate to root">${args.incURI ? args.uri.replace(/\/*$/, "/") : "/"}</a>`
+        let html = ""
+        if (_incURI) 
+          html = `<a href="/" title="Navigate to root">🏡</a> <a href="${_uri}" title="Navigate to main">${_uri.replace(/^\/*|\/*$/, "")}/</a>`
+        else 
+          html = `<a href="${_uri}" title="Navigate to root">/</a>`
         
-        let currentPath = args.uri
+        let currentPath = _uri
         segments.forEach((segment, index) => {
           currentPath += "/" + segment  // Build up the path.
           // Add separator before each segment.
@@ -581,14 +629,17 @@ jobs:
 
       args.logo = _$(args.logo, "logo").isString().default("/fonts/openaf_small.png")
 
-      var temph = _$(args.templateHead).isString().default("## {{{buildBreadcrumbs puri}}}<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + args.logo + "\">\n")
+      var temph = _$(args.templateHead).isString().default("## {{{ojh-buildBreadcrumbs puri '" + args.uri + "' " + args.incURI + "}}}<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + args.logo + "\">\n")
       var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}{{else}}<a href=\"{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{escapeMDTable filename}}/](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}/>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
 
       global.__MHTTPD = _$(global.__MHTTPD).isMap().default({})
       global.__MHTTPD[String(args.port) + args.uri] = {
-        BROWSE : args.browse,
-        PATH   : String( (new java.io.File( args.path )).getCanonicalPath() ),
-        TMPLB  : ow.template.execCompiled(ow.template.compile(templ)),
-        TMPLH  : ow.template.execCompiled(ow.template.compile(temph)),
-        DEFAULT: _$(args.default).isString().default(__)
+        BROWSE  : args.browse,
+        PATH    : String( (new java.io.File( args.path )).getCanonicalPath() ),
+        TMPLB   : ow.template.execCompiled(ow.template.compile(templ)),
+        TMPLH   : ow.template.execCompiled(ow.template.compile(temph)),
+        INCURI  : args.incURI,
+        URI     : args.uri,
+        DEFAULT : _$(args.default).isString().default(__),
+        RESTRICT: args.restrict
       }
