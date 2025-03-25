@@ -16,24 +16,24 @@ jobs:
     steps  :
     # --------------------------
     - name: Cache OpenAF runtime
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         key : oaf-nightly
         path: /tmp/oaf
         
     # -------------------------
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
         
     # ------------------
     - name: Generate oPack
-      uses: openaf/ojob-action@v4
+      uses: openaf/ojob-action@v7
       with:
         script: oPack("genpack . --exclude .github")
         dist  : nightly
         
     # --------------------------
     - name: Update version badge
-      uses: openaf/ojob-action@v4
+      uses: openaf/ojob-action@v7
       with:
         def : |
           todo:
@@ -68,7 +68,7 @@ jobs:
     - name: Checkin
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      uses: openaf/ojob-action@v4
+      uses: openaf/ojob-action@v7
       with:
         ojob: 'ojob.io/git/hub/contentIn'
         args: 'message="Update\ package" title="Update\ package" paths=.github/version.svg,.package.yaml'
