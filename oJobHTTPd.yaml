@@ -409,7 +409,6 @@ jobs:
     args.md      = _$(args.md).isString().default("You need to provide a markdown content.")
 
     args.execURI = "try { return server.replyOKHTML(ow.template.parseMD2HTML(`" + args.md.replace(/\`/g, "\\`") + "`, true)) } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" } }"
-    print(args.execURI)
 
 # Defines a classic HTTP file browse
 #
