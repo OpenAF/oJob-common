@@ -487,7 +487,7 @@ jobs:
       browse   : toBoolean.isBoolean.default(true)
       default  : isString.default(__)
       logo     : isString.default("/fonts/openaf_small.png")
-      restrict : isString.default(__)
+      restrict : default(__)
       incURI   : toBoolean.isBoolean.default(false)
   args : 
    execURI   : | #js
@@ -497,13 +497,13 @@ jobs:
       var tmplh        = global.__MHTTPD[String(port) + uri].TMPLH
       var fdefault     = global.__MHTTPD[String(port) + uri].DEFAULT
       var restrict     = global.__MHTTPD[String(port) + uri].RESTRICT
-      var incuri       = global.__MHTTPD[String(port) + uri].INCURI
+      var incURI       = global.__MHTTPD[String(port) + uri].INCURI
 
       var content = ""
       var puri = String(request.uri).replace(new RegExp("^" + uri), (uri == "/" ? "" : "/")).replace(/\/+/g, "/")
       var furi = String((new java.io.File(new java.io.File(String((new java.io.File(path + "/" + puri)).getCanonicalFile()).replace(/\\+/g, "/")))))
 
-      //if (!puri.endsWith("/")) puri += "/"
+      if (!puri.endsWith("/")) puri += "/"
 
       var finfo
       try { 
@@ -518,13 +518,14 @@ jobs:
                     ow.server.httpd.replyFileMD(server, path, uri, request.uri + "/" + fdefault) : ow.server.httpd.replyFile(server, path, uri, request.uri + "/" + fdefault))
          } else {
             if (shouldBrowse) { 
-              content += tmplh({ puri: (puri == "" ? "/" : puri) })
+              content += tmplh({ puri: (!puri.startsWith("/") ? "/" + puri : puri) })
               content += "|   | Filename | Last modified | Size | Size in bytes |\n"
               content += "|---|----------|:-------------:|-----:|--------------:|\n"
               if (puri != "/" && puri != "") 
-                content += "|  | __[..](<" + uri + puri.replace(/[^\/]+\/$/, "") + ">)__ | | |\n"
+                content += "|  | __[..](<" + uri + puri.replace(/[^\/]+\/?$/, "") + ">)__ | | |\n"
 
-              var theList = $from(io.listFiles(furi).files).sort("-isDirectory", "filename").select((f) => {
+              var theList = $from(io.listFiles(furi).files).sort("-isDirectory", "filename").select(f => {
+                //if (f.filename.endsWith("/")) f.filename = f.filename.substr(0, f.filename.length-1)
                 return merge(f, {
                   fLastModified: ow.format.fromDate(new Date(f.lastModified), 'yyyy-MM-dd HH:mm:ss'),
                   fSize        : ow.format.toBytesAbbreviation(f.size),
@@ -533,7 +534,8 @@ jobs:
                 })
               })
               if (isDef(restrict)) {
-                  theList = theList.filter(f => f.filename.match(new RegExp(restrict.join("|"))))
+                if (isString(restrict)) restrict = [ restrict ]
+                lst = lst.filter(f => restrict.reduce((aP, aC) => (aP && !(new RegExp(aC)).test(f.filepath)), true))
               }
               content += tmplb(theList)
             }
@@ -547,9 +549,9 @@ jobs:
             var fnLang = lang => {
                ow.loadTemplate()
                var _displayURI = uri.replace(/\/$/, "")
-               if (!incuri) _displayURI = _displayURI.replace(new RegExp("^" + origuri), "")
+               _displayURI = _displayURI.replace(new RegExp("^" + uri), "")
                _displayURI += puri
-               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs '" + _displayURI + "' '" + incuri + "'}}}") + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\">&larr;</span>\n\n```" + lang + "\n" + io.readFileString(furi) + "\n```\n", true, true), "text/html", 200)
+               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs '" + _displayURI + "' '" + uri + "' " + incURI + "}}}") + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\">&larr;</span>\n\n```" + lang + "\n" + io.readFileString(furi) + "\n```\n", true, true), "text/html", 200)
             }
             switch(ext) {
             case "md"  : return fn()
@@ -604,16 +606,16 @@ jobs:
         
         // Start with the clickable root.
         let html = ""
-        if (_incURI) 
-          html = `<a href="/" title="Navigate to root"> / </a> <a href="${_uri}" title="Navigate to main">${_uri.replace(/^\/*|\/*$/, "")}/</a>`
+        if (!_incURI) 
+          html = `<a href="/" title="Navigate to root"> / </a>`
         else 
-          html = `<a href="${_uri}" title="Navigate to root"> / </a>`
+          html = `<a href="${_uri}" title="Navigate to root"> ${_uri.replace(/^\//, "/ ")} / </a>`
         
         let currentPath = _uri
         segments.forEach((segment, index) => {
           currentPath += "/" + segment  // Build up the path.
           // Add separator before each segment.
-          if (index > 0) html += '/'
+          if (index > 0) html += ' / '
           
           // If it's the last segment (current location), show as plain text.
           if (index === segments.length - 1) {
@@ -629,7 +631,7 @@ jobs:
       args.logo = _$(args.logo, "logo").isString().default("/fonts/openaf_small.png")
 
       var temph = _$(args.templateHead).isString().default("## {{{ojh-buildBreadcrumbs puri '" + args.uri + "' " + args.incURI + "}}}<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + args.logo + "\">\n")
-      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}{{else}}<a href=\"{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{escapeMDTable filename}}/](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}/>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
+      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}{{else}}<a href=\"{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{escapeMDTable filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
 
       global.__MHTTPD = _$(global.__MHTTPD).isMap().default({})
       global.__MHTTPD[String(args.port) + args.uri] = {
