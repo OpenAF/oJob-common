@@ -460,6 +460,7 @@ jobs:
         logo     : logo
         restrict : restrict
         incURI   : incURI
+        sortTab  : sortTab
   help : 
    text   : Provides a HTTP file browse definition. 
    expects:
@@ -479,6 +480,8 @@ jobs:
      desc: (String) A comma separated list of regular expressions to restrict the access to the files
    - name: incURI
      desc: (Boolean) If true includes the URI in the breadcrumbs
+   - name: sortTab
+     desc: (Boolean) If true includes the table sorting script (OpenAF >= 20250402)
   check:
     in:
       port     : toNumber.isNumber.default(8091)
@@ -498,6 +501,7 @@ jobs:
       var fdefault     = global.__MHTTPD[String(port) + uri].DEFAULT
       var restrict     = global.__MHTTPD[String(port) + uri].RESTRICT
       var incURI       = global.__MHTTPD[String(port) + uri].INCURI
+      var sortTab      = global.__MHTTPD[String(port) + uri].SORTTAB
 
       var content = ""
       var puri = String(request.uri).replace(new RegExp("^" + uri), (uri == "/" ? "" : "/")).replace(/\/+/g, "/")
@@ -586,6 +590,8 @@ jobs:
          }
       }
       
+      if (sortTab) content += "<script src=\"/js/mdtablesort.js\"></script>\n"
+
       if (shouldBrowse)
          return server.replyOKHTML(ow.template.parseMD2HTML(content, true))
       else
@@ -642,5 +648,6 @@ jobs:
         INCURI  : args.incURI,
         URI     : args.uri,
         DEFAULT : _$(args.default).isString().default(__),
-        RESTRICT: args.restrict
+        RESTRICT: args.restrict,
+        SORTTAB : args.sortTab
       }
