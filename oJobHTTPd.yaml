@@ -492,6 +492,7 @@ jobs:
       logo     : isString.default("/fonts/openaf_small.png")
       restrict : default(__)
       incURI   : toBoolean.isBoolean.default(false)
+      sortTab  : toBoolean.isBoolean.default(false)
   args : 
    execURI   : | #js
       var shouldBrowse = global.__MHTTPD[String(port) + uri].BROWSE
@@ -506,7 +507,7 @@ jobs:
       var content = ""
       var puri = String(request.uri).replace(new RegExp("^" + uri), (uri == "/" ? "" : "/")).replace(/\/+/g, "/")
       var furi = String((new java.io.File(new java.io.File(String((new java.io.File(path + "/" + puri)).getCanonicalFile()).replace(/\\+/g, "/")))))
-
+ 
       if (!puri.endsWith("/")) puri += "/"
 
       var finfo
