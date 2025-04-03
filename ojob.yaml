@@ -308,21 +308,55 @@ jobs:
       name  : set
       keyArg: __key
       args  :
-        path: __path
+        path        : __path
+        data        : __data
+        templateArgs: __templateArgs
+        debug       : __debug
   help : 
-    text   : Sets a "key" with the current value on a "path" using $set
+    text   : Sets a "key" with the current value on a "path", or provided data, using $set
     expects:
     - name: __key
       desc: Map key
     - name: __path
       desc: A key or path to a value from the current args
+    - name: __data
+      desc: If defined, will set the provided data (with templateArgs or not)
+    - name: __templateArgs
+      desc: If defined, will apply template to each entry in __data
+    - name: __debug
+      desc: If defined, will print the current args
   check:
     in:
-      __key : isString.default("res")
-      __path: isString
+      __key         : isString.default("res")
+      __path        : isString.default(__)
+      __data        : isMap.default(__)
+      __templateArgs: toBoolean.isBoolean.default(true)
+      __debug       : toBoolean.isBoolean.default(false)
   exec : |
-    var r = $path(args, args.__path)
-  
+    var r
+    if (isDef(args.__path)) {
+      r = $path(args, args.__path)
+    } else if (isDef(args.__data)) {
+      r = args.__data
+      if (args.__templateArgs) {
+        traverse(r, (aK, aV, aP, aO) => {
+          if (isNull(aV)) aO[aK] = __
+          if (isString(aV) && aV.indexOf("{{") >= 0) {
+            aO[aK] = templify(aV, args)
+          }
+        })
+      }
+    } else {
+      r = args
+    }
+
+    delete r.__key
+    delete r.__path
+    delete r.__data
+    delete r.__debug
+    delete r.__templateArgs
+    if (args.__debug) cprint( ow.format.withSideLine(printTreeOrS(r, __, { bgcolor: "BG(235)" }), __, "FG(240)", "BG(235)", ow.format.withSideLineThemes().openBottomCurvedRect) )
+
     if (isDef(r) && args.__key != "args") $set(args.__key, r)
 
     // Delete all __ args
@@ -981,10 +1015,12 @@ jobs:
       __fn : isString
       __key: isString.default("res")
   exec: |
-    if (args.__fn.indexOf(".") < 0) args.__fn = "global." + args.__fn; 
-    var res = $fnM(args.__fn, (isDef(args.__path) ? $path(args, args.__path) : args));
-    if (isString(args.__fnPath)) res = $$({}).set(args.__fnPath, res);
-    if (isString(args.__key)) $set(args.__key, res); else args = merge(args, res)
+    if (args.__fn.indexOf(".") < 0) args.__fn = "global." + args.__fn
+    var res = $fnM(args.__fn, (isDef(args.__path) ? $path(args, args.__path) : args))
+    if (isDef(args.__fnPath) && isString(args.__fnPath)) res = $$({}).set(args.__fnPath, res)
+    if (isDef(res)) {
+      if (isDef(args.__key) && isString(args.__key) && args.__key != "args") $set(args.__key, res); else args = merge(args, res)
+    }
 
     // Delete all __ args
     Object.keys(args).filter(k => k.startsWith("__")).forEach(k => delete args[k])
@@ -1368,23 +1404,26 @@ jobs:
       name  : query
       keyArg: __query
       args  :
-        type: __type
-        from: __from
-        to  : __to
-        key : __key
+        type : __type
+        from : __from
+        to   : __to
+        toKey: __toKey
+        key  : __key
   help : 
     text: Performs a query (using ow.obj.filter) to the existing args.
     expects:
     - name: __query
       desc: The query map for ow.obj.filter or af.fromNLinq
     - name: __type
-      desc: The type of query to perform (e.g. path, ow.obj.filter, af.fromNLinq)
+      desc: The type of query to perform (e.g. path, sql or nlinq)
     - name: __from
       desc: The path to the args key to perform the query
     - name: __to
-      desc: The path to where the results should be stores
+      desc: The path to where the results should be stored in args
+    - name: __toKey
+      desc: If __to not provided defaults to $set on the provided key
     - name: __key
-      desc: If __from and __to not provided defaults to $get/$set on the provided key
+      desc: If __from and/or __to not provided defaults to $get/$set on the provided key
   exec : |
     if (isUnDef(args.__from) && isDef(args.from)) args.__from = args.from
     if (isUnDef(args.__key) && isDef(args.key)) args.__key = args.key
@@ -1402,13 +1441,13 @@ jobs:
     default     : f = ( isString(args.__query) ? $from(f).query(af.fromNLinq(args.__query)) : $from(f).query(args.__query) )
     }
 
-    if (args.__key != "args") { 
-      $set(args.__key, f)
-    } else { 
-      if (isDef(args.__to)) {
-        $$(args).set(args.__to, f)
+    if (args.__key == "args" && isUnDef(args.__toKey)) {
+      $$(args).set(isDef(args.__to) ? args.__to : args.__from, f)
+    } else {
+      if (isDef(args.__toKey)) {
+        $set(args.__toKey, f)
       } else {
-        $$(args).set(args.__from, f)
+        $set(args.__key, f)
       }
     }
 
@@ -2169,6 +2208,29 @@ jobs:
     // Delete all __ args
     Object.keys(args).filter(k => k.startsWith("__")).forEach(k => delete args[k])
 
+# ---------------------
+- name : ojob questions
+  typeArgs:
+    noLog   : true
+    shortcut:
+      name  : questions
+      keyArg: __questions
+  help :
+    text: |
+      Asks a list of questions and stores the answers into args.
+    expects:
+    - name: __questions
+      desc: A map structure equivalent to OpenAF's askStruct.
+  check:
+    in:
+      __questions: isArray
+  exec : |
+    askStruct(args.__questions).forEach(r => {
+      if (isDef(r.name)) {
+        $$(args).set(r.name, r.answer)
+      }
+    })
+
 # ---------------
 - name : ojob ask
   typeArgs:
@@ -2186,7 +2248,7 @@ jobs:
     - name: __question
       desc: The question to ask.
     - name: __answers
-      desc: "A map of answers to store into args. Each value should on the form of \"type.slonOptionsArray.siz\" (e.g. text, encrypt, password, char.['y'|'n'], option.['op1'|'op2'|'op3'].3)."
+      desc: "A map of answers to store into args. Each value should on the form of \"type.slonOptionsArray.size\" (e.g. text, encrypt, password, char.['y'|'n'], option.['op1'|'op2'|'op3'].3, moption.['op1'|'op2'|'op3'].3)"
     - name: __force
       desc: Boolean flag to force asking for an args value even if not defined.
   check:
@@ -2222,6 +2284,10 @@ jobs:
               if (isArray(options)) {
                 $$(args).set(aP + "." + aK, options[ askChoose(args.__question, options, (isDef(parts[2]) ? Number(parts[2]) : __) )] ); break
               }
+            case "moption" :
+              if (isArray(options)) {
+                $$(args).set(aP + "." + aK, options[ askChooseMultiple(args.__question, options, (isDef(parts[2]) ? Number(parts[2]) : __) )] ); break
+              }
             case "text"    :
             default        : $$(args).set(aP + "." + aK, ask(args.__question))
             }
@@ -2229,6 +2295,26 @@ jobs:
         }
       }
     })
+
+# ----------------
+- name : ojob oafp
+  typeArgs:
+    noLog   : true
+    shortcut:
+      name  : oafp
+      keyArg: __params
+    help  :
+      text   : |
+        "Executes oafp with the provided params"
+      expects:
+      - name: __params
+        desc: The parameters to provide to oafp
+  check:
+    in:
+      __params: isMap
+  exec : |
+    loadOAFP()
+    oafp(args.__params)
 
 # ---------------
 - name : ojob llm
@@ -2250,9 +2336,9 @@ jobs:
       "Executes a LLM (Local Language Model) prompt using $llm"
     expects:
     - name: __llmContext
-      desc: The context of the input data
+      desc: The context of the input data (determined by __llmInPath)
     - name: __llmInPath
-      desc: The path to consider from __llmInKey
+      desc: The path to consider from __llmInKey (mandatory for using context)
     - name: __llmInKey
       desc: The key for an existing list or 'args'
     - name: __llmEnv
