@@ -78,7 +78,7 @@ filesHash:
   oJobEmail.yaml: a9e54b0d2c493091283677b8f2491b471c1683c9
   oJobGIT.yaml: f1a2b6a2544935989c01edc4fadeed8693e515eb
   oJobHBS.yaml: ab15b0efd31f95ee770c77dace146035e0781661
-  oJobHTTPd.yaml: 36f94726c825c3d63d0f7b826aebb9902ce7789c
+  oJobHTTPd.yaml: 35dd81544de016145891e27b7bae3200cc3013d9
   oJobIO.yaml: 8108313099abf9d1115a3d428b68a203b8d5c2e2
   oJobManager.yaml: 5ad9ecf276bbee8b6503d0e3b40b007f2724507d
   oJobNet.yaml: 4413085d38724249587f6a790d7e1952a4d9c138
