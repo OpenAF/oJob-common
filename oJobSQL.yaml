@@ -1,11 +1,21 @@
 # Copyright 2023 Nuno Aguiar
 
 jobs:
-  # ----------------
-  - name: SQL Result
-    help: 
-      Use internally by oJobSQL
-    exec: |
+  # --------------------
+  - name    : SQL Result
+    typeArgs:
+      noLog   : false 
+      shortcut:
+        name  : email
+        keyArg: subject
+        args  :
+          server        : server
+          port          : port
+          from          : from
+          to            : to
+    help    : 
+      text: Use internally by oJobSQL
+    exec    : |
       if (isUnDef(args.sql))     throw "Please specify a query to run with sql=select\ user\ from\ dual";
       args.format = _$(args.format, "format").default("pm");
 
