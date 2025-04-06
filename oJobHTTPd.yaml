@@ -527,7 +527,7 @@ jobs:
               content += "|   | Filename | Last modified | Size | Size in bytes |\n"
               content += "|---|----------|:-------------:|-----:|--------------:|\n"
               if (puri != "/" && puri != "") 
-                content += "| <span style=\"color: #a0a0a0;\">&larrhk;</span> | __[..](<" + uri + puri.replace(/[^\/]+\/?$/, "") + ">)__ | | |\n"
+                content += "| <span style=\"color: #a0a0a0;\">&#8598;</span> | __[..](<" + uri + puri.replace(/[^\/]+\/?$/, "") + ">)__ | | |\n"
 
               var theList = $from(io.listFiles(furi).files).sort("-isDirectory", "filename").select(f => {
                 //if (f.filename.endsWith("/")) f.filename = f.filename.substr(0, f.filename.length-1)
@@ -535,7 +535,7 @@ jobs:
                   fLastModified: ow.format.fromDate(new Date(f.lastModified), 'yyyy-MM-dd HH:mm:ss'),
                   fSize        : ow.format.toBytesAbbreviation(f.size),
                   puri         : puri,
-                  uri          : uri
+                  uri          : (uri == puri && uri == "/" ? "" : uri)
                 })
               })
               if (isDef(restrict)) {
@@ -635,6 +635,7 @@ jobs:
         let currentPath = _uri
         segments.forEach((segment, index) => {
           currentPath += "/" + segment  // Build up the path.
+          currentPath = currentPath.replace(/\/+/g, "/") // Normalize slashes.
           // Add separator before each segment.
           if (index > 0) html += ' / '
           
@@ -652,7 +653,7 @@ jobs:
       args.logo = _$(args.logo, "logo").isString().default("/fonts/openaf_small.png")
 
       var temph = _$(args.templateHead).isString().default("## {{{ojh-buildBreadcrumbs puri '" + args.uri + "' " + args.incURI + "}}}<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + args.logo + "\">\n")
-      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}<span style=\"color: #a0a0a0;\">&rarrhk;</span>{{else}}<a href=\"{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{escapeMDTable filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
+      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}<span style=\"color: #a0a0a0;\">&#8600;</span>{{else}}<a href=\"{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{escapeMDTable filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
 
       global.__MHTTPD = _$(global.__MHTTPD).isMap().default({})
       global.__MHTTPD[String(args.port) + args.uri] = {
