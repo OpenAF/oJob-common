@@ -1,0 +1,292 @@
+# Copyright 2025 Nuno Aguiar
+
+include:
+- oJobHTTPd.yaml
+
+jobs:
+- name : HTTP Browse generic
+  deps :
+  - HTTP Start Server
+  to   : HTTP Service
+  typeArgs:
+    noLog: false 
+    shortcut:
+      name  : httpdBrowse
+      keyArg: port
+      args  : 
+        uri      : uri
+        path     : path
+        templates: templates
+        fns      : fns
+        options  : options
+  help : 
+   text   : Provides a HTTP browse definition. 
+   expects:
+   - name: port
+     desc: (Number) The port where the server was made available (default is 8091)
+   - name: uri
+     desc: (String) The URI where the HTTP File Browse will be available.
+   - name: templates
+     desc: (Map) A map with templates to be used.
+   - name: fns
+     desc: (Map) A map with functions to be used in the template.
+   - name: options
+     desc: (Map) A map with options to be passed
+  check:
+    in:
+      port     : toNumber.isNumber.default(8091)
+      uri      : isString.default("/")
+      path     : isString.default("")
+      templates: isMap.default({})
+      fns      : isMap.default({})
+      options  : isMap.default({})
+  args :
+    execURI: | #js
+      try {
+        var _options = global.__GBHTTPD[String(port) + uri]
+        var _out = ""
+        var _lst = _options._fns.getList(request, _options)
+        if (_lst.isList) {
+            _out = _options._fns.renderList(_lst, request, _options)
+        } else {
+            if (_lst.isFile) {
+                if (request.params.raw == "true") {
+                  return ow.server.httpd.replyFile(server, _options.parentPath, uri, request.uri)
+                } else {
+                  var _obj = _options._fns.getObj(request, _options)
+                  return _options._fns.renderObj(_obj, server, request, _options)
+                }
+            } else {
+                _out = _options._fns.renderEmpty(request, _options)
+            }
+        }
+
+        return server.replyOKHTML( String(_out) )
+      } catch(e) {
+        logErr(`Error: ${e.message}`)
+        return { data: String(e), mimetype: "text/plain", status: 500, header: {} }
+      }
+  exec : | #js
+    ow.loadTemplate(); ow.loadFormat()
+
+    // Check the functions provided
+    args.fns.getList = _$(args.fns.getList, "args.fns.getList").isFunction().default((request, options) => {
+      const uri = request.uri
+      var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "")
+
+      if (io.fileExists(options.parentPath + "/" + puri)) {
+          if (io.fileInfo(options.parentPath + "/" + puri).isFile) {
+              return { isFile: true }
+          } 
+      } else {
+          return { isFile: false }
+      }
+
+      var lst = io.listFiles(options.parentPath + "/" + puri).files
+      return {
+          isList     : true,
+          fields     : [ "Filename", "Last modified", "Size", "Size in bytes" ],
+          alignFields: [ "left", "center", "right", "right" ],
+          key        : "Filename",
+          list       : lst.map(r => ({
+              isDirectory: r.isDirectory,
+              values     : {
+                  Filename        : r.filename,
+                  "Last modified" : ow.format.fromDate(new Date(r.lastModified), "yyyy-MM-dd HH:mm:ss"),
+                  Size            : (!r.isDirectory ? ow.format.toBytesAbbreviation(r.size) : ""),
+                  "Size in bytes" : (!r.isDirectory ? r.size : "")
+              }
+          }))
+      }
+    })
+    args.fns.getObj = _$(args.fns.getObj, "args.fns.getObj").isFunction().default((request, options) => {
+      const uri = request.uri
+      var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "")
+      
+      var ext = String(puri).replace(/^.*\./, "")
+      switch(ext) {
+      case "md"  : return { data: io.readFileString(options.parentPath + "/" + puri), type: "md" }
+      case "yml" :
+      case "yaml": return { data: io.readFileString(options.parentPath + "/" + puri), type: "yaml" }
+      case "css" : return { data: io.readFileString(options.parentPath + "/" + puri), type: "css" }
+      case "sh"  : return { data: io.readFileString(options.parentPath + "/" + puri), type: "sh" }
+      case "js"  : return { data: io.readFileString(options.parentPath + "/" + puri), type: "js" }
+      case "java": return { data: io.readFileString(options.parentPath + "/" + puri), type: "java" }
+      case "py"  : return { data: io.readFileString(options.parentPath + "/" + puri), type: "python" }
+      case "toml": return { data: io.readFileString(options.parentPath + "/" + puri), type: "toml" }
+      case "hbs" : return { data: io.readFileString(options.parentPath + "/" + puri), type: "handlebars" }
+      case "json": return { data: io.readFileJSON(options.parentPath + "/" + puri), type: "json" }  
+      case "adoc": return { file: options.parentPath + "/" + puri, type: "asciidoc" }            
+      default:
+        return { file: options.parentPath + "/" + puri }
+      }
+    })
+    args.fns.renderList = _$(args.fns.renderList, "args.fns.renderList").isFunction().default((lst, request, options) => {
+      const uri = request.uri
+
+      var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "").replace(/\/$/, "")
+
+      const breadcrumb = p => {
+        if (p == "") return "[/ " + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
+        var parts = p.split("/")
+        var b = "[/ " + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
+        for (var i = 0; i < parts.length; i++) {
+          if (i == parts.length - 1) {
+            b += (!options.showURI && i == 0 ? "" : " / ") + parts[i] + " "
+          } else {
+            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + parts[i] + "](<" + options.parentURI + "/" + parts.slice(0, i + 1).join("/") + "/>)"
+          }
+        }
+        return b
+      }
+
+      const logo = _$(options.logo, "logo").isString().default("/fonts/openaf_small.png")
+      var content = "## " + breadcrumb( puri ) + "<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + logo + "\">\n\n"
+      content += "|  |" + lst.fields.join(" | ") + " |\n"
+      if (lst.alignFields) {
+          content += "|---"
+          lst.alignFields.forEach((a, i) => {
+              if (a == "left") {
+                  content += "|:--"
+              } else if (a == "right") {
+                  content += "|--:"
+              } else {
+                  content += "|--"
+              }
+          })
+          content += "|\n"
+
+          if (puri != "/" && puri != "") {
+            content += "| <span style=\"color: #a0a0a0;\">&#8598;</span> | __[..](<" + options.parentURI + puri.replace(/[^\/]+\/?$/, "") + ">)__ | | |\n"
+          }
+
+          $from(lst.list).sort("-isDirectory", "values." + lst.key).select(r => {
+              content += "|"
+              if (r.isDirectory) {
+                  content += " <span style=\"color: #a0a0a0;\">&#8600;</span> |"
+              } else {
+                  content += " <a href=\"" + options.parentURI + (puri.length > 0 ? "/" : "") + puri + "/" + r.values[lst.key] + "?raw=true\" download=\"" + r.values[lst.key] + "\">&darr;</a> |"
+              }
+              lst.fields.forEach((f, i) => {
+                if (r.isDirectory) {
+                    content += " " + (i == 0 ? "__[" + r.values[f] + "](<" + options.parentURI + (puri.length > 0 ? "/" : "") + puri + "/" + r.values[lst.key] + ">)__" : r.values[f]) + " |"
+                } else {
+                    content += " " + (i == 0 ? "[" + r.values[f] + "](<" + options.parentURI + (puri.length > 0 ? "/" : "") + puri + "/" + r.values[lst.key] + ">)" : r.values[f]) + " |"
+                }
+              })
+              content += "\n"
+          })
+      }
+
+      if (isDef(options.footer)) {
+          content += "\n" + options.footer + "\n"
+      }
+
+      if (options.sortTab) content += "<script src=\"/js/mdtablesort.js\"></script>\n"
+
+      return ow.template.parseMD2HTML( content, true )
+    })
+    args.fns.renderObj = _$(args.fns.renderObj, "args.fns.renderObj").isFunction().default((obj, server, request, options) => {
+      const uri = request.uri
+
+      var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "").replace(/\/$/, "")
+
+      if (obj.type == "asciidoc" && isDef(getOPackPath("Asciidoc"))) {
+        loadLib("asciidoc.js")
+        return ow.server.httpd.replyAsciidoc(server, obj.file)
+      }
+
+      if (isDef(obj.file)) {
+        return server.replyStream(io.readFileStream(obj.file), ow.server.httpd.getMimeType(puri))
+      }
+
+      if (obj.type == "md") {
+        return server.replyOKHTML(ow.template.parseMD2HTML(obj.data, true))
+      }
+
+      if (obj.type == "json" && (isUnDef(request.params.parse) || request.params.parse != "false")) {
+        return ow.server.httpd.replyJSMap(server, obj.data)
+      }
+
+      const breadcrumb = p => {
+        if (p == "") return "[/ " + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
+        var parts = p.split("/")
+        var b = "[/ " + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
+        for (var i = 0; i < parts.length; i++) {
+          if (i == parts.length - 1) {
+            b += (!options.showURI && i == 0 ? "" : " / ") + parts[i] + " "
+          } else {
+            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + parts[i] + "](<" + options.parentURI + "/" + parts.slice(0, i + 1).join("/") + "/>)"
+          }
+        }
+        return b
+      }
+
+      const _downloadcode = `<span><script>
+        function downloadText(aFile) {
+          var selectedText = document.querySelectorAll("pre")[0].innerText
+          const blob = new Blob([selectedText], { type: "text/plain" })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement("a")
+          a.href = url
+          a.download = aFile
+          document.body.appendChild(a)
+          a.click()
+          document.body.removeChild(a)
+          URL.revokeObjectURL(url)
+        }
+      </script></span>`
+
+      if (obj.type == "rawjson") objtype = "json"
+
+      const logo = _$(options.logo, "logo").isString().default("/fonts/openaf_small.png")
+      var content = "## " + breadcrumb( puri ) + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\">&darr;</a></span>\n\n"
+      content += "```" + obj.type + "\n"
+      content += isMap(obj.data) ? stringify(obj.data) : String(obj.data)
+      content += "\n```\n\n"
+
+      if (isDef(options.footer)) {
+        content += "\n" + options.footer + "\n"
+      }
+      content += _downloadcode
+
+      return server.replyOKHTML( ow.template.parseMD2HTML( content, true ) )
+    })
+    args.fns.renderEmpty = _$(args.fns.renderEmpty, "args.fns.renderEmpty").isFunction().default((request, options) => {
+      const uri = request.uri
+
+      var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "")
+
+      var content = "# " + (options.showURI ? options.parentURI + "/" : "") + puri + "\n\n"
+      content += "**Error: No content found.**\n"
+
+      return ow.template.parseMD2HTML( content, true )
+    })
+
+    args.fns.init = _$(args.fns.init, "args.fns.init").isFunction().default(() => {
+      // Check the templates provided
+      // args.templates.thead = _$(args.templates.thead, "templates.thead")
+      //                       .isString()
+      //                       .default("## {{{breadcrumb prefix '" + args.uri + "'}}{{extra}}\n")
+      // args.templates.tline = _$(args.templates.tline, "templates.tline")
+      //                       .isString()
+      //                       .default("{{#each this}}| {{#if isDirectory}}<span style=\"color: #a0a0a0;\">&#8600;</span>{{else}}<a href=\"{{encodeURI prefix}}{{encodeURI filepath}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI realPrefix}}{{encodeURI filepath}}{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{encodeURI realPrefix}}{{escapeMDTable filepath}}{{escapeMDTable filename}}{{escapeMDTable filename}}](<{{encodeURI realPrefix}}{{encodeURI filepath}}{{encodeURI filename}}>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI realPrefix}}{{encodeURI filepath}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
+      // args.templates.tfoot = _$(args.templates.tfoot, "templates.tfoot")
+      //                       .isString()
+      //                       .default("")
+    })
+  
+    // Add basic helpers
+    ow.template.addHelper("encodeURI", encodeURI)
+    ow.template.addHelper("escapeMDTable", str => str.replace(/\|/g, "\\|"))
+
+    var _options = args.options
+    _options._fns = args.fns
+    _options._fns.init()
+    if (isUnDef(global.__GBHTTPD)) global.__GBHTTPD = {}
+
+    _options.parentURI  = args.uri
+    _options.parentPath = args.path
+    _options.port       = args.port
+    global.__GBHTTPD[String(args.port) + args.uri] = _options
+
