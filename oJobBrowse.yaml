@@ -123,7 +123,7 @@ jobs:
       }
     })
     args.fns.renderList = _$(args.fns.renderList, "args.fns.renderList").isFunction().default((lst, server, request, options) => {
-      if (!options.browse) return ""
+      if (isDef(options.browse) && !options.browse) return ""
       const uri = request.uri
 
       var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "").replace(/\/$/, "")
