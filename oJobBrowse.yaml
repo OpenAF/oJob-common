@@ -47,7 +47,8 @@ jobs:
         var _out = ""
         var _lst = _options._fns.getList(request, _options)
         if (_lst.isList) {
-            _out = _options._fns.renderList(_lst, request, _options)
+            _out = _options._fns.renderList(_lst, server, request, _options)
+            if (isMap(_out)) return _out
         } else {
             if (_lst.isFile) {
                 if (request.params.raw == "true") {
@@ -121,10 +122,16 @@ jobs:
         return { file: options.parentPath + "/" + puri }
       }
     })
-    args.fns.renderList = _$(args.fns.renderList, "args.fns.renderList").isFunction().default((lst, request, options) => {
+    args.fns.renderList = _$(args.fns.renderList, "args.fns.renderList").isFunction().default((lst, server, request, options) => {
+      if (!options.browse) return ""
       const uri = request.uri
 
       var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "").replace(/\/$/, "")
+
+      if (isDef(options.default) && lst.list.filter(r => r.values[lst.key] == options.default).length == 1) {
+        request.uri = request.uri + "/" + options.default
+        return options._fns.renderObj(options._fns.getObj(request, options), server, request, options)
+      }
 
       const breadcrumb = p => {
         if (p == "") return "[/ " + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
@@ -193,7 +200,11 @@ jobs:
 
       if (obj.type == "asciidoc" && isDef(getOPackPath("Asciidoc"))) {
         loadLib("asciidoc.js")
-        return ow.server.httpd.replyAsciidoc(server, obj.file)
+        if (isUnDef(obj.file) && isDef(obj.stream)) {
+          return  ow.server.httpd.replyAsciidoc(server, obj.stream)
+        } else {
+          return ow.server.httpd.replyAsciidoc(server, obj.file)
+        }
       }
 
       if (isDef(obj.stream)) {
