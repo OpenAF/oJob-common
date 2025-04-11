@@ -196,6 +196,10 @@ jobs:
         return ow.server.httpd.replyAsciidoc(server, obj.file)
       }
 
+      if (isDef(obj.stream)) {
+        return server.replyStream(obj.stream, ow.server.httpd.getMimeType(puri))
+      }
+
       if (isDef(obj.file)) {
         return server.replyStream(io.readFileStream(obj.file), ow.server.httpd.getMimeType(puri))
       }
