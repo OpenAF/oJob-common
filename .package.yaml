@@ -39,13 +39,9 @@ version: '20250410'
 dependencies:
   openaf: '>=20211229'
 files:
-- .github/version.svg
-- .github/workflows/updatePacks.yml
 - .package.yaml
 - LICENSE
 - README.md
-- a.yaml
-- browse.js
 - oJobBasics.yaml
 - oJobBrowse.yaml
 - oJobCh.yaml
@@ -73,12 +69,8 @@ files:
 - ojob.json
 - ojob.yaml
 filesHash:
-  .github/version.svg: ef6d4c5c17ebb89c48eea39372855d3cf1c2e37a
-  .github/workflows/updatePacks.yml: ad0c1673797302df5904e0197fea2f7c26af3aa9
   LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
   README.md: 390af07744301413415a75ef85464fced704935c
-  a.yaml: 5fe50059f7b4b6ad472aa9e2f986e9243bd933ba
-  browse.js: ec1d979ff2bd0384abefabe4459da1416c7c6c39
   oJobBasics.yaml: 3178f72c3826bd9514cbd5c15bc3399821191f3c
   oJobBrowse.yaml: eb0d5352ae3ae04085ae0a83099e5d5f4fb3b071
   oJobCh.yaml: 4290a3d5dc035a6d7b6659aeb0e370d0bb55be58
