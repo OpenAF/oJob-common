@@ -255,15 +255,27 @@ jobs:
       if (obj.type == "rawjson") objtype = "json"
 
       const logo = _$(options.logo, "logo").isString().default("/fonts/openaf_small.png")
-      var content = "## " + breadcrumb( puri ) + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\">&darr;</a></span>\n\n"
-      content += "```" + obj.type + "\n"
-      content += isMap(obj.data) ? stringify(obj.data) : String(obj.data)
-      content += "\n```\n\n"
+      var content
+      if (obj.type == "raw") {
+        content = "## " + breadcrumb( puri ) + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"></span>\n\n"
+        content += String(obj.data)
+        content += "\n\n"
 
-      if (isDef(options.footer)) {
-        content += "\n" + options.footer + "\n"
+        if (isDef(options.footer)) {
+          content += "\n" + options.footer + "\n"
+        }
+      } else {
+        content = "## " + breadcrumb( puri ) + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\">&darr;</a></span>\n\n"
+        content += "```" + obj.type + "\n"
+        content += isMap(obj.data) ? stringify(obj.data) : String(obj.data)
+        content += "\n```\n\n"
+
+        if (isDef(options.footer)) {
+          content += "\n" + options.footer + "\n"
+        }
+        content += _downloadcode
       }
-      content += _downloadcode
+
 
       return server.replyOKHTML( ow.template.parseMD2HTML( content, true ) )
     })
@@ -273,7 +285,7 @@ jobs:
       var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "")
 
       var content = "# " + (options.showURI ? options.parentURI + "/" : "") + puri + "\n\n"
-      content += "**Error: No content found.**\n"
+      content += "_No content found._\n"
 
       return ow.template.parseMD2HTML( content, true )
     })
