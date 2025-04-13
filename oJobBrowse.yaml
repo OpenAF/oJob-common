@@ -65,7 +65,7 @@ jobs:
         return server.replyOKHTML( String(_out) )
       } catch(e) {
         logErr(`Error: ${e.message}`)
-        return { data: String(e), mimetype: "text/plain", status: 500, header: {} }
+        return { data: "Internal error", mimetype: "text/plain", status: 500, header: {} }
       }
   exec : | #js
     ow.loadTemplate(); ow.loadFormat()
