@@ -237,9 +237,9 @@ jobs:
       }
 
       const breadcrumb = p => {
-        if (p == "") return "[/ " + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
+        if (p == "") return "[/](</>) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
         var parts = p.split("/")
-        var b = "[/ " + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
+        var b = "[/](</>) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
         for (var i = 0; i < parts.length; i++) {
           if (i == parts.length - 1) {
             b += (!options.showURI && i == 0 ? "" : " / ") + parts[i] + " "
