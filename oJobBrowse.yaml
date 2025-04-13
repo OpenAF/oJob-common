@@ -200,7 +200,15 @@ jobs:
 
       if (request.params.raw == "true") {
         log("Downloading raw file: " + puri)  
-        return ow.server.httpd.replyFile(server, options.parentPath, options.parentURI, puri)
+        if (isDef(obj.stream)) {
+          return server.replyStream(obj.stream, ow.server.httpd.getMimeType(puri))
+        }
+        if (isDef(obj.file)) {
+          return server.replyStream(io.readFileStream(obj.file), ow.server.httpd.getMimeType(puri))
+        }
+        if (isDef(obj.data)) {
+          return server.replyOK(obj.data, ow.server.httpd.getMimeType(puri))
+        }
       }
 
       if (obj.type == "asciidoc" && isDef(getOPackPath("Asciidoc"))) {
