@@ -51,12 +51,8 @@ jobs:
             if (isMap(_out)) return _out
         } else {
             if (_lst.isFile) {
-                if (request.params.raw == "true") {
-                  return ow.server.httpd.replyFile(server, _options.parentPath, uri, request.uri)
-                } else {
-                  var _obj = _options._fns.getObj(request, _options)
-                  return _options._fns.renderObj(_obj, server, request, _options)
-                }
+              var _obj = _options._fns.getObj(request, _options)
+              return _options._fns.renderObj(_obj, server, request, _options)
             } else {
                 _out = _options._fns.renderEmpty(request, _options)
             }
@@ -68,7 +64,7 @@ jobs:
         return { data: "Internal error", mimetype: "text/plain", status: 500, header: {} }
       }
   exec : | #js
-    ow.loadTemplate(); ow.loadFormat()
+    ow.loadTemplate(); ow.loadFormat(); ow.loadServer()
 
     // Check the functions provided
     args.fns.getList = _$(args.fns.getList, "args.fns.getList").isFunction().default((request, options) => {
@@ -104,6 +100,10 @@ jobs:
       const uri = request.uri
       var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "")
       
+      if (request.params.raw == "true") {
+        return { stream: io.readFileStream(options.parentPath + "/" + puri) }
+      }
+
       var ext = String(puri).replace(/^.*\./, "")
       switch(ext) {
       case "md"  : return { data: io.readFileString(options.parentPath + "/" + puri), type: "md" }
@@ -197,6 +197,11 @@ jobs:
       const uri = request.uri
 
       var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "").replace(/\/$/, "")
+
+      if (request.params.raw == "true") {
+        log("Downloading raw file: " + puri)  
+        return ow.server.httpd.replyFile(server, options.parentPath, options.parentURI, puri)
+      }
 
       if (obj.type == "asciidoc" && isDef(getOPackPath("Asciidoc"))) {
         loadLib("asciidoc.js")
