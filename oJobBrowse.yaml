@@ -285,7 +285,7 @@ jobs:
       var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "")
 
       var content = "# " + (options.showURI ? options.parentURI + "/" : "") + puri + "\n\n"
-      content += "_No content found._\n"
+      content += "*No content found.*\n"
 
       return ow.template.parseMD2HTML( content, true )
     })
