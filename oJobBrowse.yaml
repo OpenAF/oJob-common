@@ -265,7 +265,7 @@ jobs:
         }
       </script></span>`
 
-      if (obj.type == "rawjson") objtype = "json"
+      if (obj.type == "rawjson") obj.type = "json"
 
       const logo = _$(options.logo, "logo").isString().default("/fonts/openaf_small.png")
       var content
