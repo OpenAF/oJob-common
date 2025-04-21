@@ -40,7 +40,7 @@ jobs:
       var ks
       if (isUnDef(global.__ojobHttp)) global.__ojobHttp = {}
       if (isUnDef(global.__ojobRoutes)) global.__ojobRoutes = {}
-      if (isUnDef(args.port)) args.port = 8091
+      if (isUnDef(args.port)) args.port = 8091; else args.port = Number(args.port)
       if (isUnDef(args.cp) && isDef(args.keystore) && !isNull(java.io.File(args.keystore).getParent())) args.cp = java.io.File(args.keystore).getParent().toString()
       if (isDef(args.cp)) af.externalAddClasspath(args.cp)
       if (isDef(args.keystore)) ks = args.keystore
@@ -59,7 +59,7 @@ jobs:
 # -------------------------
 - name : HTTP Apply Service 
   exec : | #js
-   if (isUnDef(args.port)) args.port = 8091
+   if (isUnDef(args.port)) args.port = 8091; else args.port = Number(args.port)
 
    ow.server.httpd.route(global.__ojobHttp[args.port], global.__ojobRoutes[args.port], function(r) { return global.__ojobHttp[args.port].reply("", "", 401, {}); })
    log("READY [" + args.port + "]")
@@ -83,7 +83,7 @@ jobs:
   deps:
   - HTTP Start Server
   exec: | #js
-      if (isUnDef(args.port)) args.port = 8091
+      if (isUnDef(args.port)) args.port = 8091; else args.port = Number(args.port)
       ow.server.httpd.stop(global.__ojobHttp[args.port])
       delete global.__ojobHttp[args.port]
       
@@ -404,7 +404,7 @@ jobs:
    - name: md
      desc: The markdown content to be returned
   exec : | #js
-    args.port    = _$(args.port).isNumber().default(8091)
+    args.port    = _$(Number(args.port)).isNumber().default(8091)
     args.uri     = _$(args.uri).isString().default("/")
     args.md      = _$(args.md).isString().default("You need to provide a markdown content.")
 
@@ -434,7 +434,7 @@ jobs:
     - name: path
       desc: (String) The canonical path (real path) to the folder that contains the file to be browsed.
   exec: | #js
-    args.port    = _$(args.port).isNumber().default(8091)
+    args.port    = _$(Number(args.port)).isNumber().default(8091)
     args.uri     = _$(args.uri).isString().default("/")
     _$(args.path).isString().$_("You need to provide a path.")
 
