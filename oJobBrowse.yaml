@@ -4,6 +4,53 @@ include:
 - oJobHTTPd.yaml
 
 jobs:
+# -------------------
+- name : HTTP Browser
+  deps :
+  - HTTP Start Server
+  to   : HTTP Service
+  typeArgs:
+    noLog: false 
+    shortcut:
+      name  : httpdBrowser
+      keyArg: port
+      args  : 
+        uri      : uri
+        type     : type
+        options  : options
+  help : 
+   text   : Provides a HTTP browser service based on an existing type.
+   expects:
+   - name: port
+     desc: (Number) The port where the server was made available (default is 8091)
+   - name: uri
+     desc: (String) The URI where the HTTP File Browser will be available.
+   - name: type
+     desc: (String) The type of the HTTP Browser services to be used (based on ow.server.httpd.browse.*)
+   - name: options
+     desc: (Map) A map with options to be passed
+  check:
+    in:
+      port     : toNumber.default(8091)
+      uri      : isString.default("/")
+      type     : isString.default("files")
+      #options  : isMap.default({})  
+  args :
+    execURI: | #js
+      try {
+        var _options = global.__GBHTTPD[String(port) + uri]
+        return ow.server.httpd.replyBrowse(server, request, _options)
+      } catch(e) {
+        $err(e)
+        return { data: "Internal error", mimetype: "text/plain", status: 500, header: {} }
+      }
+  exec : | #js
+    global.__GBHTTPD = global.__GBHTTPD || {}
+
+    if (isUnDef(ow.server.httpd.browse[args.type])) throw new Error("Invalid type provided: " + args.type)
+    global.__GBHTTPD[String(args.port) + args.uri] = ow.server.httpd.browse[args.type](args.uri, args.options)
+
+# --------------------------
 - name : HTTP Browse generic
   deps :
   - HTTP Start Server
