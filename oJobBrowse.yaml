@@ -211,7 +211,7 @@ jobs:
           content += "|\n"
 
           if (puri != "/" && puri != "") {
-            content += "| <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8598;</span> | __[..](<" + options.parentURI + puri.replace(/[^\/]+\/?$/, "") + ">)__ | | |\n"
+            content += "| <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8598;</span> | __[..](<" + options.parentURI + (options.parentURI.endsWith("/") ? "" : "/") + puri.replace(/[^\/]+\/?$/, "") + ">)__ | | |\n"
           }
 
           $from(lst.list).sort("-isDirectory", "values." + lst.key).select(r => {
