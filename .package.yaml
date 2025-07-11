@@ -24,6 +24,8 @@ keywords:
 - Email
 - SBucket
 - Sec
+- MCP
+- Browse
 bugs:
   url: https://github.com/OpenAF/oJob-common/issues
 repository:
@@ -35,7 +37,7 @@ name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20250701'
+version: '20250710'
 dependencies:
   openaf: '>=20211229'
 files:
@@ -53,6 +55,7 @@ files:
 - oJobHBS.yaml
 - oJobHTTPd.yaml
 - oJobIO.yaml
+- oJobMCP.yaml
 - oJobManager.yaml
 - oJobNet.yaml
 - oJobOPack.yaml
@@ -80,6 +83,7 @@ filesHash:
   oJobHBS.yaml: ab15b0efd31f95ee770c77dace146035e0781661
   oJobHTTPd.yaml: a1b3534be6878f9cfd7fe20729dd604e70d2fc77
   oJobIO.yaml: 8108313099abf9d1115a3d428b68a203b8d5c2e2
+  oJobMCP.yaml: 24dfb77c68531a89871847d6141f59023e08eab1
   oJobManager.yaml: 5ad9ecf276bbee8b6503d0e3b40b007f2724507d
   oJobNet.yaml: 4413085d38724249587f6a790d7e1952a4d9c138
   oJobOPack.yaml: b4e78c90de2a72bfe1bca21e2143de4715431e87
