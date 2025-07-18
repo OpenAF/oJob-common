@@ -77,6 +77,10 @@ jobs:
               try {
                 if (isString(args.fns[params.name])) {
                   _res = $job(args.fns[params.name], params.arguments)
+                  if (isMap(_res)) {
+                    delete _res.objId
+                    delete _res.execid
+                  }
                 } else {
                   throw "Function not found: " + params.name
                 }
@@ -121,6 +125,7 @@ jobs:
               _res = _res.result
             }
 
+            if (args.debug) log(`tools/call -- response: ${af.toCSLON(_res)}`)
             return _res
         },
         "tools/list": params => {
@@ -132,8 +137,7 @@ jobs:
                 return {
                   name       : f,
                   description: f,
-                  title      : f,
-                  parameters : []
+                  inputSchema: {}
                 }
               }
             })
@@ -163,15 +167,31 @@ jobs:
 #   ((fnsMeta )):
 #   - name       : ping
 #     description: Pings the server
-#     title      : ping
-#     parameters : []
+#     inputSchema:
+#       type: object
+#       properties:
+#         text:
+#           type: string
+#           description: Text to return
+#       required: ["text"]
+#     annotations:
+#       title       : Ping
+#       readOnlyHint: false
+#       idempotentHint: true
 #   - name       : echo
 #     description: Echoes the input
 #     title      : echo
-#     parameters : 
-#     - name        : text
-#       type        : string
-#       description : Text to echo
+#     inputSchema: 
+#       type: object
+#       properties:
+#         text:
+#           type: string
+#           description: Text to echo
+#       required: ["text"]
+#     annotations:
+#       title       : Echo
+#       readOnlyHint: false
+#       idempotentHint: true
 #   ((fns     )):
 #     ping: ping
 #     echo: echo
