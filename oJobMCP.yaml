@@ -47,7 +47,7 @@ jobs:
     args.description = merge({
       serverInfo: {
           name: "OpenAF",
-          title: "OpenAF test",
+          title: "OpenAF MCP server",
           version: "1.0.0"
       },
       capabilities: {
@@ -61,7 +61,7 @@ jobs:
     }, args.description)
 
     fns = {}
-    fns[args.uri] = req => ow.server.httpd.replyMCP(global.__ojobHttp[args.port], req, {
+    fns[args.uri] = req => ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, {
         initialize                 : params => {
             if (args.debug) log(`initialize -- ${af.toCSLON(params)}`)
             return args.description
@@ -69,9 +69,6 @@ jobs:
         "notifications/initialized": params => ({}),
         "tools/call"               : params => {
             if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
-            // name: ping
-            // arguments: {}
-            // _meta: ...
             var _res
             if (isDef(args.fns[params.name])) {
               try {
@@ -104,7 +101,6 @@ jobs:
                   isError: true
               }
             }
-
             if (isString(_res.text)) {
               _res = {
                   content: [{
@@ -146,10 +142,75 @@ jobs:
             }
         },
         "prompts/list": params => ({})
-    })
+    }, log, logWarn)
 
     ow.server.httpd.route(global.__ojobHttp[args.port], merge(global.__ojobRoutes[args.port], fns))
     log("READY [" + args.port + "]")
+
+# --------------------------
+- name    : STDIO MCP Server
+  typeArgs:
+    noLog   : false 
+    shortcut:
+      name  : stdioMCP
+      keyArg: description
+      args  :
+        debug      : debug
+        fnsMeta    : fnsMeta
+        fns        : fns
+  help    :
+    text: Starts a MCP stdio to handle requests with execution of jobs.
+    expects: 
+    - name: debug
+      desc: (String) If defined it will create a ndjson file with the provided name.
+    - name: fnsMeta
+      desc: (Array) Metadata for the functions available in the MCP server stdio.
+    - name: fns
+      desc: (Map) Functions to be executed when called from the MCP server stdio.
+  check   :
+    in: 
+      description: isMap.default(__)
+      debug      : isString.default(__)
+      fnsMeta    : isArray.default([])
+      fns        : isMap.default({})
+  exec    : | #js
+    // Ensures default server info and capabilities
+    args.description = merge({
+      serverInfo: {
+          name: "OpenAF",
+          title: "OpenAF server",
+          version: "1.0.0"
+      },
+      capabilities: {
+          prompts: {
+              listChanged: true
+          },
+          tools: {
+              listChanged: true
+          }
+      }
+    }, args.description)
+
+    var fs = {}
+    Object.keys(args.fns).map(f => {
+      fs[f] = function(params) {
+        var _r = $job(args.fns[f], params)
+        if (isMap(_r)) {
+          delete _r.objId
+          delete _r.execid
+        }
+        return _r
+      }
+    })
+
+    ow.server.mcpStdio(args.description, args.fnsMeta, 
+      fs,
+      (type, msg) => {
+      if (args.debug) {
+        io.writeLineNDJSON(args.debug, { type: type, msg: msg })
+      }
+    })
+
 
 # - name: ping
 #   exec: | #js
@@ -159,12 +220,22 @@ jobs:
 #   exec: | #js
 #     args.text = args.text
 
+# - name: specialSum
+#   exec: | #js
+#     args.text = Number(args.a) + Number(args.b) * 2
+
+# ojob:
+#   #logToConsole: false
+#   daemon      : true
+
 # todo:
+# #- (stdioMCP ): {}
+# #  ((debug  )): /Applications/OpenAF/oJob-common/log.ndjson
 # - (httpdStart): 17878
 # - (httpdMCP  ): 17878
 #   ((debug   )): true
 #   ((uri     )): "/mcp"
-#   ((fnsMeta )):
+#   ((fnsMeta)):
 #   - name       : ping
 #     description: Pings the server
 #     inputSchema:
@@ -192,9 +263,22 @@ jobs:
 #       title       : Echo
 #       readOnlyHint: false
 #       idempotentHint: true
-#   ((fns     )):
+#   - name       : specialSum
+#     description: Performs a special sum
+#     inputSchema:
+#       type: object
+#       properties:
+#         a:
+#           type: number
+#           description: the a number of the sum
+#         b:
+#           type: number
+#           description: the b number of the sum
+#       required: ["a","b"]
+#     annotations:
+#       title: specialSum
+#       readOnlyHint: false
+#   ((fns    )):
 #     ping: ping
 #     echo: echo
-
-# ojob:
-#   daemon: true
+#     specialSum: specialSum
