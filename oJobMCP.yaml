@@ -38,7 +38,7 @@ jobs:
       port       : isNumber
       uri        : isString.default("/mcp")
       debug      : isBoolean.default(false)
-      fnsMeta    : isArray.default([])
+      fnsMeta    : isMap.default({})
       fns        : isMap.default({})
   deps    :
   - HTTP Start Server
@@ -66,6 +66,7 @@ jobs:
             if (args.debug) log(`initialize -- ${af.toCSLON(params)}`)
             return args.description
         },
+        "notifications/cancelled"  : params => ({}),
         "notifications/initialized": params => ({}),
         "tools/call"               : params => {
             if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
@@ -73,7 +74,7 @@ jobs:
             if (isDef(args.fns[params.name])) {
               try {
                 if (isString(args.fns[params.name])) {
-                  _res = $job(args.fns[params.name], params.arguments)
+                  _res = $job(args.fns[params.name], params.arguments || params.input || {})
                   if (isMap(_res)) {
                     delete _res.objId
                     delete _res.execid
@@ -101,7 +102,8 @@ jobs:
                   isError: true
               }
             }
-            if (isString(_res.text)) {
+            try {
+            if (isDef(_res) && isString(_res.text)) {
               _res = {
                   content: [{
                       type: "text",
@@ -109,7 +111,7 @@ jobs:
                   }],
                   isError: false
               }
-            } else if (isUnDef(_res.result)) {
+            } else if (isDef(_res) && isUnDef(_res.result)) {
               _res = {
                   content: [{
                       type: "text",
@@ -118,8 +120,9 @@ jobs:
                   isError: false
               }
             } else {
-              _res = _res.result
+              if (isDef(_res)) _res = _res.result
             }
+            } catch(eee) { $err(eee) }
 
             if (args.debug) log(`tools/call -- response: ${af.toCSLON(_res)}`)
             return _res
@@ -142,7 +145,7 @@ jobs:
             }
         },
         "prompts/list": params => ({})
-    }, log, logWarn)
+    }, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) })
 
     ow.server.httpd.route(global.__ojobHttp[args.port], merge(global.__ojobRoutes[args.port], fns))
     log("READY [" + args.port + "]")
@@ -171,7 +174,7 @@ jobs:
     in: 
       description: isMap.default(__)
       debug      : isString.default(__)
-      fnsMeta    : isArray.default([])
+      fnsMeta    : isMap.default({})
       fns        : isMap.default({})
   exec    : | #js
     // Ensures default server info and capabilities
