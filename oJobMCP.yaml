@@ -129,9 +129,9 @@ jobs:
         },
         "tools/list": params => {
             if (args.debug) log(`tools/list -- ${af.toCSLON(params)}`)
-            args.fnsMeta = Object.keys(args.fns).map(f => {
+            var _fnsMeta = Object.keys(args.fns).map(f => {
               if (isDef(args.fnsMeta[f])) {
-                return args.fnsMeta[f]
+                return clone(args.fnsMeta[f])
               } else {
                 return {
                   name       : f,
@@ -141,7 +141,7 @@ jobs:
               }
             })
             return {
-                tools: args.fnsMeta
+                tools: _fnsMeta
             }
         },
         "prompts/list": params => ({})
