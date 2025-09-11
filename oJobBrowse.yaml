@@ -219,7 +219,7 @@ jobs:
               if (r.isDirectory) {
                   content += " <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8600;</span> |"
               } else {
-                  content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + options.parentURI + (puri.length > 0 ? "/" : "") + puri + "/" + r.values[lst.key] + "?raw=true\" download=\"" + r.values[lst.key].replace(/\+/g, "%2B") + "\">&darr;</a></span> |"
+                  content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + options.parentURI + (puri.length > 0 ? "/" : "") + puri + "/" + r.values[lst.key].replace(/\+/g, "%2B") + "?raw=true\" download=\"" + r.values[lst.key].replace(/\+/g, "%2B") + "\">&darr;</a></span> |"
               }
               lst.fields.forEach((f, i) => {
                 if (r.isDirectory) {
