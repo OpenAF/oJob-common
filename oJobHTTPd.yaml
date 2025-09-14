@@ -40,6 +40,7 @@ jobs:
       var ks
       if (isUnDef(global.__ojobHttp)) global.__ojobHttp = {}
       if (isUnDef(global.__ojobRoutes)) global.__ojobRoutes = {}
+      if (isUnDef(global.__ojobPreRoutes)) global.__ojobPreRoutes = {}
       if (isUnDef(args.port)) args.port = 8091; else args.port = Number(args.port)
       if (isUnDef(args.cp) && isDef(args.keystore) && !isNull(java.io.File(args.keystore).getParent())) args.cp = java.io.File(args.keystore).getParent().toString()
       if (isDef(args.cp)) af.externalAddClasspath(args.cp)
@@ -48,6 +49,7 @@ jobs:
 
       if (isUnDef(global.__ojobHttp[args.port])) global.__ojobHttp[args.port] = (isDef(args.hs) ? args.hs : ow.server.httpd.start(args.port, args.host, ks, args.pass))
 
+      global.__ojobPreRoutes[args.port] = ""
       if (args.mapLibs) {
          global.__ojobRoutes[args.port] = ow.server.httpd.mapRoutesWithLibs(global.__ojobHttp[args.port], {})
       } else {
@@ -90,6 +92,30 @@ jobs:
       delete global.__ojobRoutes[args.port]
       log("STOPPED [" + args.port + "]")
 
+# ------------------------
+- name : HTTP Default Auth
+  deps :
+  - HTTP Start Server
+  typeArgs:
+    noLog: false
+    shortcut:
+      name  : httpdDefaultAuth
+      keyArg: port
+      args  : 
+        execAuth: execAuth
+  help :
+    text   : Provides a default authentication function for all routes on a given port.
+    expects:
+    - name: port
+      desc: (Number) The port where the server was made available (default is 8091)
+    - name: execAuth
+      desc: (Function) The authentication function. Receives a request map and a server object
+  exec : | #js
+    args.port     = _$(args.port).isNumber().default(8091)
+    args.execAuth = _$(args.execAuth).isString().$_()
+
+    global.__ojobPreRoutes[args.port] = args.execAuth
+
 # Defines a HTTP service
 #
 # -------------------
@@ -108,6 +134,7 @@ jobs:
         audit        : audit
         auditTemplate: auditTemplate
         error        : error
+        execPre      : execPre
   help :
     text: Provides a HTTP service definition. If using sequential jobs do ensure that the job 'HTTP Start Server' gets executed first.
     expects:
@@ -123,11 +150,20 @@ jobs:
       desc: (String) Provide an audit logging template based on the request argument.           
     - name: error
       desc: (Boolean) If true will return the error in case of exception.
+    - name: execPre
+      desc: (String) A pre-execution code include to execURI useful for authentication
   exec : | #js
       args.port    = _$(args.port).isNumber().default(8091)
       args.uri     = _$(args.uri).isString().default("/")
       args.audit   = _$(args.audit).default(true)
+      args.execPre = _$(args.execPre).isString().default(__)
       args.auditTemplate = _$(args.auditTemplate).default("AUDIT HTTP | {{method}} {{uri}} {{reply.status}} {{{reply.mimetype}}} ({{header.remote-addr}}; {{header.user-agent}})")     
+
+      if (isUnDef(args.execPre) && isDef(global.__ojobPreRoutes[args.port])) {
+        args.execPre = global.__ojobPreRoutes[args.port]
+      } else {
+        args.execPre = ""
+      }
 
       var fn = __
       if (args.audit) {
@@ -148,7 +184,7 @@ jobs:
 
       global.__ojobRoutes[args.port][args.uri] = function(r) {
          try {
-            var res = (new Function("var request = arguments[0]; var server = global.__ojobHttp[" + args.port + "]; var port = " + String(args.port) + "; var uri = '" + args.uri + "'; " + args.execURI))(r)
+            var res = (new Function("var request = arguments[0]; var server = global.__ojobHttp[" + args.port + "]; var port = " + String(args.port) + "; var uri = '" + args.uri + "'; " + args.execPre + "; " + args.execURI))(r)
             if (!isMap(res)) res = ow.server.httpd.reply(res, void 0, void 0, {})
             fn(r, res)
             return res
