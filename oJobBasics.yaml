@@ -195,15 +195,15 @@ jobs:
   # ---------------------------
   - name: oJob Split into items
     help: |
-      Splits an args source into an array of maps (_list). Expects:
+      Splits a string in args into an array of maps stored in args._list. Expects:
 
-        source    (String)  A object path to the string source to split
-        separator (String)  The separator for the source string (defaults to \n)
+        source    (String)  Object path to the string source to split.
+        separator (String)  Separator for the source string (defaults to \n).
 
       Example:
 
-        a source string with the value "abc, xyz, 1" 
-        + separator = ',' 
+        a source string with the value "abc, xyz, 1"
+        + separator = ','
         transforms into:
 
         - item: abc
@@ -221,7 +221,7 @@ jobs:
   # ---------------------
   - name: oJob Print list
     help: |
-      Prints the current list (args._list).
+      Prints the current args._list as YAML.
     exec: |
       _$(args._list, "_list").$_("No list found.");
       print(af.toYAML(args._list));
@@ -229,9 +229,9 @@ jobs:
   # ---------------------
   - name: oJob Print args
     help: |
-      Prints the current args. Optionally expects:
+      Prints args (or a sub-path) as YAML. Optionally expects:
 
-        _path (String)  The object path over args.
+        _path (String)  Object path over args to print.
     exec: |
       var r = args;
       if (isDef(args._path) && isString(args._path)) {
@@ -243,10 +243,11 @@ jobs:
   # --------------------------
   - name: oJob Get kept result
     help: |
-      Retrieves a previously kept result, with OAF Keep result. Optionally expects:
+      Retrieves a previously kept result saved with oJob Keep result. Optionally expects:
 
         ojobkeep  (Map)
-          name      (String)  The name of the result that was kept.
+          name (String)  Name of the stored result (defaults to "default").
+          keep (String)  Object path to merge or assign from the kept result.
 
     exec: |
       args.ojobkeep    = _$(args.ojobkeep, "ojobkeep").isMap().default({});
@@ -266,11 +267,11 @@ jobs:
   # ----------------------
   - name: oJob Keep result
     help: |
-      Keeps the current args result to later be retrieved with OAF Get kept result or the function oafGetResult(aName). Optionally expects:
+      Keeps the current args result to be retrieved later with oJob Get kept result or oafGetResult(aName). Optionally expects:
 
         ojobkeep  (Map)
-          name     (String)  The name of the result to keep.
-          keep     (String)  A object path on args to keep. If not defined it will keep _list or the entire args.
+          name (String)  Name of the result to keep (defaults to "default").
+          keep (String)  Object path on args to keep. If not defined stores args._list or the entire args.
 
     exec: |
       args.ojobkeep    = _$(args.ojobkeep, "ojobkeep").isMap().default({});
@@ -297,12 +298,12 @@ jobs:
   # -----------------
   - name: oJob Switch
     help: |
-      Adds new "todo" entries depending on the value of a provided args variable. Expects:
+      Adds new todo entries depending on the value of a provided args variable. Expects:
 
-        switchOn      (String)  The variable in args that will define which set of "todo"s will be added (trimmed)
-        lowerCase     (Boolean) Compare the switchOn in lower case (defaults to false)
-        todos.[value] (Map)     Map of "todo"s
-        default       (Map)     Default map of "todo"s
+        switchOn      (String)  Variable in args that defines which todo set will be added (trimmed).
+        lowerCase     (Boolean) Compare switchOn in lower case (defaults to false).
+        todos.[value] (Array)   Map of todo arrays keyed by possible values.
+        default       (Array)   Default todo array if no match is found.
 
         Example:
 
@@ -340,17 +341,17 @@ jobs:
   # Get a SBucket secret
   - name: oJob Sec Get
     help: |
-      This job will get a SBucket secret and map it to oJob's args:
+      Retrieves a SBucket secret and maps it into args:
 
-        - args.secOut      (string)  The args path to be mapped with the secret
-        - args.secKey      (string)  The SBucket key
-        - args.secRepo     (string)  The SBucket repository
-        - args.secBucket   (string)  The SBucket name
-        - args.secPass     (string)  The SBucket password
-        - args.secMainPass (string)  The SBucket repository password
-        - args.secFile     (string)  Optional provide a specific sbucket file
-        - args.secDontAsk  (string)  Determine if passwords should be asked from the user (default=false)
-        - args.secIgnore   (boolean) If true will ignore errors of sec parameters not being provided (default=false)
+        - args.secOut      (String)  Args path to assign with the secret (optional).
+        - args.secKey      (String)  SBucket key to retrieve.
+        - args.secRepo     (String)  SBucket repository.
+        - args.secBucket   (String)  SBucket name.
+        - args.secPass     (String)  SBucket password.
+        - args.secMainPass (String)  Repository password.
+        - args.secFile     (String)  Optional specific SBucket file.
+        - args.secDontAsk  (Boolean) Avoid prompting for missing passwords (default=false).
+        - args.secIgnore   (Boolean) Ignore missing secret parameters (default=false).
     
     exec: |
       ow.loadSec()

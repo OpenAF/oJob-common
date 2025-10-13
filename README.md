@@ -24,13 +24,44 @@ Check the documentation for some of them:
 
 | oJobBasics jobs |
 |-----------------|
+| [oJob Start and Stop helpers](#ojob-start-and-stop-helpers) |
+| [oJob Sleep utilities](#ojob-sleep-utilities) |
 | [oJob sh](#ojob-sh) |
+| [oJob Stringify](#ojob-stringify) |
+| [oJob Set](#ojob-set) |
+| [oJob Path Set](#ojob-path-set) |
+| [oJob YAML](#ojob-yaml) |
+| [oJob Sort Array](#ojob-sort-array) |
+| [oJob Map Array](#ojob-map-array) |
+| [oJob Map](#ojob-map) |
+| [oJob Split into items](#ojob-split-into-items) |
+| [oJob Print list](#ojob-print-list) |
+| [oJob Print args](#ojob-print-args) |
+| [oJob Get kept result](#ojob-get-kept-result) |
+| [oJob Keep result](#ojob-keep-result) |
+| [oJob Switch](#ojob-switch) |
+| [oJob Sec Get](#ojob-sec-get) |
 | [oJob background processes](#ojob-background-processes) |
 | [oJob From global](#ojob-from-global) |
 | [oJob Args from JSON](#ojob-args-from-json) |
 | [oJob Args from YAML](#ojob-args-from-yaml) |
-| [oJob Send email](#ojob-send-email) |
 | [oJob Jobs Report](#ojob-jobs-report) |
+
+### oJob Start and Stop helpers
+
+These utility jobs provide a consistent start/stop lifecycle:
+
+* **oJob Start** – emits an `init` log entry when processing begins.
+* **oJob Stop** – emits a `done` log entry when processing is complete.
+* **oJob Shutdown** – equivalent to `oJob Stop` but runs on shutdown so it can perform cleanup.
+* **oJob Exit** – terminates the current script immediately with exit code `0`.
+
+### oJob Sleep utilities
+
+Two convenience jobs delay execution by a fixed interval:
+
+* **oJob Sleep 1s** – sleeps for 1 second (1000 ms).
+* **oJob Sleep 5s** – sleeps for 5 seconds (5000 ms).
 
 ### oJob sh
 
@@ -43,6 +74,10 @@ This job runs a local shell command and accepts the following arguments:
 | directory | String | No | Sets the working directory for the command |
 | stdin | String | No | Provide any stdin needed |
 | exitcode | Number | No | Determines what exitcode should be consider success (default is 0) |
+| stdout | String | No | Captures the command stdout when `quiet` is true |
+| stderr | String | No | Captures the command stderr when `quiet` is true |
+| prefix | String | No | Prefix to prepend to each output line when `quiet` is false |
+| prefixLog | Boolean | No | Uses `log` instead of `print` when applying the prefix (default is false) |
 
 Example:
 
@@ -103,6 +138,143 @@ todo:
   - Example to parse output
   - Example to prepare cmd
 ````
+
+### oJob Stringify
+
+Prints the result of a JavaScript expression as JSON.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| name | String | Yes | JavaScript expression or object to evaluate and stringify |
+| min | Boolean | No | If true, produces a minified JSON string |
+
+### oJob Set
+
+Assigns a value to a global variable.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| name | String | Yes | Global variable name to assign |
+| value | Any | No | Value to assign (defaults to `undefined`) |
+
+### oJob Path Set
+
+Assigns a value to a nested path of a global variable.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| name | String | Yes | Global variable name to assign |
+| path | String | No | Object path inside the global variable where the value should be stored |
+| value | Any | No | Value to assign (defaults to `undefined`) |
+
+### oJob YAML
+
+Prints the result of a JavaScript expression as YAML.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| name | String | Yes | JavaScript expression or object to evaluate and dump as YAML |
+
+### oJob Sort Array
+
+Sorts an array and stores the result in a global variable.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| name | String | Yes | Destination global variable name |
+| srcName | String | No | Source variable or expression to evaluate (defaults to `name`) |
+| reverse | Boolean | No | If true, reverses the sorted array |
+
+### oJob Map Array
+
+Maps an array of objects into a new array using selectors.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| name | String | Yes | Destination global variable name |
+| srcName | String | Yes | Source variable or expression that resolves to an array |
+| selectors | Array | No | Array of object path selectors to map (defaults to empty array) |
+| limit | Number | No | Optional limit for the number of entries to process |
+
+### oJob Map
+
+Applies a `$path`/JMESPath expression to derive a new value.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| name | String | Yes | Destination global variable name |
+| srcName | String | Yes | Source variable or expression to evaluate |
+| path | String | No | `$path`/JMESPath expression (defaults to empty string) |
+
+### oJob Split into items
+
+Splits a string from `args` into a list of maps stored in `args._list`.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| source | String | Yes | Object path to the string source within `args` |
+| separator | String | No | Separator used to split the string (defaults to newline) |
+
+### oJob Print list
+
+Prints the current list stored in `args._list` as YAML.
+
+### oJob Print args
+
+Prints the current `args` map or a specific sub-path as YAML.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| _path | String | No | Optional object path to print within `args` |
+
+### oJob Get kept result
+
+Retrieves a previously stored result created by **oJob Keep result**.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| ojobkeep.name | String | No | Name of the stored result (defaults to `default`) |
+| ojobkeep.keep | String | No | Optional object path to merge or assign from the kept result |
+
+Depending on the stored data type, the job will either merge maps into `args` or set `args._list` with the saved list.
+
+### oJob Keep result
+
+Stores the current job output so it can be reused later with **oJob Get kept result** or `oafGetResult`.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| ojobkeep.name | String | No | Name to associate with the stored result (defaults to `default`) |
+| ojobkeep.keep | String | No | Optional object path inside `args` to store instead of the whole result |
+
+If `args._list` exists it will be persisted; otherwise the whole `args` map (or the provided path) is kept.
+
+### oJob Switch
+
+Adds additional todo entries depending on the value of an argument.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| switchOn | String | Yes | Argument name whose value determines the todo list |
+| lowerCase | Boolean | No | If true, compares the value in lower case |
+| todos | Map | Yes | Map of todo arrays keyed by possible argument values |
+| default | Array | No | Todo array used when no matching key is found |
+
+### oJob Sec Get
+
+Retrieves secrets from an SBucket and maps them into `args`.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| secOut | String | No | Destination path within `args` for the loaded secret |
+| secKey | String | No | Key to retrieve from the SBucket (required unless `secIgnore` is true) |
+| secRepo | String | No | Repository containing the SBucket |
+| secBucket | String | No | SBucket name |
+| secPass | String | No | Password for the SBucket |
+| secMainPass | String | No | Repository password |
+| secFile | String | No | Specific SBucket file to load |
+| secDontAsk | Boolean | No | If true, avoids prompting for missing passwords |
+| secIgnore | Boolean | No | If true, ignore missing secret parameters |
 
 ### oJob background processes
 
