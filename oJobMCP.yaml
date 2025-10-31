@@ -29,7 +29,7 @@ jobs:
     - name: debug
       desc: (Boolean) If true, debug messages will be logged.
     - name: fnsMeta
-      desc: (Array) Metadata for the functions available in the MCP server.
+      desc: (Map) Metadata for the functions available in the MCP server.
     - name: fns
       desc: (Map) Functions to be executed when called from the MCP server.
   check   :
@@ -45,6 +45,7 @@ jobs:
   exec    : | #js
     // Ensures default server info and capabilities
     args.description = merge({
+      protocolVersion: "2024-11-05",
       serverInfo: {
           name: "OpenAF",
           title: "OpenAF MCP server",
@@ -167,7 +168,7 @@ jobs:
     - name: debug
       desc: (String) If defined it will create a ndjson file with the provided name.
     - name: fnsMeta
-      desc: (Array) Metadata for the functions available in the MCP server stdio.
+      desc: (Map) Metadata for the functions available in the MCP server stdio.
     - name: fns
       desc: (Map) Functions to be executed when called from the MCP server stdio.
   check   :
@@ -179,6 +180,7 @@ jobs:
   exec    : | #js
     // Ensures default server info and capabilities
     args.description = merge({
+      protocolVersion: "2024-11-05",
       serverInfo: {
           name: "OpenAF",
           title: "OpenAF server",
@@ -206,7 +208,7 @@ jobs:
       }
     })
 
-    ow.server.mcpStdio(args.description, args.fnsMeta, 
+    ow.server.mcpStdio(args.description, Object.values(args.fnsMeta), 
       fs,
       (type, msg) => {
       if (args.debug) {
