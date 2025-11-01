@@ -41,12 +41,9 @@ version: '20251031'
 dependencies:
   openaf: '>=20211229'
 files:
-- .github/version.svg
-- .github/workflows/updatePacks.yml
 - .package.yaml
 - LICENSE
 - README.md
-- a.yaml
 - oJobBasics.yaml
 - oJobBrowse.yaml
 - oJobCh.yaml
@@ -73,11 +70,8 @@ files:
 - oJobXLS.yaml
 - oJobs.yaml
 filesHash:
-  .github/version.svg: 2873619f057277a3f5051a5d3e41aa681fe4ad6d
-  .github/workflows/updatePacks.yml: ad0c1673797302df5904e0197fea2f7c26af3aa9
   LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
   README.md: e138c5830128ad1952e09f8d81b5cf8a1c8f885f
-  a.yaml: 475a81f6c79f03ce797559ff19564fefe5d2d188
   oJobBasics.yaml: a084f112233ea3faa11eb9bcc16871c721d05f5b
   oJobBrowse.yaml: 979e42364747038728eeda1c747eb139f25044b5
   oJobCh.yaml: 4290a3d5dc035a6d7b6659aeb0e370d0bb55be58
