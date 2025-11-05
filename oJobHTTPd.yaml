@@ -49,11 +49,13 @@ jobs:
 
       if (isUnDef(global.__ojobHttp[args.port])) global.__ojobHttp[args.port] = (isDef(args.hs) ? args.hs : ow.server.httpd.start(args.port, args.host, ks, args.pass))
 
-      global.__ojobPreRoutes[args.port] = ""
-      if (args.mapLibs) {
-         global.__ojobRoutes[args.port] = ow.server.httpd.mapRoutesWithLibs(global.__ojobHttp[args.port], {})
-      } else {
-         global.__ojobRoutes[args.port] = {}
+      if (isUnDef(global.__ojobPreRoutes[args.port])) global.__ojobPreRoutes[args.port] = ""
+      if (isUnDef(global.__ojobRoutes[args.port])) {
+        if (args.mapLibs) {
+          global.__ojobRoutes[args.port] = ow.server.httpd.mapRoutesWithLibs(global.__ojobHttp[args.port], {})
+        } else {
+          global.__ojobRoutes[args.port] = {}
+        }
       }
 
 # Applies a HTTP service definition
