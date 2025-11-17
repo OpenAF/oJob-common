@@ -69,6 +69,10 @@ jobs:
         },
         "notifications/cancelled"  : params => ({}),
         "notifications/initialized": params => ({}),
+        "ping"                     : params => {
+            if (args.debug) log(`ping -- ${af.toCSLON(params)}`)
+            return {}
+        },
         "tools/call"               : params => {
             if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
             var _res
