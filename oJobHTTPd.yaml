@@ -11,12 +11,13 @@ jobs:
       name  : httpdStart
       keyArg: port
       args  :
-        hs      : hs
-        keystore: keystore
-        pass    : pass
-        host    : host
-        cp      : cp
-        mapLibs : mapLibs
+        hs       : hs
+        keystore : keystore
+        pass     : pass
+        host     : host
+        uriPrefix: uriPrefix
+        cp       : cp
+        mapLibs  : mapLibs
   help :     
    text   : Provides and starts a HTTP server.
    expects:
@@ -32,6 +33,8 @@ jobs:
      desc: (String) Optionally the interface where the server should be listening (default is all)
    - name: cp
      desc: (String) Optionally providing the classpath URL to include the keystore file
+   - name: uriPrefix
+     desc: (String) Optionally a URI prefix to be applied to all routes
    - name: mapLibs
      desc: (boolean) Map also internal libs (e.g. jquery, css, etc...)
   exec : | #js
@@ -41,6 +44,7 @@ jobs:
       if (isUnDef(global.__ojobHttp)) global.__ojobHttp = {}
       if (isUnDef(global.__ojobRoutes)) global.__ojobRoutes = {}
       if (isUnDef(global.__ojobPreRoutes)) global.__ojobPreRoutes = {}
+      if (isUnDef(args.uriPrefix)) args.uriPrefix = __
       if (isUnDef(args.port)) args.port = 8091; else args.port = Number(args.port)
       if (isUnDef(args.cp) && isDef(args.keystore) && !isNull(java.io.File(args.keystore).getParent())) args.cp = java.io.File(args.keystore).getParent().toString()
       if (isDef(args.cp)) af.externalAddClasspath(args.cp)
@@ -50,6 +54,9 @@ jobs:
       if (isUnDef(global.__ojobHttp[args.port])) global.__ojobHttp[args.port] = (isDef(args.hs) ? args.hs : ow.server.httpd.start(args.port, args.host, ks, args.pass))
 
       if (isUnDef(global.__ojobPreRoutes[args.port])) global.__ojobPreRoutes[args.port] = ""
+      if (isUnDef(global.__ojobHttpUriPrefix)) global.__ojobHttpUriPrefix = {}
+
+      global.__ojobHttpUriPrefix[args.port] = args.uriPrefix
       if (isUnDef(global.__ojobRoutes[args.port])) {
         if (args.mapLibs) {
           global.__ojobRoutes[args.port] = ow.server.httpd.mapRoutesWithLibs(global.__ojobHttp[args.port], {})
@@ -65,7 +72,7 @@ jobs:
   exec : | #js
    if (isUnDef(args.port)) args.port = 8091; else args.port = Number(args.port)
 
-   ow.server.httpd.route(global.__ojobHttp[args.port], global.__ojobRoutes[args.port], function(r) { return global.__ojobHttp[args.port].reply("", "", 401, {}); })
+   ow.server.httpd.route(global.__ojobHttp[args.port], global.__ojobRoutes[args.port], function(r) { return global.__ojobHttp[args.port].reply("", "", 401, {}); }, global.__ojobHttpUriPrefix[args.port])
    log("READY [" + args.port + "]")
 
 # Stopping the HTTP server
@@ -90,6 +97,7 @@ jobs:
       if (isUnDef(args.port)) args.port = 8091; else args.port = Number(args.port)
       ow.server.httpd.stop(global.__ojobHttp[args.port])
       delete global.__ojobHttp[args.port]
+      delete global.__ojobHttpUriPrefix[args.port]
       
       delete global.__ojobRoutes[args.port]
       log("STOPPED [" + args.port + "]")
@@ -155,10 +163,10 @@ jobs:
     - name: execPre
       desc: (String) A pre-execution code include to execURI useful for authentication
   exec : | #js
-      args.port    = _$(args.port).isNumber().default(8091)
-      args.uri     = _$(args.uri).isString().default("/")
-      args.audit   = _$(args.audit).default(true)
-      args.execPre = _$(args.execPre).isString().default(__)
+      args.port          = _$(args.port).isNumber().default(8091)
+      args.uri           = _$(args.uri).isString().default("/")
+      args.audit         = _$(args.audit).default(true)
+      args.execPre       = _$(args.execPre).isString().default(__)
       args.auditTemplate = _$(args.auditTemplate).default("AUDIT HTTP | {{method}} {{uri}} {{reply.status}} {{{reply.mimetype}}} ({{header.remote-addr}}; {{header.user-agent}})")     
 
       if (isUnDef(args.execPre) && isDef(global.__ojobPreRoutes[args.port])) {
