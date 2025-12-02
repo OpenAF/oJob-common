@@ -13,12 +13,20 @@ Check the documentation for some of them:
 | [oJobSSH](#ojobssh) | SSH to execute commands and upload/download files. |
 | [oJobSQL](#ojobsql) | Query or execute SQL to a JDBC database. |
 | [oJobES](#ojobes) | Logging to ElasticSearch |
-| [oJobNet](#ojobnet) | Testing network connectivity | 
-| [oJob](#ojob) | Building a simple HTTP(s) server |
+| [oJobNet](#ojobnet) | Testing network connectivity |
+| [oJobHTTPd](#ojobhttpd) | Building a simple HTTP(s) server |
 | [oJobRest](#ojobrest) | Building a simple REST server |
+| [oJobBrowse](#ojobbrowse) | HTTP file browsing with customizable templates |
+| [oJobMCP](#ojobmcp) | MCP (Model Context Protocol) server functionality |
 | [oJobOPack](#ojobopack) | Simplified OPack creation |
 | [oJobRAID](#ojobraid) | Simplified RAID AF operation execution. |
 | [oJobWatchDog](#ojobwatchdog) | Helps build a cron-based process "watchdog". |
+| [oJobCh](#ojobch) | Channel operations (buffering, waiting) |
+| [oJobIO](#ojobio) | File I/O operations (copy, move, append, etc.) |
+| [oJobTest](#ojobtest) | Testing functionality with assertions and reports |
+| [oJobXLS](#ojobxls) | Excel file operations |
+| [oJobGIT](#ojobgit) | GIT repository operations |
+| [oJobDebug](#ojobdebug) | Debug utilities |
 
 ## oJobBasics
 
@@ -697,14 +705,15 @@ It's composed of 3 jobs:
 * HTTP Service
 * HTTP File Browse
 
-The job "HTTP Start Server" expects: 
+The job "HTTP Start Server" expects:
 
 | Argument | Type | Mandatory | Description |
 |----------|------|-----------|-------------|
 | port | Number | No | The port number where to assign the HTTP(s) server (defaults to 8091) |
-| keystore | String | No | The keystore for the SSL certificates to create a HTTPS server | 
+| keystore | String | No | The keystore for the SSL certificates to create a HTTPS server |
 | pass | String | No | The password for the keystore to create a HTTPS server |
 | host | String | No | The ip address of the local network interface to which to bind this HTTP server (defaults to 0.0.0.0) |
+| uriPrefix | String | No | Optionally a URI prefix to be applied to all routes |
 | cp | String | No | Provide a folder where the keystore file is to include it on the current classpath (Java requires for keystores to be on the execution classpath) |
 | hs | HTTPServer object | No | An already created HTTPServer to which to bind the HTTP services |
 | mapLibs | Boolean | No | Map internal OpenAF libs like JQuery, highlight css, etc. |
@@ -978,6 +987,368 @@ jobs:
 todo:
   - nAttrMon watchdog
 ````
+
+---
+
+## oJobMCP
+
+Provides MCP (Model Context Protocol) server functionality for handling requests and executing jobs via HTTP or STDIO transport.
+
+### HTTP MCP Server
+
+Starts a MCP server that listens for HTTP requests and executes jobs based on the requests.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| port | Number | Yes | The port to listen on |
+| uri | String | No | The URI to handle requests (defaults to "/mcp") |
+| debug | Boolean | No | If true, debug messages will be logged (defaults to false) |
+| description | Map | No | Metadata for the MCP server (protocol version, server info, capabilities) |
+| fnsMeta | Map | No | Metadata for the functions available in the MCP server (defaults to {}) |
+| fns | Map | Yes | Functions/jobs to be executed when called from the MCP server |
+
+Example:
+
+```yaml
+include:
+  - oJobMCP.yaml
+
+ojob:
+  daemon: true
+
+jobs:
+  - name: ping
+    exec: |
+      args.text = "PONG!"
+
+  - name: echo
+    exec: |
+      args.text = args.text
+
+todo:
+  - (httpdStart): 17878
+  - (httpdMCP): 17878
+    ((debug)): true
+    ((uri)): "/mcp"
+    ((fnsMeta)):
+      - name: ping
+        description: Pings the server
+        inputSchema:
+          type: object
+          properties:
+            text:
+              type: string
+              description: Text to return
+          required: ["text"]
+      - name: echo
+        description: Echoes the input
+        inputSchema:
+          type: object
+          properties:
+            text:
+              type: string
+              description: Text to echo
+          required: ["text"]
+    ((fns)):
+      ping: ping
+      echo: echo
+```
+
+### STDIO MCP Server
+
+Starts a MCP stdio server to handle requests with execution of jobs.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| debug | String | No | If defined, creates an ndjson file with the provided name for debugging |
+| description | Map | No | Metadata for the MCP server (protocol version, server info, capabilities) |
+| fnsMeta | Map | No | Metadata for the functions available in the MCP server (defaults to {}) |
+| fns | Map | Yes | Functions/jobs to be executed when called from the MCP server |
+
+## oJobBrowse
+
+Provides HTTP file browsing functionality with customizable templates and multiple rendering options.
+
+### HTTP Browse generic
+
+Generic HTTP browse service with customizable templates and functions.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| port | Number | No | The port where the server was made available (defaults to 8091) |
+| uri | String | No | The URI where the HTTP Browse will be available (defaults to "/") |
+| path | String | No | The base path for browsing (defaults to "") |
+| templates | Map | No | Map with templates to be used |
+| fns | Map | No | Map with functions for template rendering (getList, getObj, renderList, renderObj, renderEmpty, init) |
+| options | Map | No | Map with options to be passed (browse, default, logo, showURI, sortTab, footer) |
+
+### HTTP Browser
+
+HTTP browser service based on existing types (e.g., ow.server.httpd.browse.files).
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| port | Number | No | The port where the server was made available (defaults to 8091) |
+| uri | String | No | The URI where the HTTP Browser will be available (defaults to "/") |
+| type | String | No | The type of HTTP Browser services (defaults to "files") |
+| options | Map | No | Map with options to be passed to the browser type |
+
+## oJobCh
+
+Channel operations for buffering and managing data flow between channels.
+
+### oJob Ch Start Buffering
+
+Creates a buffering channel between a source and a target channel.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| source | String | Yes | The source channel name |
+| target | String | Yes | The target channel name |
+| id | String/Array | Yes | A string or array of fields that uniquely identify records |
+| byNumber | Number | No | Limit number of records to buffer |
+| byTimeInMs | Number | No | Limit time in ms to hold records in buffer |
+| filterFunc | String | No | Function to filter what gets buffered |
+| bufferFunc | String | No | Function to determine when to flush the buffer |
+
+Note: Use oJob Ch Stop Buffering to ensure proper release of resources.
+
+### oJob Ch Stop Buffering
+
+Stops buffering between a source and a target channel.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| source | String | Yes | The source channel name |
+| target | String | Yes | The target channel name |
+
+### oJob Ch Wait For Jobs
+
+Waits for the jobs associated with a channel.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| name | String | Yes | The channel name |
+| timeout | Number | No | Optionally provide a timeout for the wait in ms |
+
+## oJobIO
+
+File I/O operations for manipulating files and directories.
+
+### IO Append File
+
+Appends a line or lines to a file.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| target | String | Yes | The text file to which the line will be appended |
+| line | String/Array | Yes | The line(s) to be appended |
+| separator | String | No | Separator (defaults to '\n') |
+
+### IO Find & Replace
+
+Finds and replaces text in a file using regular expressions.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| target | String | Yes | The text file to be changed |
+| search | String | Yes | The regular expression used for replacing |
+| flags | String | No | Optional regular expression flags for search |
+| replace | String | Yes | The replace text |
+| separator | String | No | Separator (defaults to '\n') |
+| byline | Boolean | No | Load entire file vs. line by line (defaults to true) |
+
+### IO MV File
+
+Moves a source to a target.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| source | String | Yes | Source to move from |
+| target | String | Yes | Target to move to |
+
+### IO RM File
+
+Removes a file or directory recursively.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| filepath | String | Yes | The filepath (file or directory) to remove |
+
+### IO CP File
+
+Copies a source to a target.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| source | String | Yes | Source to copy from |
+| target | String | Yes | Target to copy to |
+
+### IO List files
+
+List files from a local filepath to args.files array.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| path | String | Yes | The filepath to list files from |
+| recursive | Boolean | No | Recursive file list (defaults to false) |
+
+### IO List filenames
+
+List filenames from a local filepath to args.files array.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| path | String | Yes | The filepath to list files from |
+| fullpath | Boolean | No | Include the fullpath with each file (defaults to true) |
+
+### IO Modify text file
+
+Finds and replaces text in a configuration file (exact match, not regex).
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| file | String | Yes | The file for find/replace |
+| find | String | Yes | The string to find |
+| replace | String | Yes | The string to replace |
+
+## oJobTest
+
+Testing functionality with assertions, test execution, and result reporting.
+
+### oJob Assert
+
+Asserts that two values are equal.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| a | Any | Yes | The 'a' value |
+| b | Any | Yes | The 'b' value |
+| msg | String | Yes | The message to display if the assert fails |
+
+### oJob Test
+
+Tests a function or job with optional asserts.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| name | String | No | Test name (defaults to job name) |
+| func | Function/String | No | The function to execute and test |
+| job | String | No | The ojob to execute and test |
+| count | Number | No | Number of test repeats (defaults to 1) |
+| asserts | Array | No | Array of assert maps with 'path', 'value', and 'msg' |
+| debug | Boolean | No | If true, outputs debug information |
+
+### oJob Test sh
+
+Tests a shell command.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| name | String | No | Test name (defaults to job name) |
+| cmd | String | Yes | The shell command to test |
+
+### oJob Test Results
+
+Prints or outputs test results with profile information.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| quiet | Boolean | No | If true, won't output results to stdout (defaults to false) |
+| noprofile | Boolean | No | If true, won't include profile results (defaults to false) |
+| key | String | No | If defined, outputs results to the provided key |
+
+### oJob Generate Markdown
+
+Generates a Markdown document with test results.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| key | String | No | If 'file' not defined, output to key and path |
+| path | String | No | Path within key to store markdown output |
+| file | String | No | If defined, outputs markdown to the provided file |
+| includeLogs | Boolean | No | If true, includes logs in markdown (defaults to false) |
+
+### oJob Generate JSON results
+
+Generates JSON output with test results.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| file | String | No | If defined, outputs JSON to file; "-" outputs to stdout |
+| noprofile | Boolean | No | If true, won't include profile results (defaults to false) |
+| includeLogs | Boolean | No | If true, includes logs (defaults to false) |
+
+### oJob Generate JUnit XML
+
+Generates JUnit XML format test results.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| suitesId | String | Yes | The JUnit suites id |
+| suitesName | String | Yes | The JUnit suites name |
+| resultsFile | String | Yes | The filename and path where to store the JUnit results |
+
+## oJobXLS
+
+Excel file operations for creating and manipulating XLS/XLSX files.
+
+### oJob XLS Open File
+
+Opens an XLSx file for use with other oJob XLS jobs.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| file | String | Yes | The XLSx file to write to |
+| template | String | No | The XLSx file to use as a template |
+
+### oJob XLS Table
+
+Adds an array of objects as a table on an XLS file sheet.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| file | String | Yes | The XLSx file to write to |
+| sheet | String | No | The sheet name or number (defaults to "table") |
+| data | Array | Yes | The array of objects to add |
+| position | Map | No | XLSx position with column and row (defaults to A1) |
+| headerStyle | Object | No | Map of table header style options |
+| lineStyle | Object | No | Map of table line style options |
+| autoResize | Boolean | No | Auto-size columns (defaults to true) |
+| autoFilter | Boolean | No | Enable auto filter (defaults to true) |
+
+### oJob XLS Close File
+
+Closes an XLSx file, writing it to the filesystem.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| file | String | Yes | The XLSx file to write to |
+
+## oJobGIT
+
+GIT repository operations.
+
+### GIT Copy Repository
+
+Copies a GIT repository files to a local folder.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| gittarget | String | Yes | The target folder for repository files |
+| giturl | String | Yes | The GIT repository URL |
+| gittemp | String | No | Temporary folder to clone repository (defaults to gittarget + ".tmp") |
+| gitbranch | String | No | Specific branch to checkout (defaults to master) |
+| gituser | String | No | GIT remote repository user (can be encrypted) |
+| gitpass | String | No | GIT remote repository pass (can be encrypted) |
+
+## oJobDebug
+
+Debug utilities for troubleshooting oJob execution.
+
+### oJob Debug Args
+
+Logs the current args map for debugging purposes.
 
 ---
 
