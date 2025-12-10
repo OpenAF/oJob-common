@@ -232,6 +232,12 @@ jobs:
           })
       }
 
+      // Content
+      if (isDef(lst.content)) {
+          content += "\n" + lst.content + "\n"
+      }
+ 
+      // Footer
       if (isDef(options.footer)) {
           content += "\n" + options.footer + "\n"
       }
