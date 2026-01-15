@@ -79,7 +79,7 @@ jobs:
             if (isDef(args.fns[params.name])) {
               try {
                 if (isString(args.fns[params.name])) {
-                  _res = $job(args.fns[params.name], params.arguments || params.input || {})
+                  _res = $job(args.fns[params.name], merge({ _httprequest: req }, params.arguments || params.input || {}))
                   if (isMap(_res)) {
                     delete _res.objId
                     delete _res.execid
