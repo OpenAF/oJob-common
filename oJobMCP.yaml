@@ -83,6 +83,17 @@ jobs:
                   if (isMap(_res)) {
                     delete _res.objId
                     delete _res.execid
+                    // Check for _err and treat it as an error
+                    if (isDef(_res._err)) {
+                      logErr(`Error executing tool '${params.name}': ${_res._err}`)
+                      _res = {
+                          content: [{
+                              type: "text",
+                              text: String(_res._err)
+                          }],
+                          isError: true
+                      }
+                    }
                   }
                 } else {
                   throw "Function not found: " + params.name
@@ -108,7 +119,7 @@ jobs:
               }
             }
             try {
-            if (isDef(_res) && isString(_res.text)) {
+            if (isDef(_res) && _res.isError !== true && isString(_res.text)) {
               _res = {
                   content: [{
                       type: "text",
@@ -116,7 +127,7 @@ jobs:
                   }],
                   isError: false
               }
-            } else if (isDef(_res) && isUnDef(_res.result)) {
+            } else if (isDef(_res) && _res.isError !== true && isUnDef(_res.result)) {
               _res = {
                   content: [{
                       type: "text",
@@ -125,7 +136,7 @@ jobs:
                   isError: false
               }
             } else {
-              if (isDef(_res)) _res = _res.result
+              if (isDef(_res) && _res.isError !== true) _res = _res.result
             }
             } catch(eee) { $err(eee) }
 
@@ -207,6 +218,10 @@ jobs:
         if (isMap(_r)) {
           delete _r.objId
           delete _r.execid
+          // Check for _err and treat it as an error
+          if (isDef(_r._err)) {
+            throw String(_r._err)
+          }
         }
         return _r
       }
