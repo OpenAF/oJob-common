@@ -85,11 +85,13 @@ jobs:
                     delete _res.execid
                     // Check for _err and treat it as an error
                     if (isDef(_res._err)) {
-                      logErr(`Error executing tool '${params.name}': ${_res._err}`)
+                      var errMsg = _res._err
+                      delete _res._err
+                      logErr(`Error executing tool '${params.name}': ${errMsg}`)
                       _res = {
                           content: [{
                               type: "text",
-                              text: String(_res._err)
+                              text: String(errMsg)
                           }],
                           isError: true
                       }
@@ -220,7 +222,9 @@ jobs:
           delete _r.execid
           // Check for _err and treat it as an error
           if (isDef(_r._err)) {
-            throw String(_r._err)
+            var errMsg = _r._err
+            delete _r._err
+            throw String(errMsg)
           }
         }
         return _r
