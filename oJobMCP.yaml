@@ -264,48 +264,51 @@ jobs:
 #   ((debug   )): true
 #   ((uri     )): "/mcp"
 #   ((fnsMeta)):
-#   - name       : ping
-#     description: Pings the server
-#     inputSchema:
-#       type: object
-#       properties:
-#         text:
-#           type: string
-#           description: Text to return
-#       required: ["text"]
-#     annotations:
-#       title       : Ping
-#       readOnlyHint: false
-#       idempotentHint: true
-#   - name       : echo
-#     description: Echoes the input
-#     title      : echo
-#     inputSchema: 
-#       type: object
-#       properties:
-#         text:
-#           type: string
-#           description: Text to echo
-#       required: ["text"]
-#     annotations:
-#       title       : Echo
-#       readOnlyHint: false
-#       idempotentHint: true
-#   - name       : specialSum
-#     description: Performs a special sum
-#     inputSchema:
-#       type: object
-#       properties:
-#         a:
-#           type: number
-#           description: the a number of the sum
-#         b:
-#           type: number
-#           description: the b number of the sum
-#       required: ["a","b"]
-#     annotations:
-#       title: specialSum
-#       readOnlyHint: false
+#     ping:
+  #     name       : ping
+  #     description: Pings the server
+  #     inputSchema:
+  #       type: object
+  #       properties:
+  #         text:
+  #           type: string
+  #           description: Text to return
+  #       required: ["text"]
+  #     annotations:
+  #       title       : Ping
+  #       readOnlyHint: false
+  #       idempotentHint: true
+  #   echo:
+  #     name       : echo
+  #     description: Echoes the input
+  #     title      : echo
+  #     inputSchema: 
+  #       type: object
+  #       properties:
+  #         text:
+  #           type: string
+  #           description: Text to echo
+  #       required: ["text"]
+  #     annotations:
+  #       title       : Echo
+  #       readOnlyHint: false
+  #       idempotentHint: true
+  #   specialSum:
+  #     name       : specialSum
+  #     description: Performs a special sum
+  #     inputSchema:
+  #       type: object
+  #       properties:
+  #         a:
+  #           type: number
+  #           description: the a number of the sum
+  #         b:
+  #           type: number
+  #           description: the b number of the sum
+  #       required: ["a","b"]
+  #     annotations:
+  #       title: specialSum
+  #       readOnlyHint: false
 #   ((fns    )):
 #     ping: ping
 #     echo: echo
