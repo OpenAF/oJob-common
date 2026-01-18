@@ -1007,6 +1007,8 @@ Starts a MCP server that listens for HTTP requests and executes jobs based on th
 | fnsMeta | Map | No | Metadata for the functions available in the MCP server (defaults to {}) |
 | fns | Map | Yes | Functions/jobs to be executed when called from the MCP server |
 
+**Error Handling:** Jobs can signal errors by returning a map with an `_err` property. When `_err` is present in the job result, the MCP server will treat it as an error response with `isError: true` and return the error message to the client.
+
 Example:
 
 ```yaml
@@ -1031,7 +1033,8 @@ todo:
     ((debug)): true
     ((uri)): "/mcp"
     ((fnsMeta)):
-      - name: ping
+      ping:
+        name: ping
         description: Pings the server
         inputSchema:
           type: object
@@ -1040,7 +1043,8 @@ todo:
               type: string
               description: Text to return
           required: ["text"]
-      - name: echo
+      echo:
+        name: echo
         description: Echoes the input
         inputSchema:
           type: object
@@ -1064,6 +1068,8 @@ Starts a MCP stdio server to handle requests with execution of jobs.
 | description | Map | No | Metadata for the MCP server (protocol version, server info, capabilities) |
 | fnsMeta | Map | No | Metadata for the functions available in the MCP server (defaults to {}) |
 | fns | Map | Yes | Functions/jobs to be executed when called from the MCP server |
+
+**Error Handling:** Jobs can signal errors by returning a map with an `_err` property. When `_err` is present in the job result, the STDIO MCP server will throw the error message as an exception, which will be returned to the client as an error response.
 
 ## oJobBrowse
 

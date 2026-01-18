@@ -83,6 +83,19 @@ jobs:
                   if (isMap(_res)) {
                     delete _res.objId
                     delete _res.execid
+                    // Check for _err and treat it as an error
+                    if (isDef(_res._err)) {
+                      var errMsg = _res._err
+                      delete _res._err
+                      logErr(`Error executing tool '${params.name}': ${errMsg}`)
+                      _res = {
+                          content: [{
+                              type: "text",
+                              text: String(errMsg)
+                          }],
+                          isError: true
+                      }
+                    }
                   }
                 } else {
                   throw "Function not found: " + params.name
@@ -108,7 +121,7 @@ jobs:
               }
             }
             try {
-            if (isDef(_res) && isString(_res.text)) {
+            if (isDef(_res) && _res.isError !== true && isString(_res.text)) {
               _res = {
                   content: [{
                       type: "text",
@@ -116,7 +129,7 @@ jobs:
                   }],
                   isError: false
               }
-            } else if (isDef(_res) && isUnDef(_res.result)) {
+            } else if (isDef(_res) && _res.isError !== true && isUnDef(_res.result)) {
               _res = {
                   content: [{
                       type: "text",
@@ -125,7 +138,7 @@ jobs:
                   isError: false
               }
             } else {
-              if (isDef(_res)) _res = _res.result
+              if (isDef(_res) && _res.isError !== true) _res = _res.result
             }
             } catch(eee) { $err(eee) }
 
@@ -207,6 +220,12 @@ jobs:
         if (isMap(_r)) {
           delete _r.objId
           delete _r.execid
+          // Check for _err and treat it as an error
+          if (isDef(_r._err)) {
+            var errMsg = _r._err
+            delete _r._err
+            throw String(errMsg)
+          }
         }
         return _r
       }
@@ -245,48 +264,51 @@ jobs:
 #   ((debug   )): true
 #   ((uri     )): "/mcp"
 #   ((fnsMeta)):
-#   - name       : ping
-#     description: Pings the server
-#     inputSchema:
-#       type: object
-#       properties:
-#         text:
-#           type: string
-#           description: Text to return
-#       required: ["text"]
-#     annotations:
-#       title       : Ping
-#       readOnlyHint: false
-#       idempotentHint: true
-#   - name       : echo
-#     description: Echoes the input
-#     title      : echo
-#     inputSchema: 
-#       type: object
-#       properties:
-#         text:
-#           type: string
-#           description: Text to echo
-#       required: ["text"]
-#     annotations:
-#       title       : Echo
-#       readOnlyHint: false
-#       idempotentHint: true
-#   - name       : specialSum
-#     description: Performs a special sum
-#     inputSchema:
-#       type: object
-#       properties:
-#         a:
-#           type: number
-#           description: the a number of the sum
-#         b:
-#           type: number
-#           description: the b number of the sum
-#       required: ["a","b"]
-#     annotations:
-#       title: specialSum
-#       readOnlyHint: false
+#     ping:
+  #     name       : ping
+  #     description: Pings the server
+  #     inputSchema:
+  #       type: object
+  #       properties:
+  #         text:
+  #           type: string
+  #           description: Text to return
+  #       required: ["text"]
+  #     annotations:
+  #       title       : Ping
+  #       readOnlyHint: false
+  #       idempotentHint: true
+  #   echo:
+  #     name       : echo
+  #     description: Echoes the input
+  #     title      : echo
+  #     inputSchema: 
+  #       type: object
+  #       properties:
+  #         text:
+  #           type: string
+  #           description: Text to echo
+  #       required: ["text"]
+  #     annotations:
+  #       title       : Echo
+  #       readOnlyHint: false
+  #       idempotentHint: true
+  #   specialSum:
+  #     name       : specialSum
+  #     description: Performs a special sum
+  #     inputSchema:
+  #       type: object
+  #       properties:
+  #         a:
+  #           type: number
+  #           description: the a number of the sum
+  #         b:
+  #           type: number
+  #           description: the b number of the sum
+  #       required: ["a","b"]
+  #     annotations:
+  #       title: specialSum
+  #       readOnlyHint: false
 #   ((fns    )):
 #     ping: ping
 #     echo: echo
