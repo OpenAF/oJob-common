@@ -81,12 +81,12 @@ jobs:
                 if (isString(args.fns[params.name])) {
                   // private arguments should be removed from params.arguments
                   if (isDef(params.arguments) && isMap(params.arguments)) {
-                    Object.keys(params.arguments).map(k => {
+                    Object.keys(params.arguments).forEach(k => {
                       if (k.startsWith("_")) delete params.arguments[k]
                     })
                   }
                   if (isDef(params.input) && isMap(params.input)) {
-                    Object.keys(params.input).map(k => {
+                    Object.keys(params.input).forEach(k => {
                       if (k.startsWith("_")) delete params.input[k]
                     })
                   }
