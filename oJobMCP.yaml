@@ -79,6 +79,18 @@ jobs:
             if (isDef(args.fns[params.name])) {
               try {
                 if (isString(args.fns[params.name])) {
+                  // private arguments should be removed from params.arguments
+                  if (isDef(params.arguments) && isMap(params.arguments)) {
+                    Object.keys(params.arguments).map(k => {
+                      if (k.startsWith("_")) delete params.arguments[k]
+                    })
+                  }
+                  if (isDef(params.input) && isMap(params.input)) {
+                    Object.keys(params.input).map(k => {
+                      if (k.startsWith("_")) delete params.input[k]
+                    })
+                  }
+                  
                   _res = $job(args.fns[params.name], merge({ _httprequest: req }, params.arguments || params.input || {}))
                   if (isMap(_res)) {
                     delete _res.objId
