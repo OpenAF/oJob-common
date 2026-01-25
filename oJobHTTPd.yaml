@@ -713,3 +713,121 @@ jobs:
         RESTRICT: args.restrict,
         SORTTAB : args.sortTab
       }
+
+# Defines a HTTP SSE (Server-Sent Events) service
+#
+# -----------------------
+- name : HTTP SSE Service
+  deps :
+  - HTTP Start Server
+  to   : HTTP Apply Service
+  typeArgs:
+    noLog: false
+    shortcut:
+      name  : httpdSSE
+      keyArg: port
+      args  :
+        uri          : uri
+        execSSE      : execSSE
+        audit        : audit
+        auditTemplate: auditTemplate
+        error        : error
+        execPre      : execPre
+  help :
+    text: Provides a Server-Sent Events (SSE) streaming endpoint. If using sequential jobs do ensure that the job 'HTTP Start Server' gets executed first.
+    expects:
+    - name: port
+      desc: (Number) The port where the server was made available (default is 8091)
+    - name: uri
+      desc: (String) The URI where the SSE endpoint will be available.
+    - name: execSSE
+      desc: (Function) The SSE execution function. Receives (writer, request) where writer has write(event, data) and close() methods.
+    - name: audit
+      desc: (Boolean) Turns request audit logging on (default true)
+    - name: auditTemplate
+      desc: (String) Provide an audit logging template based on the request argument.
+    - name: error
+      desc: (Boolean) If true will return the error in case of exception.
+    - name: execPre
+      desc: (String) A pre-execution code include to execSSE useful for authentication
+  exec : | #js
+      args.port          = _$(args.port).isNumber().default(8091)
+      args.uri           = _$(args.uri).isString().default("/sse")
+      args.audit         = _$(args.audit).default(true)
+      args.execPre       = _$(args.execPre).isString().default(__)
+      args.auditTemplate = _$(args.auditTemplate).default("AUDIT SSE | {{method}} {{uri}} ({{header.remote-addr}}; {{header.user-agent}})")
+
+      if (isUnDef(args.execPre) && isDef(global.__ojobPreRoutes[args.port])) {
+        args.execPre = global.__ojobPreRoutes[args.port]
+      } else {
+        args.execPre = ""
+      }
+
+      var fn = __
+      if (args.audit) {
+         fn = (req, reply) => {
+            var data = merge(req, {
+               reply: {
+                  status  : reply.status,
+                  mimetype: reply.mimetype
+               }
+            })
+            try {
+               tlog(args.auditTemplate, data)
+            } catch(e) {
+               logErr("Error on auditing SSE access: " + String(e))
+            }
+         }
+      }
+
+      global.__ojobRoutes[args.port][args.uri] = function(r) {
+         try {
+            var pis = new java.io.PipedInputStream()
+            var pos = new java.io.PipedOutputStream(pis)
+            var _closed = false
+
+            var writer = {
+              write: function(event, data) {
+                if (_closed) return
+                var msg = "event: " + event + "\n"
+                msg += "data: " + JSON.stringify(data) + "\n\n"
+                pos.write(af.fromString2Bytes(msg))
+                pos.flush()
+              },
+              close: function() {
+                if (_closed) return
+                _closed = true
+                try { pos.close() } catch(e) {}
+              }
+            }
+
+            $do(function() {
+              try {
+                (new Function("var writer = arguments[0]; var request = arguments[1]; var server = global.__ojobHttp[" + args.port + "]; var port = " + String(args.port) + "; var uri = '" + args.uri + "'; " + args.execPre + "; " + args.execSSE))(writer, r)
+              } catch(e) {
+                writer.write("error", { message: String(e) })
+                if (args.error) logErr("SSE error: " + String(e))
+              } finally {
+                writer.close()
+              }
+            })
+
+            var res = {
+              status  : 200,
+              mimetype: "text/event-stream",
+              stream  : pis,
+              header  : {
+                "Cache-Control"    : "no-cache, no-transform",
+                "Connection"       : "keep-alive",
+                "Content-Encoding" : "identity",
+                "X-Accel-Buffering": "no"
+              }
+            }
+            if (fn) fn(r, res)
+            return res
+         } catch(e) {
+            if (args.error) {
+               return { data: String(e), mimetype: "text/plain", status: 500, header: {} }
+            }
+         }
+      }
