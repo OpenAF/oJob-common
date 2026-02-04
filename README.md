@@ -1088,6 +1088,10 @@ Generic HTTP browse service with customizable templates and functions.
 | fns | Map | No | Map with functions for template rendering (getList, getObj, renderList, renderObj, renderEmpty, init) |
 | options | Map | No | Map with options to be passed (browse, default, logo, showURI, sortTab, footer) |
 
+Pagination:
+- `renderList` will render pager controls when the list metadata includes `pageInfo` with `page`, `pageSize`, and `total`.
+- If `pageInfo` is not present, it falls back to query parameters `page` and `pageSize`.
+
 ### HTTP Browser
 
 HTTP browser service based on existing types (e.g., ow.server.httpd.browse.files).

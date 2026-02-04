@@ -174,6 +174,17 @@ jobs:
       const uri = request.uri
 
       var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "").replace(/\/$/, "")
+      var _page = 1
+      var _pageSize = 0
+      if (isDef(lst.pageInfo)) {
+        if (isDef(lst.pageInfo.page)) _page = Number(lst.pageInfo.page)
+        if (isDef(lst.pageInfo.pageSize)) _pageSize = Number(lst.pageInfo.pageSize)
+      } else {
+        if (isDef(request.params.page)) _page = Number(request.params.page)
+        if (isDef(request.params.pageSize)) _pageSize = Number(request.params.pageSize)
+      }
+      if (!isNumber(_page) || _page <= 0) _page = 1
+      if (!isNumber(_pageSize) || _pageSize < 0) _pageSize = 0
 
       if (isDef(options.default) && lst.list.filter(r => r.values[lst.key] == options.default).length == 1) {
         request.uri = request.uri + "/" + options.default
@@ -196,6 +207,36 @@ jobs:
 
       const logo = _$(options.logo, "logo").isString().default("/fonts/openaf_small.png")
       var content = "## " + breadcrumb( puri ) + "<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + logo + "\">\n\n"
+
+      // Pagination controls (if metadata is provided)
+      if (isDef(lst.pageInfo) && isDef(lst.pageInfo.pageSize) && lst.pageInfo.pageSize > 0) {
+        var _totalPages = Math.max(1, Math.ceil(lst.pageInfo.total / lst.pageInfo.pageSize))
+        if (_totalPages == 1 && _page <= 1) {
+          // Don't render pagination for a single page.
+        } else {
+        var _base = options.parentURI + (puri.length > 0 ? "/" + puri : "")
+        var _qs = "pageSize=" + encodeURIComponent(lst.pageInfo.pageSize)
+        var _prev = _page > 1 ? (_base + "?" + _qs + "&page=" + (_page - 1)) : __
+        var _next = (_page < _totalPages) ? (_base + "?" + _qs + "&page=" + (_page + 1)) : __
+        var _pager = "<div style=\"margin: 0.25em 0 0.75em 0; padding-left: 0.5em; font-family: -apple-system, Calibri, DejaVu Sans;\">"
+        if (isDef(_prev) && String(_prev).length > 0) {
+          _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _prev + "\">&#8592;</a>"
+        } else {
+          _pager += "<span style=\"color: #a0a0a0;\">&#8592;</span>"
+        }
+        _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
+        _pager += "<span style=\"color: #a0a0a0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 0.95em;\">" + _page + " / " + _totalPages + "</span>"
+        _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
+        if (isDef(_next) && String(_next).length > 0) {
+          _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _next + "\">&#8594;</a>"
+        } else {
+          _pager += "<span style=\"color: #a0a0a0;\">&#8594;</span>"
+        }
+        _pager += "</div>\n"
+        content += _pager
+        }
+      }
+
       content += "|  |" + lst.fields.join(" | ") + " |\n"
       if (lst.alignFields) {
           content += "|---"
@@ -382,4 +423,3 @@ jobs:
     _options.parentPath = args.path
     _options.port       = args.port
     global.__GBHTTPD[String(args.port) + args.uri] = _options
-
