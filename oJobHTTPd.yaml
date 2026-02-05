@@ -801,7 +801,7 @@ jobs:
               }
             }
 
-            $do(function() {
+            $doV(function() {
               try {
                 (new Function("var writer = arguments[0]; var request = arguments[1]; var server = global.__ojobHttp[" + args.port + "]; var port = " + String(args.port) + "; var uri = '" + args.uri + "'; " + args.execPre + "; " + args.execSSE))(writer, r)
               } catch(e) {

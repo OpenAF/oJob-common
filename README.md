@@ -1002,6 +1002,7 @@ Starts a MCP server that listens for HTTP requests and executes jobs based on th
 |----------|------|-----------|-------------|
 | port | Number | Yes | The port to listen on |
 | uri | String | No | The URI to handle requests (defaults to "/mcp") |
+| usestream | Boolean | No | If true, returns MCP responses as HTTP SSE stream events (defaults to false) |
 | debug | Boolean | No | If true, debug messages will be logged (defaults to false) |
 | description | Map | No | Metadata for the MCP server (protocol version, server info, capabilities) |
 | fnsMeta | Map | No | Metadata for the functions available in the MCP server (defaults to {}) |
@@ -1032,6 +1033,7 @@ todo:
   - (httpdMCP): 17878
     ((debug)): true
     ((uri)): "/mcp"
+    ((usestream)): false
     ((fnsMeta)):
       ping:
         name: ping

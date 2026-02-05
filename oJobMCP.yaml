@@ -16,6 +16,7 @@ jobs:
       args  :
         description: description
         uri        : uri
+        usestream  : usestream
         debug      : debug
         fnsMeta    : fnsMeta
         fns        : fns
@@ -26,6 +27,8 @@ jobs:
       desc: (Number) The port to listen on.
     - name: uri
       desc: (String) The URI to handle requests. Default is "/mcp".
+    - name: usestream
+      desc: (Boolean) If true, returns responses as HTTP SSE stream events.
     - name: debug
       desc: (Boolean) If true, debug messages will be logged.
     - name: fnsMeta
@@ -37,7 +40,8 @@ jobs:
       description: isMap.default(__)
       port       : isNumber
       uri        : isString.default("/mcp")
-      debug      : isBoolean.default(false)
+      usestream  : toBoolean.isBoolean.default(false)
+      debug      : toBoolean.isBoolean.default(false)
       fnsMeta    : isMap.default({})
       fns        : isMap.default({})
   deps    :
@@ -62,7 +66,7 @@ jobs:
     }, args.description)
 
     fns = {}
-    fns[args.uri] = req => ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, {
+    var _rpcFns = {
         initialize                 : params => {
             if (args.debug) log(`initialize -- ${af.toCSLON(params)}`)
             return args.description
@@ -163,7 +167,86 @@ jobs:
             }
         },
         "prompts/list": params => ({})
-    }, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) })
+    }
+
+    if (args.usestream) {
+      fns[args.uri] = req => {
+        try {
+          // Process the JSON-RPC request
+          var _rpcRes = ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) })
+          
+          // Parse request to check if it's a notification
+          var body = (isDef(req.files) && isDef(req.files.postData)) ? req.files.postData : __
+          if (isUnDef(body) && isDef(req.data)) body = req.data
+          
+          var reqObj
+          try {
+            reqObj = jsonParse(body)
+          } catch(e) {
+            return { data: "Invalid JSON", mimetype: "text/plain", status: 400, header: {} }
+          }
+
+          // For notifications (no id field), return 204 No Content immediately
+          if (isUnDef(reqObj.id)) {
+            if (args.debug) log("Notification received: " + reqObj.method)
+            return { data: "", mimetype: "text/plain", status: 204, header: {} }
+          }
+
+          // For requests with id, return SSE stream
+          var pis = new java.io.PipedInputStream()
+          var pos = new java.io.PipedOutputStream(pis)
+
+          $doV(function() {
+            try {
+              var _payload = _rpcRes
+              if (isMap(_rpcRes) && isDef(_rpcRes.data)) _payload = _rpcRes.data
+              if (isString(_payload)) {
+                try { _payload = jsonParse(_payload) } catch(__e) {}
+              }
+              
+              if (isDef(_payload) && _payload !== "") {
+                var msg = "event: message\n"
+                msg += "data: " + JSON.stringify(_payload) + "\n\n"
+                pos.write(af.fromString2Bytes(msg))
+                pos.flush()
+              }
+            } catch(e) {
+              try {
+                var errMsg = "event: error\n"
+                errMsg += "data: " + JSON.stringify({ message: String(e) }) + "\n\n"
+                pos.write(af.fromString2Bytes(errMsg))
+                pos.flush()
+              } catch(e2) {
+                logErr("MCP stream error: " + String(e2))
+              }
+            } finally {
+              try { pos.close() } catch(e) {}
+            }
+          })
+
+          return {
+            status  : 200,
+            mimetype: "text/event-stream",
+            stream  : pis,
+            header  : {
+              "Cache-Control"    : "no-cache, no-transform",
+              "Connection"       : "keep-alive",
+              "Content-Encoding" : "identity",
+              "X-Accel-Buffering": "no"
+            }
+          }
+        } catch(e) {
+          return { data: String(e), mimetype: "text/plain", status: 500, header: {} }
+        }
+      }
+    } else {
+      fns[args.uri] = req => ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) })
+    }
+
+    // Add handler for .well-known endpoint (optional OAuth discovery)
+    /*fns[args.uri + "/.well-known/oauth-authorization-server"] = req => {
+      return { data: "{}", mimetype: "application/json", status: 404, header: {} }
+    }*/
 
     ow.server.httpd.route(global.__ojobHttp[args.port], merge(global.__ojobRoutes[args.port], fns))
     log("READY [" + args.port + "]")
