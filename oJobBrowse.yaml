@@ -181,7 +181,7 @@ jobs:
         if (isDef(lst.pageInfo.pageSize)) _pageSize = Number(lst.pageInfo.pageSize)
       } else {
         if (isDef(request.params.page)) _page = Number(request.params.page)
-        if (isDef(request.params.pageSize)) _pageSize = Number(request.params.pageSize)
+        //if (isDef(request.params.pageSize)) _pageSize = Number(request.params.pageSize)
       }
       if (!isNumber(_page) || _page <= 0) _page = 1
       if (!isNumber(_pageSize) || _pageSize < 0) _pageSize = 0
