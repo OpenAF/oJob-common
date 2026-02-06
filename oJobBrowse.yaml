@@ -215,9 +215,9 @@ jobs:
           // Don't render pagination for a single page.
         } else {
         var _base = options.parentURI + (puri.length > 0 ? "/" + puri : "")
-        var _qs = "pageSize=" + encodeURIComponent(lst.pageInfo.pageSize)
-        var _prev = _page > 1 ? (_base + "?" + _qs + "&page=" + (_page - 1)) : __
-        var _next = (_page < _totalPages) ? (_base + "?" + _qs + "&page=" + (_page + 1)) : __
+        //var _qs = "pageSize=" + encodeURIComponent(lst.pageInfo.pageSize)
+        var _prev = _page > 1 ? (_base + "?page=" + (_page - 1)) : __
+        var _next = (_page < _totalPages) ? (_base + "?page=" + (_page + 1)) : __
         var _pager = "<div style=\"margin: 0.25em 0 0.75em 0; padding-left: 0.5em; font-family: -apple-system, Calibri, DejaVu Sans;\">"
         if (isDef(_prev) && String(_prev).length > 0) {
           _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _prev + "\">&#8592;</a>"
