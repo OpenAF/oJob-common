@@ -66,112 +66,113 @@ jobs:
     }, args.description)
 
     fns = {}
-    var _rpcFns = {
-        initialize                 : params => {
-            if (args.debug) log(`initialize -- ${af.toCSLON(params)}`)
-            return args.description
-        },
-        "notifications/cancelled"  : params => ({}),
-        "notifications/initialized": params => ({}),
-        "ping"                     : params => {
-            if (args.debug) log(`ping -- ${af.toCSLON(params)}`)
-            return {}
-        },
-        "tools/call"               : params => {
-            if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
-            var _res
-            if (isDef(args.fns[params.name])) {
-              try {
-                if (isString(args.fns[params.name])) {
-                  _res = $job(args.fns[params.name], merge({ _httprequest: req }, params.arguments || params.input || {}))
-                  if (isMap(_res)) {
-                    delete _res.objId
-                    delete _res.execid
-                    // Check for _err and treat it as an error
-                    if (isDef(_res._err)) {
-                      var errMsg = _res._err
-                      delete _res._err
-                      logErr(`Error executing tool '${params.name}': ${errMsg}`)
-                      _res = {
-                          content: [{
-                              type: "text",
-                              text: String(errMsg)
-                          }],
-                          isError: true
-                      }
-                    }
-                  }
-                } else {
-                  throw "Function not found: " + params.name
-                }
-              } catch(e) {
-                logErr(`Error executing tool '${params.name}': ${e.message}`)
-                _res = {
-                    content: [{
-                        type: "text",
-                        text: `Error executing tool '${params.name}': ${e.message}`
-                    }],
-                    isError: true
-                }
-                $err(e)
-              }
-            } else {
-              _res = {
-                  content: [{
-                      type: "text",
-                      text: `Error: Unknown tool '${params.name}'`
-                  }],
-                  isError: true
-              }
-            }
-            try {
-            if (isDef(_res) && _res.isError !== true && isString(_res.text)) {
-              _res = {
-                  content: [{
-                      type: "text",
-                      text: _res.text
-                  }],
-                  isError: false
-              }
-            } else if (isDef(_res) && _res.isError !== true && isUnDef(_res.result)) {
-              _res = {
-                  content: [{
-                      type: "text",
-                      text: stringify(_res, __, "")
-                  }],
-                  isError: false
-              }
-            } else {
-              if (isDef(_res) && _res.isError !== true) _res = _res.result
-            }
-            } catch(eee) { $err(eee) }
-
-            if (args.debug) log(`tools/call -- response: ${af.toCSLON(_res)}`)
-            return _res
-        },
-        "tools/list": params => {
-            if (args.debug) log(`tools/list -- ${af.toCSLON(params)}`)
-            var _fnsMeta = Object.keys(args.fns).map(f => {
-              if (isDef(args.fnsMeta[f])) {
-                return clone(args.fnsMeta[f])
-              } else {
-                return {
-                  name       : f,
-                  description: f,
-                  inputSchema: {}
-                }
-              }
-            })
-            return {
-                tools: _fnsMeta
-            }
-        },
-        "prompts/list": params => ({})
-    }
 
     if (args.usestream) {
       fns[args.uri] = req => {
         try {
+          var _rpcFns = {
+              initialize                 : params => {
+                  if (args.debug) log(`initialize -- ${af.toCSLON(params)}`)
+                  return args.description
+              },
+              "notifications/cancelled"  : params => ({}),
+              "notifications/initialized": params => ({}),
+              "ping"                     : params => {
+                  if (args.debug) log(`ping -- ${af.toCSLON(params)}`)
+                  return {}
+              },
+              "tools/call"               : params => {
+                  if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
+                  var _res
+                  if (isDef(args.fns[params.name])) {
+                    try {
+                      if (isString(args.fns[params.name])) {
+                        _res = $job(args.fns[params.name], merge({ _httprequest: req }, params.arguments || params.input || {}))
+                        if (isMap(_res)) {
+                          delete _res.objId
+                          delete _res.execid
+                          // Check for _err and treat it as an error
+                          if (isDef(_res._err)) {
+                            var errMsg = _res._err
+                            delete _res._err
+                            logErr(`Error executing tool '${params.name}': ${errMsg}`)
+                            _res = {
+                                content: [{
+                                    type: "text",
+                                    text: String(errMsg)
+                                }],
+                                isError: true
+                            }
+                          }
+                        }
+                      } else {
+                        throw "Function not found: " + params.name
+                      }
+                    } catch(e) {
+                      logErr(`Error executing tool '${params.name}': ${e.message}`)
+                      _res = {
+                          content: [{
+                              type: "text",
+                              text: `Error executing tool '${params.name}': ${e.message}`
+                          }],
+                          isError: true
+                      }
+                      $err(e)
+                    }
+                  } else {
+                    _res = {
+                        content: [{
+                            type: "text",
+                            text: `Error: Unknown tool '${params.name}'`
+                        }],
+                        isError: true
+                    }
+                  }
+                  try {
+                  if (isDef(_res) && _res.isError !== true && isString(_res.text)) {
+                    _res = {
+                        content: [{
+                            type: "text",
+                            text: _res.text
+                        }],
+                        isError: false
+                    }
+                  } else if (isDef(_res) && _res.isError !== true && isUnDef(_res.result)) {
+                    _res = {
+                        content: [{
+                            type: "text",
+                            text: stringify(_res, __, "")
+                        }],
+                        isError: false
+                    }
+                  } else {
+                    if (isDef(_res) && _res.isError !== true) _res = _res.result
+                  }
+                  } catch(eee) { $err(eee) }
+
+                  if (args.debug) log(`tools/call -- response: ${af.toCSLON(_res)}`)
+                  return _res
+              },
+              "tools/list": params => {
+                  if (args.debug) log(`tools/list -- ${af.toCSLON(params)}`)
+                  var _fnsMeta = Object.keys(args.fns).map(f => {
+                    if (isDef(args.fnsMeta[f])) {
+                      return clone(args.fnsMeta[f])
+                    } else {
+                      return {
+                        name       : f,
+                        description: f,
+                        inputSchema: {}
+                      }
+                    }
+                  })
+                  return {
+                      tools: _fnsMeta
+                  }
+              },
+              "prompts/list": params => ({})
+          }
+
           // Process the JSON-RPC request
           var _rpcRes = ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) })
           
@@ -240,7 +241,112 @@ jobs:
         }
       }
     } else {
-      fns[args.uri] = req => ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) })
+      fns[args.uri] = req => {
+        var _rpcFns = {
+            initialize                 : params => {
+                if (args.debug) log(`initialize -- ${af.toCSLON(params)}`)
+                return args.description
+            },
+            "notifications/cancelled"  : params => ({}),
+            "notifications/initialized": params => ({}),
+            "ping"                     : params => {
+                if (args.debug) log(`ping -- ${af.toCSLON(params)}`)
+                return {}
+            },
+            "tools/call"               : params => {
+                if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
+                var _res
+                if (isDef(args.fns[params.name])) {
+                  try {
+                    if (isString(args.fns[params.name])) {
+                      _res = $job(args.fns[params.name], merge({ _httprequest: req }, params.arguments || params.input || {}))
+                      if (isMap(_res)) {
+                        delete _res.objId
+                        delete _res.execid
+                        // Check for _err and treat it as an error
+                        if (isDef(_res._err)) {
+                          var errMsg = _res._err
+                          delete _res._err
+                          logErr(`Error executing tool '${params.name}': ${errMsg}`)
+                          _res = {
+                              content: [{
+                                  type: "text",
+                                  text: String(errMsg)
+                              }],
+                              isError: true
+                          }
+                        }
+                      }
+                    } else {
+                      throw "Function not found: " + params.name
+                    }
+                  } catch(e) {
+                    logErr(`Error executing tool '${params.name}': ${e.message}`)
+                    _res = {
+                        content: [{
+                            type: "text",
+                            text: `Error executing tool '${params.name}': ${e.message}`
+                        }],
+                        isError: true
+                    }
+                    $err(e)
+                  }
+                } else {
+                  _res = {
+                      content: [{
+                          type: "text",
+                          text: `Error: Unknown tool '${params.name}'`
+                      }],
+                      isError: true
+                  }
+                }
+                try {
+                if (isDef(_res) && _res.isError !== true && isString(_res.text)) {
+                  _res = {
+                      content: [{
+                          type: "text",
+                          text: _res.text
+                      }],
+                      isError: false
+                  }
+                } else if (isDef(_res) && _res.isError !== true && isUnDef(_res.result)) {
+                  _res = {
+                      content: [{
+                          type: "text",
+                          text: stringify(_res, __, "")
+                      }],
+                      isError: false
+                  }
+                } else {
+                  if (isDef(_res) && _res.isError !== true) _res = _res.result
+                }
+                } catch(eee) { $err(eee) }
+
+                if (args.debug) log(`tools/call -- response: ${af.toCSLON(_res)}`)
+                return _res
+            },
+            "tools/list": params => {
+                if (args.debug) log(`tools/list -- ${af.toCSLON(params)}`)
+                var _fnsMeta = Object.keys(args.fns).map(f => {
+                  if (isDef(args.fnsMeta[f])) {
+                    return clone(args.fnsMeta[f])
+                  } else {
+                    return {
+                      name       : f,
+                      description: f,
+                      inputSchema: {}
+                    }
+                  }
+                })
+                return {
+                    tools: _fnsMeta
+                }
+            },
+            "prompts/list": params => ({})
+        }
+
+        return ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) })
+      }
     }
 
     // Add handler for .well-known endpoint (optional OAuth discovery)
