@@ -1094,6 +1094,21 @@ Pagination:
 - `renderList` will render pager controls when the list metadata includes `pageInfo` with `page`, `pageSize`, and `total`.
 - If `pageInfo` is not present, it falls back to query parameters `page` and `pageSize`.
 
+### HTTP Browser API
+
+HTTP API to access `getList`/`getObj` for any `HTTP Browse generic` instance.
+
+| Argument | Type | Mandatory | Description |
+|----------|------|-----------|-------------|
+| port | Number | No | The port where the server was made available (defaults to 8091) |
+| uri | String | No | The URI where the HTTP Browser API will be available (defaults to "/api/browse") |
+| browseUri | String | No | The HTTP Browse generic URI to target (can be overridden by request param `browseUri`) |
+
+Query parameters:
+- `action`: `list` (default) or `obj`.
+- `path`: Optional relative path appended to the target browse URI.
+- `raw`: When `true`, streams the object response if possible.
+
 ### HTTP Browser
 
 HTTP browser service based on existing types (e.g., ow.server.httpd.browse.files).
