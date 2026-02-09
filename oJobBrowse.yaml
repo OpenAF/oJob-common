@@ -424,8 +424,11 @@ jobs:
     _options.port       = args.port
     global.__GBHTTPD[String(args.port) + args.uri] = _options
 
-# --------------------------
-- name : HTTP Browser API
+# ----------------------
+# http://127.0.0.1:11224/test?browseUri=/test&path=a/b/destination.txt&action=obj
+# http://127.0.0.1:11224/test?browseUri=/test&path=a/b&action=list
+#
+- name : HTTP Browse API
   deps :
   - HTTP Start Server
   to   : HTTP Service
@@ -435,8 +438,8 @@ jobs:
       name  : httpdBrowserAPI
       keyArg: port
       args  :
-        uri      : uri
-        browseUri: browseUri
+        uri       : uri
+        browseUri : browseUri
   help :
    text   : Provides a HTTP API to access getList/getObj for any HTTP Browse generic implementation.
    expects:
@@ -448,9 +451,10 @@ jobs:
      desc: (String) The HTTP Browse generic URI to target (can be overridden by request param browseUri)
   check:
     in:
-      port     : toNumber.isNumber.default(8091)
-      uri      : isString.default("/api/browse")
-      browseUri: isString.default(__)
+      port      : toNumber.isNumber.default(8091)
+      uri       : isString.default("/api/browse")
+      browseUri : isString.default(__)
+      path      : isString.default("")
   args :
     execURI: | #js
       try {
@@ -473,17 +477,27 @@ jobs:
         var action = _$(request.params.action).isString().default("list")
         if (action == "obj") {
           var _obj = _options._fns.getObj(_req, _options)
-          if (request.params.raw == "true") {
+          //if (request.params.raw == "true") {
             if (isDef(_obj.stream)) return server.replyStream(_obj.stream, ow.server.httpd.getMimeType(targetPath))
             if (isDef(_obj.file)) return server.replyStream(io.readFileStream(_obj.file), ow.server.httpd.getMimeType(targetPath))
             if (isDef(_obj.data)) return server.replyOK(_obj.data, ow.server.httpd.getMimeType(targetPath))
-          }
-          return ow.server.httpd.replyJSMap(server, _obj)
+          //}
+          return ow.server.httpd.reply(_obj)
         }
 
         var _lst = _options._fns.getList(_req, _options)
-        return ow.server.httpd.replyJSMap(server, _lst)
+        return ow.server.httpd.reply(_lst)
       } catch(e) {
         logErr(`Error: ${e.message}`)
         return { data: "Internal error", mimetype: "text/plain", status: 500, header: {} }
       }
+  exec : | #js
+    var _options = args.options
+    _options._fns = args.fns
+    _options._fns.init()
+    if (isUnDef(global.__GBHTTPD)) global.__GBHTTPD = {}
+
+    _options.parentURI  = args.uri
+    _options.parentPath = args.path
+    _options.port       = args.port
+    global.__GBHTTPD[String(args.port) + args.uri] = _options
