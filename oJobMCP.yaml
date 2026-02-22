@@ -141,7 +141,7 @@ jobs:
                     _res = {
                         content: [{
                             type: "text",
-                            text: stringify(_res, __, "")
+                            text: isDef(__flags.MCPSERVER) && __flags.MCPSERVER.answerInTOON ? af.toTOON(_res) : stringify(_res, __, "")
                         }],
                         isError: false
                     }
@@ -207,7 +207,7 @@ jobs:
               
               if (isDef(_payload) && _payload !== "") {
                 var msg = "event: message\n"
-                msg += "data: " + JSON.stringify(_payload) + "\n\n"
+                msg += "data: " + (isDef(__flags.MCPSERVER) && __flags.MCPSERVER.answerInTOON ? af.toTOON(_payload) : JSON.stringify(_payload)) + "\n\n"
                 pos.write(af.fromString2Bytes(msg))
                 pos.flush()
               }
@@ -313,7 +313,7 @@ jobs:
                   _res = {
                       content: [{
                           type: "text",
-                          text: stringify(_res, __, "")
+                          text: (isDef(__flags.MCPSERVER) && __flags.MCPSERVER.answerInTOON ? af.toTOON(_res) : stringify(_res, __, ""))
                       }],
                       isError: false
                   }

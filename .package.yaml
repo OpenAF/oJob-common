@@ -37,13 +37,14 @@ name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20260227'
+version: '20260228'
 dependencies:
   openaf: '>=20251115'
 files:
 - .package.yaml
 - LICENSE
 - README.md
+- example.yaml
 - oJobBasics.yaml
 - oJobBrowse.yaml
 - oJobCh.yaml
@@ -72,6 +73,7 @@ files:
 filesHash:
   LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
   README.md: fc1de27ad943a8563e974a3edf9c1a5aec60ec6d
+  example.yaml: 8b4f0452e3ccc1dcbc6969c46657ad658862077f
   oJobBasics.yaml: a084f112233ea3faa11eb9bcc16871c721d05f5b
   oJobBrowse.yaml: 07881a387281a5bea39bb740af42cbaac9a93ee8
   oJobCh.yaml: 4290a3d5dc035a6d7b6659aeb0e370d0bb55be58
@@ -83,7 +85,7 @@ filesHash:
   oJobHBS.yaml: ab15b0efd31f95ee770c77dace146035e0781661
   oJobHTTPd.yaml: ca7b876513bf380be043528adc972c9974394486
   oJobIO.yaml: 8108313099abf9d1115a3d428b68a203b8d5c2e2
-  oJobMCP.yaml: 82f6d6567b45b1872b76a4b82e6f42f6de02ba12
+  oJobMCP.yaml: 65340bcd98481e228cd638e55f588132254c8ac6
   oJobManager.yaml: 5ad9ecf276bbee8b6503d0e3b40b007f2724507d
   oJobNet.yaml: 4413085d38724249587f6a790d7e1952a4d9c138
   oJobOPack.yaml: b4e78c90de2a72bfe1bca21e2143de4715431e87
