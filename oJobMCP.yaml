@@ -55,6 +55,25 @@ jobs:
   deps    :
   - HTTP Start Server
   exec    : | #js
+    var _applyTemplate = (meta, allStrings) => {
+      if (!args.tplDesc) return meta
+      var _walk = obj => {
+        if (isString(obj) && allStrings) return $t(obj, args)
+        if (isArray(obj)) return obj.map(_walk)
+        if (isMap(obj)) {
+          Object.keys(obj).forEach(k => {
+            if (isString(obj[k]) && (allStrings || k == "description")) {
+              obj[k] = $t(obj[k], args)
+            } else {
+              obj[k] = _walk(obj[k])
+            }
+          })
+        }
+        return obj
+      }
+      return _walk(meta)
+    }
+
     // Ensures default server info and capabilities
     args.description = merge({
       protocolVersion: "2024-11-05",
@@ -72,26 +91,11 @@ jobs:
           }
       }
     }, args.description)
+    args.description = _applyTemplate(clone(args.description), true)
 
     fns = {}
 
-    var _applyTemplateToDescriptions = meta => {
-      if (!args.tplDesc) return meta
-      var _walk = obj => {
-        if (isArray(obj)) return obj.map(_walk)
-        if (isMap(obj)) {
-          Object.keys(obj).forEach(k => {
-            if (k == "description" && isString(obj[k])) {
-              obj[k] = $t(obj[k], args)
-            } else {
-              obj[k] = _walk(obj[k])
-            }
-          })
-        }
-        return obj
-      }
-      return _walk(meta)
-    }
+    var _applyTemplateToDescriptions = meta => _applyTemplate(meta, false)
 
     var _prefixToolName = n => (isString(args.toolPrefix) && args.toolPrefix.length > 0 ? args.toolPrefix + n : n)
     var _resolveToolName = n => {
@@ -423,6 +427,25 @@ jobs:
       fnsMeta    : isMap.default({})
       fns        : isMap.default({})
   exec    : | #js
+    var _applyTemplate = (meta, allStrings) => {
+      if (!args.tplDesc) return meta
+      var _walk = obj => {
+        if (isString(obj) && allStrings) return $t(obj, args)
+        if (isArray(obj)) return obj.map(_walk)
+        if (isMap(obj)) {
+          Object.keys(obj).forEach(k => {
+            if (isString(obj[k]) && (allStrings || k == "description")) {
+              obj[k] = $t(obj[k], args)
+            } else {
+              obj[k] = _walk(obj[k])
+            }
+          })
+        }
+        return obj
+      }
+      return _walk(meta)
+    }
+
     // Ensures default server info and capabilities
     args.description = merge({
       protocolVersion: "2024-11-05",
@@ -440,27 +463,18 @@ jobs:
           }
       }
     }, args.description)
+    args.description = _applyTemplate(clone(args.description), true)
 
     var fs = {}
-    var _applyTemplateToDescriptions = meta => {
-      if (!args.tplDesc) return meta
-      var _walk = obj => {
-        if (isArray(obj)) return obj.map(_walk)
-        if (isMap(obj)) {
-          Object.keys(obj).forEach(k => {
-            if (k == "description" && isString(obj[k])) {
-              obj[k] = $t(obj[k], args)
-            } else {
-              obj[k] = _walk(obj[k])
-            }
-          })
-        }
-        return obj
-      }
-      return _walk(meta)
-    }
+    var _applyTemplateToDescriptions = meta => _applyTemplate(meta, false)
 
     var _prefixToolName = n => (isString(args.toolPrefix) && args.toolPrefix.length > 0 ? args.toolPrefix + n : n)
+    var _resolveToolName = n => {
+      if (isString(args.toolPrefix) && args.toolPrefix.length > 0 && isString(n) && n.startsWith(args.toolPrefix)) {
+        return n.substring(args.toolPrefix.length)
+      }
+      return n
+    }
     var _toToolMeta = f => {
       var _meta
       if (isDef(args.fnsMeta[f])) {
@@ -480,7 +494,8 @@ jobs:
     Object.keys(args.fns).map(f => {
       var _toolName = _prefixToolName(f)
       fs[_toolName] = function(params) {
-        var _r = $job(args.fns[f], params)
+        var _jobName = _resolveToolName(_toolName)
+        var _r = $job(args.fns[_jobName], params)
         if (isMap(_r)) {
           delete _r.objId
           delete _r.execid
