@@ -18,6 +18,8 @@ jobs:
         uri        : uri
         usestream  : usestream
         debug      : debug
+        tplDesc    : tplDesc
+        toolPrefix : toolPrefix
         fnsMeta    : fnsMeta
         fns        : fns
   help    :
@@ -31,6 +33,10 @@ jobs:
       desc: (Boolean) If true, returns responses as HTTP SSE stream events.
     - name: debug
       desc: (Boolean) If true, debug messages will be logged.
+    - name: tplDesc
+      desc: (Boolean) If true, all tool description fields in fnsMeta are evaluated as handlebars templates with the current oJob args.
+    - name: toolPrefix
+      desc: (String) If defined, prefixes exposed MCP tool names without changing fns/fnsMeta key mapping.
     - name: fnsMeta
       desc: (Map) Metadata for the functions available in the MCP server.
     - name: fns
@@ -42,6 +48,8 @@ jobs:
       uri        : isString.default("/mcp")
       usestream  : toBoolean.isBoolean.default(false)
       debug      : toBoolean.isBoolean.default(false)
+      tplDesc    : toBoolean.isBoolean.default(false)
+      toolPrefix : isString.default("")
       fnsMeta    : isMap.default({})
       fns        : isMap.default({})
   deps    :
@@ -67,6 +75,47 @@ jobs:
 
     fns = {}
 
+    var _applyTemplateToDescriptions = meta => {
+      if (!args.tplDesc) return meta
+      var _walk = obj => {
+        if (isArray(obj)) return obj.map(_walk)
+        if (isMap(obj)) {
+          Object.keys(obj).forEach(k => {
+            if (k == "description" && isString(obj[k])) {
+              obj[k] = $t(obj[k], args)
+            } else {
+              obj[k] = _walk(obj[k])
+            }
+          })
+        }
+        return obj
+      }
+      return _walk(meta)
+    }
+
+    var _prefixToolName = n => (isString(args.toolPrefix) && args.toolPrefix.length > 0 ? args.toolPrefix + n : n)
+    var _resolveToolName = n => {
+      if (isString(args.toolPrefix) && args.toolPrefix.length > 0 && isString(n) && n.startsWith(args.toolPrefix)) {
+        return n.substring(args.toolPrefix.length)
+      }
+      return n
+    }
+    var _toToolMeta = f => {
+      var _meta
+      if (isDef(args.fnsMeta[f])) {
+        _meta = _applyTemplateToDescriptions(clone(args.fnsMeta[f]))
+      } else {
+        _meta = {
+          name       : f,
+          description: f,
+          inputSchema: {}
+        }
+      }
+      if (!isMap(_meta)) _meta = { name: f, description: String(_meta), inputSchema: {} }
+      _meta.name = _prefixToolName(isString(_meta.name) ? _meta.name : f)
+      return _meta
+    }
+
     if (args.usestream) {
       fns[args.uri] = req => {
         try {
@@ -84,10 +133,11 @@ jobs:
               "tools/call"               : params => {
                   if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                   var _res
-                  if (isDef(args.fns[params.name])) {
+                  var _toolName = _resolveToolName(params.name)
+                  if (isDef(args.fns[_toolName])) {
                     try {
-                      if (isString(args.fns[params.name])) {
-                        _res = $job(args.fns[params.name], merge({ _httprequest: req }, params.arguments || params.input || {}))
+                      if (isString(args.fns[_toolName])) {
+                        _res = $job(args.fns[_toolName], merge({ _httprequest: req }, params.arguments || params.input || {}))
                         if (isMap(_res)) {
                           delete _res.objId
                           delete _res.execid
@@ -106,7 +156,7 @@ jobs:
                           }
                         }
                       } else {
-                        throw "Function not found: " + params.name
+                        throw "Function not found: " + _toolName
                       }
                     } catch(e) {
                       logErr(`Error executing tool '${params.name}': ${e.message}`)
@@ -155,17 +205,7 @@ jobs:
               },
               "tools/list": params => {
                   if (args.debug) log(`tools/list -- ${af.toCSLON(params)}`)
-                  var _fnsMeta = Object.keys(args.fns).map(f => {
-                    if (isDef(args.fnsMeta[f])) {
-                      return clone(args.fnsMeta[f])
-                    } else {
-                      return {
-                        name       : f,
-                        description: f,
-                        inputSchema: {}
-                      }
-                    }
-                  })
+                  var _fnsMeta = Object.keys(args.fns).map(f => _toToolMeta(f))
                   return {
                       tools: _fnsMeta
                   }
@@ -256,10 +296,11 @@ jobs:
             "tools/call"               : params => {
                 if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                 var _res
-                if (isDef(args.fns[params.name])) {
+                var _toolName = _resolveToolName(params.name)
+                if (isDef(args.fns[_toolName])) {
                   try {
-                    if (isString(args.fns[params.name])) {
-                      _res = $job(args.fns[params.name], merge({ _httprequest: req }, params.arguments || params.input || {}))
+                    if (isString(args.fns[_toolName])) {
+                      _res = $job(args.fns[_toolName], merge({ _httprequest: req }, params.arguments || params.input || {}))
                       if (isMap(_res)) {
                         delete _res.objId
                         delete _res.execid
@@ -278,7 +319,7 @@ jobs:
                         }
                       }
                     } else {
-                      throw "Function not found: " + params.name
+                      throw "Function not found: " + _toolName
                     }
                   } catch(e) {
                     logErr(`Error executing tool '${params.name}': ${e.message}`)
@@ -327,17 +368,7 @@ jobs:
             },
             "tools/list": params => {
                 if (args.debug) log(`tools/list -- ${af.toCSLON(params)}`)
-                var _fnsMeta = Object.keys(args.fns).map(f => {
-                  if (isDef(args.fnsMeta[f])) {
-                    return clone(args.fnsMeta[f])
-                  } else {
-                    return {
-                      name       : f,
-                      description: f,
-                      inputSchema: {}
-                    }
-                  }
-                })
+                var _fnsMeta = Object.keys(args.fns).map(f => _toToolMeta(f))
                 return {
                     tools: _fnsMeta
                 }
@@ -366,6 +397,8 @@ jobs:
       keyArg: description
       args  :
         debug      : debug
+        tplDesc    : tplDesc
+        toolPrefix : toolPrefix
         fnsMeta    : fnsMeta
         fns        : fns
   help    :
@@ -375,12 +408,18 @@ jobs:
       desc: (String) If defined it will create a ndjson file with the provided name.
     - name: fnsMeta
       desc: (Map) Metadata for the functions available in the MCP server stdio.
+    - name: tplDesc
+      desc: (Boolean) If true, all tool description fields in fnsMeta are evaluated as handlebars templates with the current oJob args.
+    - name: toolPrefix
+      desc: (String) If defined, prefixes exposed MCP tool names without changing fns/fnsMeta key mapping.
     - name: fns
       desc: (Map) Functions to be executed when called from the MCP server stdio.
   check   :
     in: 
       description: isMap.default(__)
       debug      : isString.default(__)
+      tplDesc    : toBoolean.isBoolean.default(false)
+      toolPrefix : isString.default("")
       fnsMeta    : isMap.default({})
       fns        : isMap.default({})
   exec    : | #js
@@ -403,8 +442,44 @@ jobs:
     }, args.description)
 
     var fs = {}
+    var _applyTemplateToDescriptions = meta => {
+      if (!args.tplDesc) return meta
+      var _walk = obj => {
+        if (isArray(obj)) return obj.map(_walk)
+        if (isMap(obj)) {
+          Object.keys(obj).forEach(k => {
+            if (k == "description" && isString(obj[k])) {
+              obj[k] = $t(obj[k], args)
+            } else {
+              obj[k] = _walk(obj[k])
+            }
+          })
+        }
+        return obj
+      }
+      return _walk(meta)
+    }
+
+    var _prefixToolName = n => (isString(args.toolPrefix) && args.toolPrefix.length > 0 ? args.toolPrefix + n : n)
+    var _toToolMeta = f => {
+      var _meta
+      if (isDef(args.fnsMeta[f])) {
+        _meta = _applyTemplateToDescriptions(clone(args.fnsMeta[f]))
+      } else {
+        _meta = {
+          name       : f,
+          description: f,
+          inputSchema: {}
+        }
+      }
+      if (!isMap(_meta)) _meta = { name: f, description: String(_meta), inputSchema: {} }
+      _meta.name = _prefixToolName(isString(_meta.name) ? _meta.name : f)
+      return _meta
+    }
+
     Object.keys(args.fns).map(f => {
-      fs[f] = function(params) {
+      var _toolName = _prefixToolName(f)
+      fs[_toolName] = function(params) {
         var _r = $job(args.fns[f], params)
         if (isMap(_r)) {
           delete _r.objId
@@ -420,7 +495,7 @@ jobs:
       }
     })
 
-    ow.server.mcpStdio(args.description, Object.values(args.fnsMeta), 
+    ow.server.mcpStdio(args.description, Object.keys(args.fns).map(f => _toToolMeta(f)), 
       fs,
       (type, msg) => {
       if (args.debug) {
