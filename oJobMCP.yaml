@@ -487,7 +487,7 @@ jobs:
         }
       }
       if (!isMap(_meta)) _meta = { name: f, description: String(_meta), inputSchema: {} }
-      _meta.name = _prefixToolName(isString(_meta.name) ? _meta.name : f)
+      _meta.name = _prefixToolName(f)
       return _meta
     }
 
