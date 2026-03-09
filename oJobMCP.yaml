@@ -491,7 +491,7 @@ jobs:
       return _meta
     }
 
-    Object.keys(args.fns).map(f => {
+    Object.keys(args.fns).forEach(f => {
       var _toolName = _prefixToolName(f)
       fs[_toolName] = function(params) {
         var _jobName = _resolveToolName(_toolName)
