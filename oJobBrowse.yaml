@@ -301,7 +301,7 @@ jobs:
           return server.replyStream(io.readFileStream(obj.file), ow.server.httpd.getMimeType(puri))
         }
         if (isDef(obj.data)) {
-          return server.replyOK(obj.data, ow.server.httpd.getMimeType(puri))
+          return server.replyOKJSON(obj.data, ow.server.httpd.getMimeType(puri))
         }
       }
 
@@ -480,7 +480,7 @@ jobs:
           //if (request.params.raw == "true") {
             if (isDef(_obj.stream)) return server.replyStream(_obj.stream, ow.server.httpd.getMimeType(targetPath))
             if (isDef(_obj.file)) return server.replyStream(io.readFileStream(_obj.file), ow.server.httpd.getMimeType(targetPath))
-            if (isDef(_obj.data)) return server.replyOK(_obj.data, ow.server.httpd.getMimeType(targetPath))
+            if (isDef(_obj.data)) return server.replyOKJSON(_obj.data, ow.server.httpd.getMimeType(targetPath))
           //}
           return ow.server.httpd.reply(_obj)
         }
