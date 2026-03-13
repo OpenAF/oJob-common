@@ -476,7 +476,7 @@ jobs:
 
         var action = _$(request.params.action).isString().default("list")
         if (action == "obj") {
-          var _obj = _options._fns.getObj(_req, _options)
+          var _obj = _options._fns.getObj(_req, merge(_options, { _api: true }))
           //if (request.params.raw == "true") {
             if (isDef(_obj.stream)) return server.replyStream(_obj.stream, ow.server.httpd.getMimeType(targetPath))
             if (isDef(_obj.file)) return server.replyStream(io.readFileStream(_obj.file), ow.server.httpd.getMimeType(targetPath))
@@ -485,7 +485,7 @@ jobs:
           return ow.server.httpd.reply(_obj)
         }
 
-        var _lst = _options._fns.getList(_req, _options)
+        var _lst = _options._fns.getList(_req, merge(_options, { _api: true }))
         return ow.server.httpd.reply(_lst)
       } catch(e) {
         logErr(`Error: ${e.message}`)
