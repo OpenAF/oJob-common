@@ -44,8 +44,18 @@ jobs:
       if (isUnDef(global.__ojobHttp)) global.__ojobHttp = {}
       if (isUnDef(global.__ojobRoutes)) global.__ojobRoutes = {}
       if (isUnDef(global.__ojobPreRoutes)) global.__ojobPreRoutes = {}
-      if (isUnDef(args.uriPrefix)) args.uriPrefix = __
       if (isUnDef(args.port)) args.port = 8091; else args.port = Number(args.port)
+      if (isUnDef(args.uriPrefix) && isDef(__flags.HTTPD_PREFIX)) {
+        if (isMap(__flags.HTTPD_PREFIX)) {
+          args.uriPrefix = _$( __flags.HTTPD_PREFIX[String(args.port)]).default(
+                             _$( __flags.HTTPD_PREFIX[args.port]).default(
+                             _$( __flags.HTTPD_PREFIX["0"]).default(
+                             _$( __flags.HTTPD_PREFIX[0]).default(__))))
+        } else {
+          args.uriPrefix = __flags.HTTPD_PREFIX
+        }
+      }
+      if (isUnDef(args.uriPrefix)) args.uriPrefix = __
       if (isUnDef(args.cp) && isDef(args.keystore) && !isNull(java.io.File(args.keystore).getParent())) args.cp = java.io.File(args.keystore).getParent().toString()
       if (isDef(args.cp)) af.externalAddClasspath(args.cp)
       if (isDef(args.keystore)) ks = args.keystore
@@ -72,7 +82,7 @@ jobs:
   exec : | #js
    if (isUnDef(args.port)) args.port = 8091; else args.port = Number(args.port)
 
-   ow.server.httpd.route(global.__ojobHttp[args.port], global.__ojobRoutes[args.port], function(r) { return global.__ojobHttp[args.port].reply("", "", 401, {}); }, global.__ojobHttpUriPrefix[args.port])
+   ow.server.httpd.route(global.__ojobHttp[args.port], global.__ojobRoutes[args.port], function(r) { return global.__ojobHttp[args.port].reply("", "", 401, {}); })
    log("READY [" + args.port + "]")
 
 # Stopping the HTTP server
@@ -549,12 +559,19 @@ jobs:
       var restrict     = global.__MHTTPD[String(port) + uri].RESTRICT
       var incURI       = global.__MHTTPD[String(port) + uri].INCURI
       var sortTab      = global.__MHTTPD[String(port) + uri].SORTTAB
+      var uriPrefix    = _$(global.__ojobHttpUriPrefix[String(port)], "__ojobHttpUriPrefix1").default(_$(global.__ojobHttpUriPrefix[port], "__ojobHttpUriPrefix2").default(""))
+      var prefixURL    = aURL => {
+         aURL = _$(aURL).default("")
+         if (aURL == "") return aURL
+         aURL = String(aURL)
+         if ((/^[a-z]+:/i).test(aURL) || aURL.startsWith("//")) return aURL
+         if (!aURL.startsWith("/")) return aURL
+         return (uriPrefix + (uriPrefix.length > 0 ? "/" : "") + aURL.replace(/^\/+/, "")).replace(/\/+/g, "/")
+      }
 
       var content = ""
       var puri = String(request.uri).replace(new RegExp("^" + uri), (uri == "/" ? "" : "/")).replace(/\/+/g, "/")
       var furi = String((new java.io.File(new java.io.File(String((new java.io.File(path + "/" + puri)).getCanonicalFile()).replace(/\\+/g, "/")))))
- 
-      if (!puri.endsWith("/")) puri += "/"
 
       var finfo
       try { 
@@ -564,6 +581,17 @@ jobs:
       }
 
       if (finfo.isDirectory) { 
+         try {
+         if (!request.originalURI.endsWith("/")) {
+            var redirectURI = String(_$(request.original).default(request.uri))
+            var q = isMap(request.params) && Object.keys(request.params).length > 0 && Object.keys(request.params).filter(k => request.params[k] != null).length > 0
+                  ? "?" + Object.keys(request.params).filter(k => request.params[k] != null).map(k => encodeURIComponent(k) + "=" + encodeURIComponent(request.params[k])).join("&")
+                  : ""
+            print("Redirecting to " + redirectURI + (!redirectURI.endsWith("/") ? "/" : "") + q)
+            return ow.server.httpd.replyRedirect(server, redirectURI + (!redirectURI.endsWith("/") ? "/" : "") + q, {})
+         }
+         } catch(eee) { $err(eee) }
+         if (!puri.endsWith("/")) puri += "/"
          if (isDef(fdefault) && io.fileExists(furi + "/" + fdefault)) {
             return (fdefault.endsWith(".md") ? 
                     ow.server.httpd.replyFileMD(server, path, uri, request.uri + "/" + fdefault) : ow.server.httpd.replyFile(server, path, uri, request.uri + "/" + fdefault))
@@ -573,15 +601,14 @@ jobs:
               content += "|   | Filename | Last modified | Size | Size in bytes |\n"
               content += "|---|----------|:-------------:|-----:|--------------:|\n"
               if (puri != "/" && puri != "") 
-                content += "| <span style=\"color: #a0a0a0;\">&#8598;</span> | __[..](<" + uri + puri.replace(/[^\/]+\/?$/, "") + ">)__ | | |\n"
+                content += "| <span style=\"color: #a0a0a0;\">&#8598;</span> | __[..](<../>)__ | | |\n"
 
               var theList = $from(io.listFiles(furi).files).sort("-isDirectory", "filename").select(f => {
                 //if (f.filename.endsWith("/")) f.filename = f.filename.substr(0, f.filename.length-1)
                 return merge(f, {
                   fLastModified: ow.format.fromDate(new Date(f.lastModified), 'yyyy-MM-dd HH:mm:ss'),
                   fSize        : ow.format.toBytesAbbreviation(f.size),
-                  puri         : puri,
-                  uri          : (uri == puri && uri == "/" ? "" : uri)
+                  puri         : puri
                 })
               })
               if (isDef(restrict)) {
@@ -592,6 +619,7 @@ jobs:
             }
          }
       } else {
+         if (puri.endsWith("/")) puri = puri.replace(/\/+$/, "")
          if (request.params.raw == "true") {
             return ow.server.httpd.replyFile(server, path, uri, request.uri)
          } else {
@@ -616,7 +644,7 @@ jobs:
                var _displayURI = uri.replace(/\/$/, "")
                _displayURI = _displayURI.replace(new RegExp("^" + uri), "")
                _displayURI += puri
-               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs '" + _displayURI + "' '" + uri + "' " + incURI + "}}}") + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\">&darr;</a></span>\n\n```" + lang + "\n" + io.readFileString(furi) + "\n```\n" + _downloadcode, true, true), "text/html", 200)
+               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs '" + _displayURI + "' '" + uri + "' " + incURI + " false}}}") + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\">&darr;</a></span>\n\n```" + lang + "\n" + io.readFileString(furi) + "\n```\n" + _downloadcode, true, true), "text/html", 200)
             }
             switch(ext) {
             case "md"  : return fn()
@@ -651,7 +679,7 @@ jobs:
          }
       }
       
-      if (sortTab) content += "<script src=\"/js/mdtablesort.js\"></script>\n"
+      if (sortTab) content += "<script src=\"" + prefixURL("/js/mdtablesort.js") + "\"></script>\n"
 
       if (shouldBrowse)
          return server.replyOKHTML(ow.template.parseMD2HTML(content, true))
@@ -664,24 +692,33 @@ jobs:
 
       args.uri  = _$(args.uri).isString().default("/")
       args.path = _$(args.path).isString().default(".")
+      var uriPrefix = _$(global.__ojobHttpUriPrefix[String(args.port)], "__ojobHttpUriPrefix1").default(_$(global.__ojobHttpUriPrefix[args.port], "__ojobHttpUriPrefix2").default(""))
+      var prefixURL = aURL => {
+        aURL = _$(aURL).default("")
+        if (aURL == "") return aURL
+        aURL = String(aURL)
+        if ((/^[a-z]+:/i).test(aURL) || aURL.startsWith("//")) return aURL
+        if (!aURL.startsWith("/")) return aURL
+        return (uriPrefix + (uriPrefix.length > 0 ? "/" : "") + aURL.replace(/^\/+/, "")).replace(/\/+/g, "/")
+      }
 
       ow.template.addHelper("escapeMDTable", str => str.replace(/\|/g, "\\|"))
-      ow.template.addHelper("ojh-buildBreadcrumbs", (path, _uri, _incURI) => {
+      ow.template.addHelper("ojh-buildBreadcrumbs", (path, _uri, _incURI, _isDir) => {
         // Remove any leading or trailing slashes and split into segments.
         const trimmedPath = path.replace(/^\/|\/$/g, '')
         const segments = trimmedPath ? trimmedPath.split('/') : []
+        const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
+        const baseDepth = Math.max(0, segments.length - (_isDir ? 0 : 1))
+        const rootURI = relDir(baseDepth)
         
         // Start with the clickable root.
         let html = ""
         if (!_incURI) 
-          html = `<a href="/" title="Navigate to root"> / </a>`
+          html = `<a href="${rootURI}" title="Navigate to root"> / </a>`
         else 
-          html = `<a href="${_uri}" title="Navigate to root"> ${_uri.replace(/^\//, "/ ")} / </a>`
+          html = `<a href="${rootURI}" title="Navigate to root"> ${_uri.replace(/^\//, "/ ")} / </a>`
         
-        let currentPath = _uri
         segments.forEach((segment, index) => {
-          currentPath += "/" + segment  // Build up the path.
-          currentPath = currentPath.replace(/\/+/g, "/") // Normalize slashes.
           // Add separator before each segment.
           if (index > 0) html += ' / '
           
@@ -689,17 +726,18 @@ jobs:
           if (index === segments.length - 1) {
             html += `<span>${segment}</span>`
           } else {
-            html += `<a href="${currentPath}/" title="Navigate to ${currentPath}/">${segment}</a>`
+            const targetURI = relDir(Math.max(0, baseDepth - index - 1))
+            html += `<a href="${targetURI}" title="Navigate to ${segment}">${segment}</a>`
           }
         })
 
         return html
       })
 
-      args.logo = _$(args.logo, "logo").isString().default("/fonts/openaf_small.png")
+      args.logo = prefixURL(_$(args.logo, "logo").isString().default("/fonts/openaf_small.png"))
 
-      var temph = _$(args.templateHead).isString().default("## {{{ojh-buildBreadcrumbs puri '" + args.uri + "' " + args.incURI + "}}}<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + args.logo + "\">\n")
-      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}<span style=\"color: #a0a0a0;\">&#8600;</span>{{else}}<a href=\"{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{escapeMDTable filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI uri}}{{encodeURI puri}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
+      var temph = _$(args.templateHead).isString().default("## {{{ojh-buildBreadcrumbs puri '" + args.uri + "' " + args.incURI + " true}}}<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + args.logo + "\">\n")
+      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}<span style=\"color: #a0a0a0;\">&#8600;</span>{{else}}<a href=\"{{encodeURI filename}}?raw=true\" download=\"{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{escapeMDTable filename}}](<{{encodeURI filename}}/>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
 
       global.__MHTTPD = _$(global.__MHTTPD).isMap().default({})
       global.__MHTTPD[String(args.port) + args.uri] = {

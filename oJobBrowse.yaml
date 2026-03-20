@@ -172,8 +172,25 @@ jobs:
     args.fns.renderList = _$(args.fns.renderList, "args.fns.renderList").isFunction().default((lst, server, request, options) => {
       if (isDef(options.browse) && !options.browse) return ""
       const uri = request.uri
+      const uriPrefix = _$(global.__ojobHttpUriPrefix[String(options.port)], "__ojobHttpUriPrefix1").default(_$(global.__ojobHttpUriPrefix[options.port], "__ojobHttpUriPrefix2").default(""))
+      const prefixURL = aURL => {
+        aURL = _$(aURL).default("")
+        if (aURL == "") return aURL
+        aURL = String(aURL)
+        if ((/^[a-z]+:/i).test(aURL) || aURL.startsWith("//")) return aURL
+        if (!aURL.startsWith("/")) return aURL
+        return (uriPrefix + "/" + aURL.replace(/^\/+/, "")).replace(/\/+/g, "/")
+      }
 
       var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "").replace(/\/$/, "")
+      const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
+      const fileLink = aName => encodeURI(aName).replace(/\+/g, "%2B")
+      if (!uri.endsWith("/")) {
+        const q = isMap(request.params) && Object.keys(request.params).length > 0
+                ? "?" + Object.keys(request.params).map(k => encodeURIComponent(k) + "=" + encodeURIComponent(request.params[k])).join("&")
+                : ""
+        return ow.server.httpd.replyRedirect(server, uri + "/" + q, {})
+      }
       var _page = 1
       var _pageSize = 0
       if (isDef(lst.pageInfo)) {
@@ -192,20 +209,20 @@ jobs:
       }
 
       const breadcrumb = p => {
-        if (p == "") return "[/](</>) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
+        if (p == "") return "[/](<./>) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<./>)"
         var parts = p.split("/")
-        var b = "[/](</>) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
+        var b = "[/](<" + relDir(parts.length).replace(/ +/g, "") + ">) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + relDir(parts.length).replace(/ +/g, "") + ">)"
         for (var i = 0; i < parts.length; i++) {
           if (i == parts.length - 1) {
             b += (!options.showURI && i == 0 ? "" : " / ") + parts[i] + " "
           } else {
-            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + parts[i] + "](<" + options.parentURI + "/" + parts.slice(0, i + 1).join("/") + "/>)"
+            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + parts[i] + "](<" + relDir(parts.length - i - 1) + ">)"
           }
         }
         return b
       }
 
-      const logo = _$(options.logo, "logo").isString().default("/fonts/openaf_small.png")
+      const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
       var content = "## " + breadcrumb( puri ) + "<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + logo + "\">\n\n"
 
       // Pagination controls (if metadata is provided)
@@ -214,10 +231,8 @@ jobs:
         if (_totalPages == 1 && _page <= 1) {
           // Don't render pagination for a single page.
         } else {
-        var _base = options.parentURI + (puri.length > 0 ? "/" + puri : "")
-        //var _qs = "pageSize=" + encodeURIComponent(lst.pageInfo.pageSize)
-        var _prev = _page > 1 ? (_base + "?page=" + (_page - 1)) : __
-        var _next = (_page < _totalPages) ? (_base + "?page=" + (_page + 1)) : __
+        var _prev = _page > 1 ? ("?page=" + (_page - 1)) : __
+        var _next = (_page < _totalPages) ? ("?page=" + (_page + 1)) : __
         var _pager = "<div style=\"margin: 0.25em 0 0.75em 0; padding-left: 0.5em; font-family: -apple-system, Calibri, DejaVu Sans;\">"
         if (isDef(_prev) && String(_prev).length > 0) {
           _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _prev + "\">&#8592;</a>"
@@ -252,7 +267,7 @@ jobs:
           content += "|\n"
 
           if (puri != "/" && puri != "") {
-            content += "| <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8598;</span> | __[..](<" + options.parentURI + (options.parentURI.endsWith("/") ? "" : "/") + puri.replace(/[^\/]+\/?$/, "") + ">)__ | | |\n"
+            content += "| <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8598;</span> | __[..](<../>)__ | | |\n"
           }
 
           $from(lst.list).sort("-isDirectory", "values." + lst.key).select(r => {
@@ -260,13 +275,13 @@ jobs:
               if (r.isDirectory) {
                   content += " <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8600;</span> |"
               } else {
-                  content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + options.parentURI + (puri.length > 0 ? "/" : "") + puri + "/" + r.values[lst.key].replace(/\+/g, "%2B") + "?raw=true\" download=\"" + r.values[lst.key].replace(/\+/g, "%2B") + "\">&darr;</a></span> |"
+                  content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + fileLink(r.values[lst.key]) + "?raw=true\" download=\"" + r.values[lst.key].replace(/\+/g, "%2B") + "\">&darr;</a></span> |"
               }
               lst.fields.forEach((f, i) => {
                 if (r.isDirectory) {
-                    content += " " + (i == 0 ? "__[" + r.values[f] + "](<" + options.parentURI + (puri.length > 0 ? "/" : "") + puri + "/" + r.values[lst.key].replace(/\+/g, "%2B") + ">)__" : r.values[f]) + " |"
+                    content += " " + (i == 0 ? "__[" + r.values[f] + "](<" + fileLink(r.values[lst.key]) + "/>)__" : r.values[f]) + " |"
                 } else {
-                    content += " " + (i == 0 ? "[" + r.values[f] + "](<" + options.parentURI + (puri.length > 0 ? "/" : "") + puri + "/" + r.values[lst.key].replace(/\+/g, "%2B") + ">)" : r.values[f]) + " |"
+                    content += " " + (i == 0 ? "[" + r.values[f] + "](<" + fileLink(r.values[lst.key]) + ">)" : r.values[f]) + " |"
                 }
               })
               content += "\n"
@@ -283,14 +298,24 @@ jobs:
           content += "\n" + options.footer + "\n"
       }
 
-      if (options.sortTab) content += "<script src=\"/js/mdtablesort.js\"></script>\n"
+      if (options.sortTab) content += "<script src=\"" + prefixURL("/js/mdtablesort.js") + "\"></script>\n"
 
       return ow.template.parseMD2HTML( content, true )
     })
     args.fns.renderObj = _$(args.fns.renderObj, "args.fns.renderObj").isFunction().default((obj, server, request, options) => {
       const uri = request.uri
+      const uriPrefix = _$(global.__ojobHttpUriPrefix[String(options.port)], "__ojobHttpUriPrefix1").default(_$(global.__ojobHttpUriPrefix[options.port], "__ojobHttpUriPrefix2").default(""))
+      const prefixURL = aURL => {
+        aURL = _$(aURL).default("")
+        if (aURL == "") return aURL
+        aURL = String(aURL)
+        if ((/^[a-z]+:/i).test(aURL) || aURL.startsWith("//")) return aURL
+        if (!aURL.startsWith("/")) return aURL
+        return (uriPrefix + "/" + aURL.replace(/^\/+/, "")).replace(/\/+/g, "/")
+      }
 
       var puri = uri.replace(new RegExp("^" + options.parentURI + "/?"), "").replace(/\/$/, "")
+      const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
 
       if (request.params.raw == "true") {
         log("Downloading raw file: " + puri)  
@@ -331,14 +356,14 @@ jobs:
       }
 
       const breadcrumb = p => {
-        if (p == "") return "[/](</>) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
+        if (p == "") return "[/](<./>) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<./>)"
         var parts = p.split("/")
-        var b = "[/](</>) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + options.parentURI.replace(/ +/g, "") + ">)"
+        var b = "[/](<" + relDir(parts.length).replace(/ +/g, "") + ">) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + relDir(parts.length).replace(/ +/g, "") + ">)"
         for (var i = 0; i < parts.length; i++) {
           if (i == parts.length - 1) {
             b += (!options.showURI && i == 0 ? "" : " / ") + parts[i] + " "
           } else {
-            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + parts[i] + "](<" + options.parentURI + "/" + parts.slice(0, i + 1).join("/") + "/>)"
+            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + parts[i] + "](<" + relDir(parts.length - i - 1) + ">)"
           }
         }
         return b
@@ -361,7 +386,7 @@ jobs:
 
       if (obj.type == "rawjson") obj.type = "json"
 
-      const logo = _$(options.logo, "logo").isString().default("/fonts/openaf_small.png")
+      const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
       var content
       if (obj.type == "raw") {
         content = "## <span style=\"display: flex; justify-content: space-between\"><span>" + breadcrumb( puri ) + "</span><span style=\"display: inline-flex; justify-content: space-between; float: inline-end; align-items: start\"><span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:history.back()\">&larr;</a></span></span></span>\n\n"
