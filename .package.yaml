@@ -37,10 +37,12 @@ name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20260318'
+version: '20260417'
 dependencies:
   openaf: '>=20251115'
 files:
+- .github/version.svg
+- .github/workflows/updatePacks.yml
 - .package.yaml
 - LICENSE
 - README.md
@@ -70,6 +72,8 @@ files:
 - oJobXLS.yaml
 - oJobs.yaml
 filesHash:
+  .github/version.svg: b9d59e3a31582dc119a1fb0448f546e1259b76e1
+  .github/workflows/updatePacks.yml: ad0c1673797302df5904e0197fea2f7c26af3aa9
   LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
   README.md: fc1de27ad943a8563e974a3edf9c1a5aec60ec6d
   oJobBasics.yaml: a084f112233ea3faa11eb9bcc16871c721d05f5b
@@ -93,7 +97,7 @@ filesHash:
   oJobSQL.yaml: 23bf73d5f96d0763f67d0d29308a96ab00013f17
   oJobSSH.yaml: 6dbefb7028a6be855ee4d3cc93e971eeee563d5b
   oJobSVN.yaml: 10920575ac4c337fe99448b8a04a0689c2bde77f
-  oJobTest.yaml: c900dc8ce222e24573a9374c4347f76ab9ac3258
+  oJobTest.yaml: 640b8979c599511e0277fa73d56ca4b910e33e0c
   oJobWatchDog.yaml: d1dbeab36784bd6722daa27e572425c84ebbc36b
   oJobXLS.yaml: 00def6b195d7487989d7aa2c774b584a0e0b01a0
   oJobs.yaml: 83d8406c43b4a5325686467ed80911a9c1e26d49

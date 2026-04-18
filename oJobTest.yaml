@@ -303,6 +303,36 @@ jobs:
       io.writeFileJSON(args.file, _r, "")
     }
 
+# CI/CD summary and exit
+#
+# -----------------------------
+- name: oJob Test CI summary
+  typeArgs:
+    noLog: false
+    shortcut:
+      name  : testCISummary
+      keyArg: quiet
+      args  :
+        exitCode: exitCode
+  help:
+    text   : "Prints a CI-friendly PASS/FAIL summary and exits with a non-zero code if there are failed tests."
+    expects:
+    - name: quiet
+      desc: Boolean flag that if true wont output the CI summary to stdout.
+    - name: exitCode
+      desc: Exit code to use when at least one test failed (defaults to 1).
+  check:
+    in:
+      quiet   : toBoolean.isBoolean.default(false)
+      exitCode: toNumber.isNumber.default(1)
+  exec: |
+    var _results = {
+      pass: ow.loadTest().getCountPass(),
+      fail: ow.loadTest().getCountFail()
+    }
+    if (!args.quiet) print("PASS=" + _results.pass + " FAIL=" + _results.fail)
+    if (_results.fail > 0) exit(args.exitCode)
+
 # JUnit results
 #
 # -----------------------------
