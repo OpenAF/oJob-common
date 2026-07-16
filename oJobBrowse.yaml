@@ -107,7 +107,7 @@ jobs:
 
         return server.replyOKHTML( String(_out) )
       } catch(e) {
-        logErr(`Error: ${e.message}`)
+        logErr(`Error: ${e.message} | ` + $err(e,__,true))
         return { data: "Internal error", mimetype: "text/plain", status: 500, header: {} }
       }
   exec : | #js
@@ -513,7 +513,7 @@ jobs:
         var _lst = _options._fns.getList(_req, merge(_options, { _api: true }))
         return ow.server.httpd.reply(_lst)
       } catch(e) {
-        logErr(`Error: ${e.message}`)
+        logErr(`Error: ${e.message} | ` + $err(e,__,true))
         return { data: "Internal error", mimetype: "text/plain", status: 500, header: {} }
       }
   exec : | #js
