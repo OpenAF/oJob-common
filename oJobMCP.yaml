@@ -93,6 +93,14 @@ jobs:
     }, args.description)
     args.description = _applyTemplate(clone(args.description), true)
 
+    var _readToolsEnv = envName => isDef(getEnv(envName)) ? af.fromJSSLON('{"tools":' + getEnv(envName) + '}').tools : []
+    var _toolsInclude = _readToolsEnv("OJOB_MCP_TOOLS_INCLUDE")
+    var _toolsExclude = _readToolsEnv("OJOB_MCP_TOOLS_EXCLUDE")
+    _$( _toolsInclude, "OJOB_MCP_TOOLS_INCLUDE").isArray().$_("OJOB_MCP_TOOLS_INCLUDE must be a JSON/SLON array")
+    _$( _toolsExclude, "OJOB_MCP_TOOLS_EXCLUDE").isArray().$_("OJOB_MCP_TOOLS_EXCLUDE must be a JSON/SLON array")
+    _toolsInclude.forEach(n => _$(n, "OJOB_MCP_TOOLS_INCLUDE entry").isString().$_("OJOB_MCP_TOOLS_INCLUDE entries must be strings"))
+    _toolsExclude.forEach(n => _$(n, "OJOB_MCP_TOOLS_EXCLUDE entry").isString().$_("OJOB_MCP_TOOLS_EXCLUDE entries must be strings"))
+
     fns = {}
 
     var _applyTemplateToDescriptions = meta => _applyTemplate(meta, false)
@@ -104,6 +112,7 @@ jobs:
       }
       return n
     }
+    var _isToolEnabled = f => (_toolsInclude.length == 0 || _toolsInclude.indexOf(f) >= 0) && _toolsExclude.indexOf(f) < 0
     var _toToolMeta = f => {
       var _meta
       if (isDef(args.fnsMeta[f])) {
@@ -138,7 +147,7 @@ jobs:
                   if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                   var _res
                   var _toolName = _resolveToolName(params.name)
-                  if (isDef(args.fns[_toolName])) {
+                  if (_isToolEnabled(_toolName) && isDef(args.fns[_toolName])) {
                     try {
                       if (isString(args.fns[_toolName])) {
                         _res = $job(args.fns[_toolName], merge({ _httprequest: req }, params.arguments || params.input || {}))
@@ -209,7 +218,7 @@ jobs:
               },
               "tools/list": params => {
                   if (args.debug) log(`tools/list -- ${af.toCSLON(params)}`)
-                  var _fnsMeta = Object.keys(args.fns).map(f => _toToolMeta(f))
+                  var _fnsMeta = Object.keys(args.fns).filter(_isToolEnabled).map(f => _toToolMeta(f))
                   return {
                       tools: _fnsMeta
                   }
@@ -301,7 +310,7 @@ jobs:
                 if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                 var _res
                 var _toolName = _resolveToolName(params.name)
-                if (isDef(args.fns[_toolName])) {
+                if (_isToolEnabled(_toolName) && isDef(args.fns[_toolName])) {
                   try {
                     if (isString(args.fns[_toolName])) {
                       _res = $job(args.fns[_toolName], merge({ _httprequest: req }, params.arguments || params.input || {}))
@@ -372,7 +381,7 @@ jobs:
             },
             "tools/list": params => {
                 if (args.debug) log(`tools/list -- ${af.toCSLON(params)}`)
-                var _fnsMeta = Object.keys(args.fns).map(f => _toToolMeta(f))
+                var _fnsMeta = Object.keys(args.fns).filter(_isToolEnabled).map(f => _toToolMeta(f))
                 return {
                     tools: _fnsMeta
                 }
@@ -465,6 +474,14 @@ jobs:
     }, args.description)
     args.description = _applyTemplate(clone(args.description), true)
 
+    var _readToolsEnv = envName => isDef(getEnv(envName)) ? af.fromJSSLON('{"tools":' + getEnv(envName) + '}').tools : []
+    var _toolsInclude = _readToolsEnv("OJOB_MCP_TOOLS_INCLUDE")
+    var _toolsExclude = _readToolsEnv("OJOB_MCP_TOOLS_EXCLUDE")
+    _$( _toolsInclude, "OJOB_MCP_TOOLS_INCLUDE").isArray().$_("OJOB_MCP_TOOLS_INCLUDE must be a JSON/SLON array")
+    _$( _toolsExclude, "OJOB_MCP_TOOLS_EXCLUDE").isArray().$_("OJOB_MCP_TOOLS_EXCLUDE must be a JSON/SLON array")
+    _toolsInclude.forEach(n => _$(n, "OJOB_MCP_TOOLS_INCLUDE entry").isString().$_("OJOB_MCP_TOOLS_INCLUDE entries must be strings"))
+    _toolsExclude.forEach(n => _$(n, "OJOB_MCP_TOOLS_EXCLUDE entry").isString().$_("OJOB_MCP_TOOLS_EXCLUDE entries must be strings"))
+
     var fs = {}
     var _applyTemplateToDescriptions = meta => _applyTemplate(meta, false)
 
@@ -475,6 +492,7 @@ jobs:
       }
       return n
     }
+    var _isToolEnabled = f => (_toolsInclude.length == 0 || _toolsInclude.indexOf(f) >= 0) && _toolsExclude.indexOf(f) < 0
     var _toToolMeta = f => {
       var _meta
       if (isDef(args.fnsMeta[f])) {
@@ -491,7 +509,7 @@ jobs:
       return _meta
     }
 
-    Object.keys(args.fns).forEach(f => {
+    Object.keys(args.fns).filter(_isToolEnabled).forEach(f => {
       var _toolName = _prefixToolName(f)
       fs[_toolName] = function(params) {
         var _jobName = _resolveToolName(_toolName)
@@ -510,7 +528,7 @@ jobs:
       }
     })
 
-    ow.server.mcpStdio(args.description, Object.keys(args.fns).map(f => _toToolMeta(f)), 
+    ow.server.mcpStdio(args.description, Object.keys(args.fns).filter(_isToolEnabled).map(f => _toToolMeta(f)),
       fs,
       (type, msg) => {
       if (args.debug) {

@@ -1005,6 +1005,7 @@ Starts a MCP server that listens for HTTP requests and executes jobs based on th
 | usestream | Boolean | No | If true, returns MCP responses as HTTP SSE stream events (defaults to false) |
 | debug | Boolean | No | If true, debug messages will be logged (defaults to false) |
 | description | Map | No | Metadata for the MCP server (protocol version, server info, capabilities) |
+| toolPrefix | String | No | Prefix for exposed wire tool names; does not change the source `fns` keys (defaults to empty) |
 | fnsMeta | Map | No | Metadata for the functions available in the MCP server (defaults to {}) |
 | fns | Map | Yes | Functions/jobs to be executed when called from the MCP server |
 
@@ -1068,10 +1069,13 @@ Starts a MCP stdio server to handle requests with execution of jobs.
 |----------|------|-----------|-------------|
 | debug | String | No | If defined, creates an ndjson file with the provided name for debugging |
 | description | Map | No | Metadata for the MCP server (protocol version, server info, capabilities) |
+| toolPrefix | String | No | Prefix for exposed wire tool names; does not change the source `fns` keys (defaults to empty) |
 | fnsMeta | Map | No | Metadata for the functions available in the MCP server (defaults to {}) |
 | fns | Map | Yes | Functions/jobs to be executed when called from the MCP server |
 
 **Error Handling:** Jobs can signal errors by returning a map with an `_err` property. When `_err` is present in the job result, the STDIO MCP server will throw the error message as an exception, which will be returned to the client as an error response.
+
+For both transports, `OJOB_MCP_TOOLS_INCLUDE` and `OJOB_MCP_TOOLS_EXCLUDE` are optional environment variables parsed as JSON/SLON arrays of exact, unprefixed `fns` keys. An unset or empty include list allows all tools; exclusions take precedence. For example, `OJOB_MCP_TOOLS_INCLUDE='["ping", "echo"]' OJOB_MCP_TOOLS_EXCLUDE='["echo"]' ojob my-mcp.yaml` exposes only `ping`. Tool prefixes affect only the MCP wire name, not filtering.
 
 ## oJobBrowse
 
