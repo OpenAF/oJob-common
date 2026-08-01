@@ -14,18 +14,23 @@ jobs:
       name  : httpdMCP
       keyArg: port
       args  :
-        description: description
-        uri        : uri
-        usestream  : usestream
-        debug      : debug
-        tplDesc    : tplDesc
-        toolPrefix : toolPrefix
-        fnsMeta    : fnsMeta
-        fns        : fns
+        description  : description
+        uri          : uri
+        usestream    : usestream
+        debug        : debug
+        tplDesc      : tplDesc
+        toolPrefix   : toolPrefix
+        fnsMeta      : fnsMeta
+        fns          : fns
+        authtoken    : authtoken
+        authheader   : authheader
+        authscheme   : authscheme
+        authrealm    : authrealm
+        authchallenge: authchallenge
   help    :
     text: Starts a MCP server to handle requests with execution of jobs.
-    expects: 
-    - name: port 
+    expects:
+    - name: port
       desc: (Number) The port to listen on.
     - name: uri
       desc: (String) The URI to handle requests. Default is "/mcp".
@@ -41,17 +46,32 @@ jobs:
       desc: (Map) Metadata for the functions available in the MCP server.
     - name: fns
       desc: (Map) Functions to be executed when called from the MCP server.
+    - name: authtoken
+      desc: (String) If defined (or env OJOB_MCP_AUTH_TOKEN), requires this bearer token on every request to this MCP endpoint. If not defined, no authentication is enforced (default behavior).
+    - name: authheader
+      desc: (String) The request header to read the credential from (default "authorization", or env OJOB_MCP_AUTH_HEADER).
+    - name: authscheme
+      desc: (String) The authorization scheme prefix expected before the token (default "Bearer", or env OJOB_MCP_AUTH_SCHEME).
+    - name: authrealm
+      desc: (String) The realm reported in the WWW-Authenticate challenge (default is the MCP server's name, or env OJOB_MCP_AUTH_REALM).
+    - name: authchallenge
+      desc: (Boolean) If true (default), unauthenticated/unauthorized requests receive a WWW-Authenticate header (or env OJOB_MCP_AUTH_CHALLENGE).
   check   :
-    in: 
-      description: isMap.default(__)
-      port       : isNumber
-      uri        : isString.default("/mcp")
-      usestream  : toBoolean.isBoolean.default(false)
-      debug      : toBoolean.isBoolean.default(false)
-      tplDesc    : toBoolean.isBoolean.default(false)
-      toolPrefix : isString.default("")
-      fnsMeta    : isMap.default({})
-      fns        : isMap.default({})
+    in:
+      description  : isMap.default(__)
+      port         : isNumber
+      uri          : isString.default("/mcp")
+      usestream    : toBoolean.isBoolean.default(false)
+      debug        : toBoolean.isBoolean.default(false)
+      tplDesc      : toBoolean.isBoolean.default(false)
+      toolPrefix   : isString.default("")
+      fnsMeta      : isMap.default({})
+      fns          : isMap.default({})
+      authtoken    : isString.default(__)
+      authheader   : isString.default(__)
+      authscheme   : isString.default(__)
+      authrealm    : isString.default(__)
+      authchallenge: isString.default(__)
   deps    :
   - HTTP Start Server
   exec    : | #js
@@ -92,6 +112,42 @@ jobs:
       }
     }, args.description)
     args.description = _applyTemplate(clone(args.description), true)
+
+    // Optional bearer-token authentication for this HTTP MCP endpoint (opt-in; fails open when unconfigured)
+    var _authToken     = _$(args.authtoken).default(getEnv("OJOB_MCP_AUTH_TOKEN"))
+    var _authHeader    = String(_$(args.authheader).default(getEnv("OJOB_MCP_AUTH_HEADER") || "authorization")).toLowerCase()
+    var _authScheme    = _$(args.authscheme).default(getEnv("OJOB_MCP_AUTH_SCHEME") || "Bearer")
+    var _authRealm     = _$(args.authrealm).default(getEnv("OJOB_MCP_AUTH_REALM") || args.description.serverInfo.name)
+    var _authChallenge = toBoolean(_$(args.authchallenge).default(getEnv("OJOB_MCP_AUTH_CHALLENGE") || "true"))
+    var _authEnabled   = isString(_authToken) && _authToken.length > 0
+
+    var _authCheck = headerValue => {
+      if (!isString(headerValue)) return false
+      var _m = headerValue.match(new RegExp("^" + _authScheme + "\\s+(.+)$", "i"))
+      if (isNull(_m)) return false
+      return sha512(_m[1]) == sha512(_authToken)
+    }
+
+    var _authReject = () => {
+      var _hdrs = {}
+      if (_authChallenge) _hdrs["WWW-Authenticate"] = _authScheme + " realm=\"" + _authRealm + "\""
+      return {
+        data    : stringify({ jsonrpc: "2.0", error: { code: -32001, message: "Unauthorized" } }, __, ""),
+        mimetype: "application/json",
+        status  : 401,
+        header  : _hdrs
+      }
+    }
+
+    // Strips the auth credential before it reaches tool jobs (avoids leaking the shared secret via echoed args/errors)
+    var _scrubAuthHeader = req => {
+      if (!_authEnabled || !isMap(req) || !isMap(req.header)) return req
+      var _r = merge({}, req)
+      _r.header = merge({}, req.header)
+      delete _r.header[_authHeader]
+      delete _r.header.authorization
+      return _r
+    }
 
     var _readToolsEnv = envName => isDef(getEnv(envName)) ? af.fromJSSLON('{"tools":' + getEnv(envName) + '}').tools : []
     var _toolsInclude = _readToolsEnv("OJOB_MCP_TOOLS_INCLUDE")
@@ -150,7 +206,7 @@ jobs:
                   if (_isToolEnabled(_toolName) && isDef(args.fns[_toolName])) {
                     try {
                       if (isString(args.fns[_toolName])) {
-                        _res = $job(args.fns[_toolName], merge({ _httprequest: req }, params.arguments || params.input || {}))
+                        _res = $job(args.fns[_toolName], merge({ _httprequest: _scrubAuthHeader(req) }, params.arguments || params.input || {}))
                         if (isMap(_res)) {
                           delete _res.objId
                           delete _res.execid
@@ -313,7 +369,7 @@ jobs:
                 if (_isToolEnabled(_toolName) && isDef(args.fns[_toolName])) {
                   try {
                     if (isString(args.fns[_toolName])) {
-                      _res = $job(args.fns[_toolName], merge({ _httprequest: req }, params.arguments || params.input || {}))
+                      _res = $job(args.fns[_toolName], merge({ _httprequest: _scrubAuthHeader(req) }, params.arguments || params.input || {}))
                       if (isMap(_res)) {
                         delete _res.objId
                         delete _res.execid
@@ -390,6 +446,16 @@ jobs:
         }
 
         return ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) })
+      }
+    }
+
+    // Wraps the MCP endpoint with a bearer-token check when auth is configured; no-op otherwise
+    if (_authEnabled) {
+      var _innerFn = fns[args.uri]
+      fns[args.uri] = req => {
+        var _hdr = isMap(req) && isMap(req.header) ? req.header[_authHeader] : __
+        if (!_authCheck(_hdr)) return _authReject()
+        return _innerFn(req)
       }
     }
 
