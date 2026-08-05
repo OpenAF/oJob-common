@@ -27,6 +27,7 @@ jobs:
         authscheme   : authscheme
         authrealm    : authrealm
         authchallenge: authchallenge
+        audit        : audit
   help    :
     text: Starts a MCP server to handle requests with execution of jobs.
     expects:
@@ -56,6 +57,8 @@ jobs:
       desc: (String) The realm reported in the WWW-Authenticate challenge (default is the MCP server's name, or env OJOB_MCP_AUTH_REALM).
     - name: authchallenge
       desc: (Boolean) If true (default), unauthenticated/unauthorized requests receive a WWW-Authenticate header (or env OJOB_MCP_AUTH_CHALLENGE).
+    - name: audit
+      desc: (Boolean) If true (or env OJOB_MCP_AUDIT), logs every tool call (tool name and arguments) via OpenAF's log() function. Default false (no auditing).
   check   :
     in:
       description  : isMap.default(__)
@@ -72,6 +75,7 @@ jobs:
       authscheme   : isString.default(__)
       authrealm    : isString.default(__)
       authchallenge: isString.default(__)
+      audit        : default(__)
   deps    :
   - HTTP Start Server
   exec    : | #js
@@ -149,6 +153,14 @@ jobs:
       return _r
     }
 
+    // Optional per-tool-call audit logging (opt-in; fails closed/off by default; logs via OpenAF's log() function)
+    var _auditEnabled = toBoolean(_$(args.audit).default(getEnv("OJOB_MCP_AUDIT") || "false"))
+    var _auditServer  = isMap(args.description) && isMap(args.description.serverInfo) ? args.description.serverInfo.name : "mcp"
+    var _auditLog = (toolName, toolArgs) => {
+      if (!_auditEnabled) return
+      log("[audit] " + _auditServer + " tool=" + toolName + " args=" + stringify(isMap(toolArgs) ? toolArgs : {}, __, ""))
+    }
+
     var _readToolsEnv = envName => isDef(getEnv(envName)) ? af.fromJSSLON('{"tools":' + getEnv(envName) + '}').tools : []
     var _toolsInclude = _readToolsEnv("OJOB_MCP_TOOLS_INCLUDE")
     var _toolsExclude = _readToolsEnv("OJOB_MCP_TOOLS_EXCLUDE")
@@ -203,6 +215,7 @@ jobs:
                   if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                   var _res
                   var _toolName = _resolveToolName(params.name)
+                  _auditLog(_toolName, params.arguments || params.input || {})
                   if (_isToolEnabled(_toolName) && isDef(args.fns[_toolName])) {
                     try {
                       if (isString(args.fns[_toolName])) {
@@ -366,6 +379,7 @@ jobs:
                 if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                 var _res
                 var _toolName = _resolveToolName(params.name)
+                _auditLog(_toolName, params.arguments || params.input || {})
                 if (_isToolEnabled(_toolName) && isDef(args.fns[_toolName])) {
                   try {
                     if (isString(args.fns[_toolName])) {
@@ -480,9 +494,10 @@ jobs:
         toolPrefix : toolPrefix
         fnsMeta    : fnsMeta
         fns        : fns
+        audit      : audit
   help    :
     text: Starts a MCP stdio to handle requests with execution of jobs.
-    expects: 
+    expects:
     - name: debug
       desc: (String) If defined it will create a ndjson file with the provided name.
     - name: fnsMeta
@@ -493,14 +508,17 @@ jobs:
       desc: (String) If defined, prefixes exposed MCP tool names without changing fns/fnsMeta key mapping.
     - name: fns
       desc: (Map) Functions to be executed when called from the MCP server stdio.
+    - name: audit
+      desc: (Boolean) If true (or env OJOB_MCP_AUDIT), logs every tool call (tool name and arguments) via OpenAF's log() function. Default false (no auditing).
   check   :
-    in: 
+    in:
       description: isMap.default(__)
       debug      : isString.default(__)
       tplDesc    : toBoolean.isBoolean.default(false)
       toolPrefix : isString.default("")
       fnsMeta    : isMap.default({})
       fns        : isMap.default({})
+      audit      : default(__)
   exec    : | #js
     var _applyTemplate = (meta, allStrings) => {
       if (!args.tplDesc) return meta
@@ -548,6 +566,14 @@ jobs:
     _toolsInclude.forEach(n => _$(n, "OJOB_MCP_TOOLS_INCLUDE entry").isString().$_("OJOB_MCP_TOOLS_INCLUDE entries must be strings"))
     _toolsExclude.forEach(n => _$(n, "OJOB_MCP_TOOLS_EXCLUDE entry").isString().$_("OJOB_MCP_TOOLS_EXCLUDE entries must be strings"))
 
+    // Optional per-tool-call audit logging (opt-in; fails closed/off by default; logs via OpenAF's log() function)
+    var _auditEnabled = toBoolean(_$(args.audit).default(getEnv("OJOB_MCP_AUDIT") || "false"))
+    var _auditServer  = isMap(args.description) && isMap(args.description.serverInfo) ? args.description.serverInfo.name : "mcp"
+    var _auditLog = (toolName, toolArgs) => {
+      if (!_auditEnabled) return
+      log("[audit] " + _auditServer + " tool=" + toolName + " args=" + stringify(isMap(toolArgs) ? toolArgs : {}, __, ""))
+    }
+
     var fs = {}
     var _applyTemplateToDescriptions = meta => _applyTemplate(meta, false)
 
@@ -579,6 +605,7 @@ jobs:
       var _toolName = _prefixToolName(f)
       fs[_toolName] = function(params) {
         var _jobName = _resolveToolName(_toolName)
+        _auditLog(_jobName, params)
         var _r = $job(args.fns[_jobName], params)
         if (isMap(_r)) {
           delete _r.objId
