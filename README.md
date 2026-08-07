@@ -1008,6 +1008,16 @@ Starts a MCP server that listens for HTTP requests and executes jobs based on th
 | toolPrefix | String | No | Prefix for exposed wire tool names; does not change the source `fns` keys (defaults to empty) |
 | fnsMeta | Map | No | Metadata for the functions available in the MCP server (defaults to {}) |
 | fns | Map | Yes | Functions/jobs to be executed when called from the MCP server |
+| authtoken | String | No | If defined (or env `OJOB_MCP_AUTH_TOKEN`), requires this bearer token on every request. If not defined, no authentication is enforced |
+| authheader | String | No | The request header to read the credential from (default `"authorization"`, or env `OJOB_MCP_AUTH_HEADER`) |
+| authscheme | String | No | The authorization scheme prefix expected before the token (default `"Bearer"`, or env `OJOB_MCP_AUTH_SCHEME`) |
+| authrealm | String | No | The realm reported in the `WWW-Authenticate` challenge (default is the MCP server's name, or env `OJOB_MCP_AUTH_REALM`) |
+| authchallenge | Boolean | No | If true (default), unauthenticated/unauthorized requests receive a `WWW-Authenticate` header (or env `OJOB_MCP_AUTH_CHALLENGE`) |
+| authapiurl | String | No | If defined (or env `OJOB_MCP_AUTH_API_URL`), validates the bearer credential by calling this URL instead of comparing it against `authtoken`. The incoming auth header is forwarded verbatim. A 2xx response means valid; any other response, or a request error/timeout, means invalid (fails closed). Mutually exclusive with `authtoken` — `authapiurl` takes precedence if both are set |
+| authapimethod | String | No | HTTP method used for the `authapiurl` validation call (default `"GET"`, or env `OJOB_MCP_AUTH_API_METHOD`) |
+| authapitimeout | Number | No | Timeout in milliseconds for the `authapiurl` validation call (default `5000`, or env `OJOB_MCP_AUTH_API_TIMEOUT`) |
+| authapicachettl | Number | No | If greater than 0, caches a token's `authapiurl` validation result in memory for this many milliseconds (default `0`, disabled; or env `OJOB_MCP_AUTH_API_CACHE_TTL`) |
+| audit | Boolean | No | If true (or env `OJOB_MCP_AUDIT`), logs every tool call (tool name, arguments, User-Agent and, when available, client IP) via OpenAF's `log()` function (defaults to false). The IP is best-effort, read from the `X-Forwarded-For`/`X-Real-IP` request headers, since OpenAF's HTTP server does not expose the raw socket address — it is only populated behind a reverse proxy that sets one of those headers |
 
 **Error Handling:** Jobs can signal errors by returning a map with an `_err` property. When `_err` is present in the job result, the MCP server will treat it as an error response with `isError: true` and return the error message to the client.
 

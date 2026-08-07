@@ -22,12 +22,16 @@ jobs:
         toolPrefix   : toolPrefix
         fnsMeta      : fnsMeta
         fns          : fns
-        authtoken    : authtoken
-        authheader   : authheader
-        authscheme   : authscheme
-        authrealm    : authrealm
-        authchallenge: authchallenge
-        audit        : audit
+        authtoken      : authtoken
+        authheader     : authheader
+        authscheme     : authscheme
+        authrealm      : authrealm
+        authchallenge  : authchallenge
+        authapiurl     : authapiurl
+        authapimethod  : authapimethod
+        authapitimeout : authapitimeout
+        authapicachettl: authapicachettl
+        audit          : audit
   help    :
     text: Starts a MCP server to handle requests with execution of jobs.
     expects:
@@ -57,8 +61,16 @@ jobs:
       desc: (String) The realm reported in the WWW-Authenticate challenge (default is the MCP server's name, or env OJOB_MCP_AUTH_REALM).
     - name: authchallenge
       desc: (Boolean) If true (default), unauthenticated/unauthorized requests receive a WWW-Authenticate header (or env OJOB_MCP_AUTH_CHALLENGE).
+    - name: authapiurl
+      desc: (String) If defined (or env OJOB_MCP_AUTH_API_URL), validates the bearer credential by calling this URL instead of comparing it against authtoken. The incoming auth header is forwarded verbatim (same header name and value, including scheme). A 2xx response means valid; any other response, or a request error/timeout, means invalid (fails closed). Mutually exclusive with authtoken -- if both are defined, authapiurl takes precedence.
+    - name: authapimethod
+      desc: (String) The HTTP method used for the authapiurl validation call (default "GET", or env OJOB_MCP_AUTH_API_METHOD).
+    - name: authapitimeout
+      desc: (Number) Timeout in milliseconds for the authapiurl validation call (default 5000, or env OJOB_MCP_AUTH_API_TIMEOUT).
+    - name: authapicachettl
+      desc: (Number) If greater than 0, caches a token's authapiurl validation result in memory for this many milliseconds to avoid calling the validation service on every request (default 0, disabled; or env OJOB_MCP_AUTH_API_CACHE_TTL).
     - name: audit
-      desc: (Boolean) If true (or env OJOB_MCP_AUDIT), logs every tool call (tool name and arguments) via OpenAF's log() function. Default false (no auditing).
+      desc: (Boolean) If true (or env OJOB_MCP_AUDIT), logs every tool call (tool name, arguments, User-Agent and, when available, client IP) via OpenAF's log() function. The IP is best-effort, read from the X-Forwarded-For/X-Real-IP request headers, since OpenAF's HTTP server does not expose the raw socket address -- it is only populated when a reverse proxy sets one of those headers. Default false (no auditing).
   check   :
     in:
       description  : isMap.default(__)
@@ -70,12 +82,16 @@ jobs:
       toolPrefix   : isString.default("")
       fnsMeta      : isMap.default({})
       fns          : isMap.default({})
-      authtoken    : isString.default(__)
-      authheader   : isString.default(__)
-      authscheme   : isString.default(__)
-      authrealm    : isString.default(__)
-      authchallenge: isString.default(__)
-      audit        : default(__)
+      authtoken      : isString.default(__)
+      authheader     : isString.default(__)
+      authscheme     : isString.default(__)
+      authrealm      : isString.default(__)
+      authchallenge  : isString.default(__)
+      authapiurl     : isString.default(__)
+      authapimethod  : isString.default(__)
+      authapitimeout : default(__)
+      authapicachettl: default(__)
+      audit          : default(__)
   deps    :
   - HTTP Start Server
   exec    : | #js
@@ -123,13 +139,50 @@ jobs:
     var _authScheme    = _$(args.authscheme).default(getEnv("OJOB_MCP_AUTH_SCHEME") || "Bearer")
     var _authRealm     = _$(args.authrealm).default(getEnv("OJOB_MCP_AUTH_REALM") || args.description.serverInfo.name)
     var _authChallenge = toBoolean(_$(args.authchallenge).default(getEnv("OJOB_MCP_AUTH_CHALLENGE") || "true"))
-    var _authEnabled   = isString(_authToken) && _authToken.length > 0
+
+    // Optional external HTTP-based token validation (opt-in; mutually exclusive with authtoken -- takes precedence when both are set)
+    var _authApiUrl      = _$(args.authapiurl).default(getEnv("OJOB_MCP_AUTH_API_URL"))
+    var _authApiMethod   = _$(args.authapimethod).default(getEnv("OJOB_MCP_AUTH_API_METHOD") || "GET")
+    var _authApiTimeout  = Number(_$(args.authapitimeout).default(getEnv("OJOB_MCP_AUTH_API_TIMEOUT") || 5000))
+    var _authApiCacheTTL = Number(_$(args.authapicachettl).default(getEnv("OJOB_MCP_AUTH_API_CACHE_TTL") || 0))
+    var _authApiEnabled  = isString(_authApiUrl) && _authApiUrl.length > 0
+    var _authApiCache    = {}
+
+    var _authEnabled   = _authApiEnabled || (isString(_authToken) && _authToken.length > 0)
 
     var _authCheck = headerValue => {
       if (!isString(headerValue)) return false
       var _m = headerValue.match(new RegExp("^" + _authScheme + "\\s+(.+)$", "i"))
       if (isNull(_m)) return false
       return sha512(_m[1]) == sha512(_authToken)
+    }
+
+    // Validates the credential by forwarding it, unchanged, to an external HTTP service; a 2xx response means valid.
+    // Fails closed: any non-2xx response, request error, or timeout is treated as invalid.
+    var _authCheckExternal = headerValue => {
+      if (!isString(headerValue)) return false
+      var _m = headerValue.match(new RegExp("^" + _authScheme + "\\s+(.+)$", "i"))
+      if (isNull(_m)) return false
+
+      var _key = sha512(headerValue)
+      if (_authApiCacheTTL > 0 && isDef(_authApiCache[_key]) && _authApiCache[_key].exp > now()) {
+        return _authApiCache[_key].ok
+      }
+
+      var _ok = false
+      try {
+        ow.loadObj()
+        var _hdrs = {}
+        _hdrs[_authHeader] = headerValue
+        var _res = (new ow.obj.http()).exec(_authApiUrl, _authApiMethod, "", _hdrs, false, _authApiTimeout)
+        _ok = isMap(_res) && _res.responseCode >= 200 && _res.responseCode < 300
+      } catch(e) {
+        if (args.debug) logErr("MCP auth API validation error: " + e.message)
+        _ok = false
+      }
+
+      if (_authApiCacheTTL > 0) _authApiCache[_key] = { ok: _ok, exp: now() + _authApiCacheTTL }
+      return _ok
     }
 
     var _authReject = () => {
@@ -156,9 +209,31 @@ jobs:
     // Optional per-tool-call audit logging (opt-in; fails closed/off by default; logs via OpenAF's log() function)
     var _auditEnabled = toBoolean(_$(args.audit).default(getEnv("OJOB_MCP_AUDIT") || "false"))
     var _auditServer  = isMap(args.description) && isMap(args.description.serverInfo) ? args.description.serverInfo.name : "mcp"
-    var _auditLog = (toolName, toolArgs) => {
+    // Header lookup is case-insensitive: the JDK-backed impl preserves "User-Agent" casing while the default nano-based impl lowercases it
+    var _getHeader = (req, name) => {
+      if (!isMap(req) || !isMap(req.header)) return __
+      var _k = Object.keys(req.header).filter(k => k.toLowerCase() == name.toLowerCase())
+      return _k.length > 0 ? req.header[_k[0]] : __
+    }
+    // Sanitizes attacker-controlled header values before they reach the audit log (strips CR/LF, caps length)
+    var _sanitizeAuditVal = v => isString(v) ? v.replace(/[\r\n]/g, " ").substring(0, 256) : __
+    // OpenAF's HTTP server doesn't expose the raw socket's remote address to oJob, only headers -- so the "original"
+    // client IP is best-effort and only available when a reverse proxy sets X-Forwarded-For/X-Real-IP
+    var _getClientMeta = req => {
+      var _xff = _getHeader(req, "x-forwarded-for")
+      var _ip  = isString(_xff) ? _xff.split(",")[0].trim() : _getHeader(req, "remote-addr")
+      var _hip = _getHeader(req, "http-client-ip")
+      var _ua  = _getHeader(req, "user-agent")
+      return { ip: _sanitizeAuditVal(_ip), hip: _sanitizeAuditVal(_hip), ua: _sanitizeAuditVal(_ua) }
+    }
+    var _auditLog = (toolName, toolArgs, req) => {
       if (!_auditEnabled) return
-      log("[audit] " + _auditServer + " tool=" + toolName + " args=" + stringify(isMap(toolArgs) ? toolArgs : {}, __, ""))
+      var _client = _getClientMeta(req)
+      var _entry = { server: _auditServer, tool: toolName, args: isMap(toolArgs) ? toolArgs : {} }
+      if (isString(_client.ip) && _client.ip.length > 0) _entry.ip = _client.ip
+      if (isString(_client.hip) && _client.hip.length > 0) _entry.hip = _client.hip
+      if (isString(_client.ua) && _client.ua.length > 0) _entry.ua = _client.ua
+      log("[audit] " + af.toSLON(_entry))
     }
 
     var _readToolsEnv = envName => isDef(getEnv(envName)) ? af.fromJSSLON('{"tools":' + getEnv(envName) + '}').tools : []
@@ -215,7 +290,7 @@ jobs:
                   if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                   var _res
                   var _toolName = _resolveToolName(params.name)
-                  _auditLog(_toolName, params.arguments || params.input || {})
+                  _auditLog(_toolName, params.arguments || params.input || {}, req)
                   if (_isToolEnabled(_toolName) && isDef(args.fns[_toolName])) {
                     try {
                       if (isString(args.fns[_toolName])) {
@@ -379,7 +454,7 @@ jobs:
                 if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                 var _res
                 var _toolName = _resolveToolName(params.name)
-                _auditLog(_toolName, params.arguments || params.input || {})
+                _auditLog(_toolName, params.arguments || params.input || {}, req)
                 if (_isToolEnabled(_toolName) && isDef(args.fns[_toolName])) {
                   try {
                     if (isString(args.fns[_toolName])) {
@@ -468,7 +543,8 @@ jobs:
       var _innerFn = fns[args.uri]
       fns[args.uri] = req => {
         var _hdr = isMap(req) && isMap(req.header) ? req.header[_authHeader] : __
-        if (!_authCheck(_hdr)) return _authReject()
+        var _valid = _authApiEnabled ? _authCheckExternal(_hdr) : _authCheck(_hdr)
+        if (!_valid) return _authReject()
         return _innerFn(req)
       }
     }
@@ -571,7 +647,7 @@ jobs:
     var _auditServer  = isMap(args.description) && isMap(args.description.serverInfo) ? args.description.serverInfo.name : "mcp"
     var _auditLog = (toolName, toolArgs) => {
       if (!_auditEnabled) return
-      log("[audit] " + _auditServer + " tool=" + toolName + " args=" + stringify(isMap(toolArgs) ? toolArgs : {}, __, ""))
+      log("[audit] " + af.toSLON({ server: _auditServer, tool: toolName, args: isMap(toolArgs) ? toolArgs : {} }))
     }
 
     var fs = {}
