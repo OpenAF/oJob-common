@@ -204,19 +204,22 @@ jobs:
       if (!isNumber(_pageSize) || _pageSize < 0) _pageSize = 0
 
       if (isDef(options.default) && lst.list.filter(r => r.values[lst.key] == options.default).length == 1) {
-        request.uri = request.uri + "/" + options.default
+        request.uri = request.uri.replace(/\/+$/, "") + "/" + options.default
         return options._fns.renderObj(options._fns.getObj(request, options), server, request, options)
       }
 
       const breadcrumb = p => {
-        if (p == "") return "[/](<./>) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<./>)"
-        var parts = p.split("/")
-        var b = "[/](<" + relDir(parts.length).replace(/ +/g, "") + ">) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + relDir(parts.length).replace(/ +/g, "") + ">)"
+        // relative links resolve against the current URL's directory: the directory itself
+        // when the URL ends with "/", otherwise the file's parent — so a file URL is one level up
+        var parts = (p == "" ? [] : p.split("/"))
+        var depth = uri.endsWith("/") ? parts.length : parts.length - 1
+        if (depth < 0) depth = 0
+        var b = "[/](<" + relDir(depth) + ">) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + relDir(depth) + ">)"
         for (var i = 0; i < parts.length; i++) {
           if (i == parts.length - 1) {
             b += (!options.showURI && i == 0 ? "" : " / ") + parts[i] + " "
           } else {
-            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + parts[i] + "](<" + relDir(parts.length - i - 1) + ">)"
+            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + parts[i] + "](<" + relDir(depth - i - 1) + ">)"
           }
         }
         return b
@@ -356,14 +359,17 @@ jobs:
       }
 
       const breadcrumb = p => {
-        if (p == "") return "[/](<./>) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<./>)"
-        var parts = p.split("/")
-        var b = "[/](<" + relDir(parts.length).replace(/ +/g, "") + ">) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + relDir(parts.length).replace(/ +/g, "") + ">)"
+        // relative links resolve against the current URL's directory: the directory itself
+        // when the URL ends with "/", otherwise the file's parent — so a file URL is one level up
+        var parts = (p == "" ? [] : p.split("/"))
+        var depth = uri.endsWith("/") ? parts.length : parts.length - 1
+        if (depth < 0) depth = 0
+        var b = "[/](<" + relDir(depth) + ">) [" + (options.showURI ? options.parentURI.replace(/^\//, "") : "") + "](<" + relDir(depth) + ">)"
         for (var i = 0; i < parts.length; i++) {
           if (i == parts.length - 1) {
             b += (!options.showURI && i == 0 ? "" : " / ") + parts[i] + " "
           } else {
-            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + parts[i] + "](<" + relDir(parts.length - i - 1) + ">)"
+            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + parts[i] + "](<" + relDir(depth - i - 1) + ">)"
           }
         }
         return b
@@ -450,8 +456,8 @@ jobs:
     global.__GBHTTPD[String(args.port) + args.uri] = _options
 
 # ----------------------
-# http://127.0.0.1:11224/test?browseUri=/test&path=a/b/destination.txt&action=obj
-# http://127.0.0.1:11224/test?browseUri=/test&path=a/b&action=list
+# http://127.0.0.1:11224/api/browse?browseUri=/test&path=a/b/destination.txt&action=obj
+# http://127.0.0.1:11224/api/browse?browseUri=/test&path=a/b&action=list
 #
 - name : HTTP Browse API
   deps :
@@ -479,27 +485,31 @@ jobs:
       port      : toNumber.isNumber.default(8091)
       uri       : isString.default("/api/browse")
       browseUri : isString.default(__)
-      path      : isString.default("")
   args :
     execURI: | #js
       try {
-        var targetUri = args.browseUri
-        if (isUnDef(targetUri) || targetUri === "") targetUri = request.params.browseUri
-        if (isUnDef(targetUri) || targetUri === "") targetUri = request.params.uri
+        var _cfg    = _$((global.__GBHTTPDAPI || {})[String(port) + uri], "apiCfg").isMap().default({})
+        var _params = _$(request.params).isMap().default({})
+
+        var targetUri = _params.browseUri
+        if (isUnDef(targetUri) || targetUri === "") targetUri = _cfg.browseUri
+        if (isUnDef(targetUri) || targetUri === "") targetUri = _params.uri
         if (isUnDef(targetUri) || targetUri === "") {
           return { data: "Missing browseUri", mimetype: "text/plain", status: 400, header: {} }
         }
 
-        var _options = global.__GBHTTPD[String(port) + targetUri]
+        var _options = (global.__GBHTTPD || {})[String(port) + targetUri]
         if (isUnDef(_options)) {
           return { data: "Unknown browseUri", mimetype: "text/plain", status: 404, header: {} }
         }
 
-        var targetPath = _$(request.params.path).isString().default("")
-        var _req = merge({}, request)
-        _req.uri = targetUri + (targetPath.length > 0 ? "/" + targetPath.replace(/^\/+/, "") : "")
+        var targetPath = _$(_params.path).isString().default("")
+        var _req = {}
+        Object.keys(request).forEach(k => _req[k] = request[k])
+        _req.params = _params
+        _req.uri    = (targetUri + "/" + targetPath.replace(/^\/+/, "")).replace(/\/{2,}/g, "/").replace(/\/$/, "") || "/"
 
-        var action = _$(request.params.action).isString().default("list")
+        var action = _$(_params.action).isString().default("list")
         if (action == "obj") {
           var _obj = _options._fns.getObj(_req, merge(_options, { _api: true }))
           //if (request.params.raw == "true") {
@@ -511,18 +521,16 @@ jobs:
         }
 
         var _lst = _options._fns.getList(_req, merge(_options, { _api: true }))
+        if (!_lst.isList) {
+          if (_lst.isFile) return ow.server.httpd.reply({ error: "Not a list", isFile: true, path: targetPath }, 400, "application/json", {})
+          return ow.server.httpd.reply({ error: "Not found", path: targetPath }, 404, "application/json", {})
+        }
+        if (!isArray(_lst.list)) _lst.list = []
         return ow.server.httpd.reply(_lst)
       } catch(e) {
         logErr(`Error: ${e.message} | ` + $err(e,__,true))
         return { data: "Internal error", mimetype: "text/plain", status: 500, header: {} }
       }
   exec : | #js
-    var _options = args.options
-    _options._fns = args.fns
-    _options._fns.init()
-    if (isUnDef(global.__GBHTTPD)) global.__GBHTTPD = {}
-
-    _options.parentURI  = args.uri
-    _options.parentPath = args.path
-    _options.port       = args.port
-    global.__GBHTTPD[String(args.port) + args.uri] = _options
+    if (isUnDef(global.__GBHTTPDAPI)) global.__GBHTTPDAPI = {}
+    global.__GBHTTPDAPI[String(args.port) + args.uri] = { browseUri: args.browseUri }
