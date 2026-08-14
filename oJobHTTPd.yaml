@@ -584,10 +584,8 @@ jobs:
          try {
          if (!request.originalURI.endsWith("/")) {
             var redirectURI = String(_$(request.original).default(request.uri))
-            var q = isMap(request.params) && Object.keys(request.params).length > 0 && Object.keys(request.params).filter(k => request.params[k] != null).length > 0
-                  ? "?" + Object.keys(request.params).filter(k => request.params[k] != null).map(k => encodeURIComponent(k) + "=" + encodeURIComponent(request.params[k])).join("&")
-                  : ""
-            print("Redirecting to " + redirectURI + (!redirectURI.endsWith("/") ? "/" : "") + q)
+            var _qs = isMap(request.params) ? request.params["NanoHttpd.QUERY_STRING"] : __
+            var q = (isString(_qs) && _qs.length > 0) ? "?" + _qs : ""
             return ow.server.httpd.replyRedirect(server, redirectURI + (!redirectURI.endsWith("/") ? "/" : "") + q, {})
          }
          } catch(eee) { $err(eee) }

@@ -186,9 +186,8 @@ jobs:
       const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
       const fileLink = aName => encodeURI(aName).replace(/\+/g, "%2B")
       if (!uri.endsWith("/")) {
-        const q = isMap(request.params) && Object.keys(request.params).length > 0
-                ? "?" + Object.keys(request.params).map(k => encodeURIComponent(k) + "=" + encodeURIComponent(request.params[k])).join("&")
-                : ""
+        var _qs = isMap(request.params) ? request.params["NanoHttpd.QUERY_STRING"] : __
+        var q = (isString(_qs) && _qs.length > 0) ? "?" + _qs : ""
         return ow.server.httpd.replyRedirect(server, uri + "/" + q, {})
       }
       var _page = 1
