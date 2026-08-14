@@ -62,7 +62,7 @@ jobs:
     - name: authchallenge
       desc: (Boolean) If true (default), unauthenticated/unauthorized requests receive a WWW-Authenticate header (or env OJOB_MCP_AUTH_CHALLENGE).
     - name: authapiurl
-      desc: (String) If defined (or env OJOB_MCP_AUTH_API_URL), validates the bearer credential by calling this URL instead of comparing it against authtoken. The incoming auth header is forwarded verbatim (same header name and value, including scheme). A 2xx response means valid; any other response, or a request error/timeout, means invalid (fails closed). Mutually exclusive with authtoken -- if both are defined, authapiurl takes precedence.
+      desc: (String) If defined (or env OJOB_MCP_AUTH_API_URL), validates the bearer credential by calling this URL instead of comparing it against authtoken. The incoming auth header is forwarded verbatim (same header name and value, including scheme), together with X-OJob-MCP-URI, X-OJob-MCP-Port, X-OJob-MCP-Name, X-OJob-MCP-Title, X-OJob-MCP-Version, X-OJob-MCP-Protocol-Version, X-OJob-MCP-Tool-Prefix and X-OJob-MCP-Stream headers describing this MCP. A 2xx response means valid; any other response, or a request error/timeout, means invalid (fails closed). Mutually exclusive with authtoken -- if both are defined, authapiurl takes precedence.
     - name: authapimethod
       desc: (String) The HTTP method used for the authapiurl validation call (default "GET", or env OJOB_MCP_AUTH_API_METHOD).
     - name: authapitimeout
@@ -147,6 +147,16 @@ jobs:
     var _authApiCacheTTL = Number(_$(args.authapicachettl).default(getEnv("OJOB_MCP_AUTH_API_CACHE_TTL") || 0))
     var _authApiEnabled  = isString(_authApiUrl) && _authApiUrl.length > 0
     var _authApiCache    = {}
+    var _authApiMcpHeaders = {
+      "X-OJob-MCP-URI"             : String(args.uri),
+      "X-OJob-MCP-Port"            : String(args.port),
+      "X-OJob-MCP-Name"            : String(args.description.serverInfo.name),
+      "X-OJob-MCP-Title"           : String(args.description.serverInfo.title),
+      "X-OJob-MCP-Version"         : String(args.description.serverInfo.version),
+      "X-OJob-MCP-Protocol-Version": String(args.description.protocolVersion),
+      "X-OJob-MCP-Tool-Prefix"     : String(args.toolPrefix),
+      "X-OJob-MCP-Stream"          : String(args.usestream)
+    }
 
     var _authEnabled   = _authApiEnabled || (isString(_authToken) && _authToken.length > 0)
 
@@ -157,7 +167,7 @@ jobs:
       return sha512(_m[1]) == sha512(_authToken)
     }
 
-    // Validates the credential by forwarding it, unchanged, to an external HTTP service; a 2xx response means valid.
+    // Validates the credential by forwarding it, unchanged, and identifying this MCP to an external HTTP service; a 2xx response means valid.
     // Fails closed: any non-2xx response, request error, or timeout is treated as invalid.
     var _authCheckExternal = headerValue => {
       if (!isString(headerValue)) return false
@@ -172,7 +182,7 @@ jobs:
       var _ok = false
       try {
         ow.loadObj()
-        var _hdrs = {}
+        var _hdrs = merge({}, _authApiMcpHeaders)
         _hdrs[_authHeader] = headerValue
         var _res = (new ow.obj.http()).exec(_authApiUrl, _authApiMethod, "", _hdrs, false, _authApiTimeout)
         _ok = isMap(_res) && _res.responseCode >= 200 && _res.responseCode < 300
