@@ -32,6 +32,7 @@ jobs:
         authapitimeout : authapitimeout
         authapicachettl: authapicachettl
         audit          : audit
+        modern         : modern
   help    :
     text: Starts a MCP server to handle requests with execution of jobs.
     expects:
@@ -71,6 +72,8 @@ jobs:
       desc: (Number) If greater than 0, caches a token's authapiurl validation result in memory for this many milliseconds to avoid calling the validation service on every request (default 0, disabled; or env OJOB_MCP_AUTH_API_CACHE_TTL).
     - name: audit
       desc: (Boolean) If true (or env OJOB_MCP_AUDIT), logs every tool call (tool name, arguments, User-Agent and, when available, client IP) via OpenAF's log() function. The IP is best-effort, read from the X-Forwarded-For/X-Real-IP request headers, since OpenAF's HTTP server does not expose the raw socket address -- it is only populated when a reverse proxy sets one of those headers. Default false (no auditing).
+    - name: modern
+      desc: (Boolean) If true (or env OJOB_MCP_MODERN), also serves the 2026-07-28 stateless/per-request MCP protocol era (server/discover, per-request protocol version negotiation, resultType/ttlMs/cacheScope on results) side-by-side with the legacy initialize-handshake era, for any request that declares a modern protocol version. Default is false, so previous (legacy-only) behavior is unchanged unless explicitly opted in.
   check   :
     in:
       description  : isMap.default(__)
@@ -92,6 +95,7 @@ jobs:
       authapitimeout : default(__)
       authapicachettl: default(__)
       audit          : default(__)
+      modern         : default(__)
   deps    :
   - HTTP Start Server
   exec    : | #js
@@ -132,6 +136,10 @@ jobs:
       }
     }, args.description)
     args.description = _applyTemplate(clone(args.description), true)
+
+    // Opt-in support for the 2026-07-28 stateless/per-request MCP protocol era, side-by-side with the legacy
+    // initialize-handshake era above (which stays the default and is left fully unchanged when modern is false).
+    args.modern = toBoolean(_$(args.modern).default(getEnv("OJOB_MCP_MODERN") || "false"))
 
     // Optional bearer-token authentication for this HTTP MCP endpoint (opt-in; fails open when unconfigured)
     var _authToken     = _$(args.authtoken).default(getEnv("OJOB_MCP_AUTH_TOKEN"))
@@ -379,9 +387,10 @@ jobs:
               },
               "prompts/list": params => ({})
           }
+          if (args.modern) _rpcFns["server/discover"] = params => ow.server.mcp.discoverResult(args.description)
 
           // Process the JSON-RPC request
-          var _rpcRes = ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) })
+          var _rpcRes = ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) }, { modern: args.modern, serverInfo: args.description.serverInfo })
           
           // Parse request to check if it's a notification
           var body = (isDef(req.files) && isDef(req.files.postData)) ? req.files.postData : __
@@ -543,8 +552,9 @@ jobs:
             },
             "prompts/list": params => ({})
         }
+        if (args.modern) _rpcFns["server/discover"] = params => ow.server.mcp.discoverResult(args.description)
 
-        return ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) })
+        return ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) }, { modern: args.modern, serverInfo: args.description.serverInfo })
       }
     }
 
@@ -581,6 +591,7 @@ jobs:
         fnsMeta    : fnsMeta
         fns        : fns
         audit      : audit
+        modern     : modern
   help    :
     text: Starts a MCP stdio to handle requests with execution of jobs.
     expects:
@@ -596,6 +607,8 @@ jobs:
       desc: (Map) Functions to be executed when called from the MCP server stdio.
     - name: audit
       desc: (Boolean) If true (or env OJOB_MCP_AUDIT), logs every tool call (tool name and arguments) via OpenAF's log() function. Default false (no auditing).
+    - name: modern
+      desc: (Boolean) If true (or env OJOB_MCP_MODERN), also serves the 2026-07-28 stateless/per-request MCP protocol era side-by-side with the legacy initialize-handshake era. Default is false, so previous (legacy-only) behavior is unchanged unless explicitly opted in.
   check   :
     in:
       description: isMap.default(__)
@@ -605,6 +618,7 @@ jobs:
       fnsMeta    : isMap.default({})
       fns        : isMap.default({})
       audit      : default(__)
+      modern     : default(__)
   exec    : | #js
     var _applyTemplate = (meta, allStrings) => {
       if (!args.tplDesc) return meta
@@ -643,6 +657,10 @@ jobs:
       }
     }, args.description)
     args.description = _applyTemplate(clone(args.description), true)
+
+    // Opt-in support for the 2026-07-28 stateless/per-request MCP protocol era, side-by-side with the legacy
+    // initialize-handshake era above (which stays the default and is left fully unchanged when modern is false).
+    args.modern = toBoolean(_$(args.modern).default(getEnv("OJOB_MCP_MODERN") || "false"))
 
     var _readToolsEnv = envName => isDef(getEnv(envName)) ? af.fromJSSLON('{"tools":' + getEnv(envName) + '}').tools : []
     var _toolsInclude = _readToolsEnv("OJOB_MCP_TOOLS_INCLUDE")
@@ -713,7 +731,8 @@ jobs:
       if (args.debug) {
         io.writeLineNDJSON(args.debug, { type: type, msg: msg })
       }
-    })
+    },
+    { modern: args.modern })
 
 
 # - name: ping
