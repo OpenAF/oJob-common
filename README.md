@@ -1102,11 +1102,15 @@ Generic HTTP browse service with customizable templates and functions.
 | path | String | No | The base path for browsing (defaults to "") |
 | templates | Map | No | Map with templates to be used |
 | fns | Map | No | Map with functions for template rendering (getList, getObj, renderList, renderObj, renderEmpty, init) |
-| options | Map | No | Map with options to be passed (browse, default, logo, showURI, sortTab, footer) |
+| options | Map | No | Map with options to be passed (browse, default, logo, showURI, sortTab, sortTabAsc, footer) |
 
 Pagination:
 - `renderList` will render pager controls when the list metadata includes `pageInfo` with `page`, `pageSize`, and `total`.
 - If `pageInfo` is not present, it falls back to query parameters `page` and `pageSize`.
+
+Sorting:
+- `sortTab` (Boolean, defaults to false) includes a client-side table sorting script, adding sort controls to each column header.
+- `sortTabAsc` (Boolean, defaults to false) requires `sortTab` to also be true, and pre-selects an ascending sort on the first file/folder field column when the page loads.
 
 ### HTTP Browser API
 

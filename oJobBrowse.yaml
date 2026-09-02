@@ -300,7 +300,12 @@ jobs:
           content += "\n" + options.footer + "\n"
       }
 
-      if (options.sortTab) content += "<script src=\"" + prefixURL("/js/mdtablesort.js") + "\"></script>\n"
+      if (options.sortTab) {
+          content += "<script src=\"" + prefixURL("/js/mdtablesort.js") + "\"></script>\n"
+          if (options.sortTabAsc) {
+              content += "<script>document.addEventListener('DOMContentLoaded', function() { var t = document.querySelector('table'); if (!t) return; var row = t.querySelector('thead tr') || t.querySelector('tr'); if (!row) return; var cell = row.querySelectorAll('th, td')[1]; if (!cell) return; if (typeof updateSortState === 'function') updateSortState(cell, 'asc', t); });</script>\n"
+          }
+      }
 
       return ow.template.parseMD2HTML( content, true )
     })
