@@ -1017,7 +1017,8 @@ Starts a MCP server that listens for HTTP requests and executes jobs based on th
 | authapimethod | String | No | HTTP method used for the `authapiurl` validation call (default `"GET"`, or env `OJOB_MCP_AUTH_API_METHOD`) |
 | authapitimeout | Number | No | Timeout in milliseconds for the `authapiurl` validation call (default `5000`, or env `OJOB_MCP_AUTH_API_TIMEOUT`) |
 | authapicachettl | Number | No | If greater than 0, caches a token's `authapiurl` validation result in memory for this many milliseconds (default `0`, disabled; or env `OJOB_MCP_AUTH_API_CACHE_TTL`) |
-| audit | Boolean | No | If true (or env `OJOB_MCP_AUDIT`), logs every tool call (tool name, arguments, User-Agent and, when available, client IP) via OpenAF's `log()` function (defaults to false). The IP is best-effort, read from the `X-Forwarded-For`/`X-Real-IP` request headers, since OpenAF's HTTP server does not expose the raw socket address — it is only populated behind a reverse proxy that sets one of those headers |
+| authapicachemax | Number | No | Maximum number of entries kept in the `authapiurl` validation cache (default `1000`, or env `OJOB_MCP_AUTH_API_CACHE_MAX`). Expired entries are evicted first, then the entry closest to expiring, so distinct credentials cannot grow the cache without limit |
+| audit | Boolean | No | If true (or env `OJOB_MCP_AUDIT`), logs every tool call (tool name, arguments, User-Agent and, when available, client IP) via OpenAF's `log()` function (defaults to false). The IP is best-effort, read from the `X-Forwarded-For`/`X-Real-IP` request headers, since OpenAF's HTTP server does not expose the raw socket address — it is only populated behind a reverse proxy that sets one of those headers. Logged values are attacker-controlled, so the tool name, argument keys and string values are stripped of CR/LF and capped at 256 characters before being written, keeping one audit record on one line; the tool job and any audit webhooks still receive the untouched values. The client IP is taken from request headers a caller can set, so treat it as a hint rather than as proof of origin |
 
 **Error Handling:** Jobs can signal errors by returning a map with an `_err` property. When `_err` is present in the job result, the MCP server will treat it as an error response with `isError: true` and return the error message to the client.
 
@@ -1086,6 +1087,54 @@ Starts a MCP stdio server to handle requests with execution of jobs.
 **Error Handling:** Jobs can signal errors by returning a map with an `_err` property. When `_err` is present in the job result, the STDIO MCP server will throw the error message as an exception, which will be returned to the client as an error response.
 
 For both transports, `OJOB_MCP_TOOLS_INCLUDE` and `OJOB_MCP_TOOLS_EXCLUDE` are optional environment variables parsed as JSON/SLON arrays of exact, unprefixed `fns` keys. An unset or empty include list allows all tools; exclusions take precedence. For example, `OJOB_MCP_TOOLS_INCLUDE='["ping", "echo"]' OJOB_MCP_TOOLS_EXCLUDE='["echo"]' ojob my-mcp.yaml` exposes only `ping`. Tool prefixes affect only the MCP wire name, not filtering.
+
+### Asynchronous tool audit webhooks
+
+HTTP (including streaming) and STDIO MCP support optional JSON HTTP POST notifications:
+
+| Environment variable | Description |
+|----------------------|-------------|
+| `OJOB_MCP_PREHOOK_URL` | Receives an event scheduled before the tool job executes. Unset or blank disables it. |
+| `OJOB_MCP_POSTHOOK_URL` | Receives an event scheduled after the tool completes or fails. Unset or blank disables it. |
+| `OJOB_MCP_HOOK_TIMEOUT` | Positive timeout in milliseconds for each HTTP request, including a whole-call timeout. Defaults to `5000`; invalid values use the default. |
+| `OJOB_MCP_HOOK_INCLUDE_ARGS` | Boolean. Set to `true` to include input `arguments` in both pre/post POST bodies. Defaults to `false`; omitted arguments are not copied or serialized. |
+| `OJOB_MCP_HOOK_INCLUDE_RESULT` | Boolean. Set to `true` to include the output `result` or `error` text in the posthook POST body. Defaults to `false`; omitted outputs are not serialized for hooks. |
+| `OJOB_MCP_HOOK_INCLUDE_HEADERS` | Boolean. Set to `true` to include the incoming HTTP request `headers` in both pre/post POST bodies (HTTP transports only). Defaults to `false`. The MCP auth credential is always removed first -- both the `authorization` header and whatever `authheader`/`OJOB_MCP_AUTH_HEADER` names -- matched case-insensitively. |
+| `OJOB_MCP_HOOK_MAX_INFLIGHT` | Positive maximum number of deliveries in flight at once. Defaults to `64`; invalid values use the default. Events above the cap are dropped immediately (never queued) and logged as `MCP audit webhook dropped (in-flight cap reached)`. |
+| `OJOB_MCP_HOOK_MAX_BODY` | Positive maximum size, in characters, of a single event body. Defaults to `65536`; invalid values use the default. An oversized event is re-sent with `arguments`, `result`, `error` and `headers` removed and `truncated: true` set, so metadata still arrives. |
+| `OJOB_MCP_HOOK_AUTH_TOKEN` | If set, sent as a credential on every hook request so the receiver can authenticate the events. Unset (default) means the events are sent unauthenticated. |
+| `OJOB_MCP_HOOK_AUTH_HEADER` | Header carrying `OJOB_MCP_HOOK_AUTH_TOKEN` (default `authorization`). |
+| `OJOB_MCP_HOOK_AUTH_SCHEME` | Scheme prefixed to the token (default `Bearer`); a blank value falls back to the default. |
+
+Either hook can be enabled independently; they do not require `audit=true`. Settings are read when the MCP server job starts.
+
+Payload flags are independent and enable sending only when their value is `true` (case-insensitive, ignoring surrounding whitespace). Unset, blank, `false`, and other values disable sending. By default, events contain metadata only, including `isError` on post events. To include full payloads, set `OJOB_MCP_HOOK_INCLUDE_ARGS=true` and/or `OJOB_MCP_HOOK_INCLUDE_RESULT=true`.
+
+Lightweight metrics remain available with both payload flags disabled:
+
+| Field | Meaning |
+|-------|---------|
+| `argumentCount` | Number of supplied top-level argument keys before the job executes (both events). Empty or non-map arguments count as zero; nested values are not traversed or serialized. |
+| `isError` | Whether the tool call failed (post events), independent of whether error text is included. |
+| `durationMs` | Elapsed milliseconds from prehook context creation through tool execution and response preparation (post events). Includes local audit/hook preparation overhead, but does not wait for webhook delivery. |
+| `startedAt`, `timestamp` | Call start and event timestamps in Unix milliseconds. |
+
+Counting arguments does not read their values. No payload byte-size calculation or deep inspection is performed.
+
+```sh
+OJOB_MCP_PREHOOK_URL=https://audit.example.com/mcp/events \
+OJOB_MCP_POSTHOOK_URL=https://audit.example.com/mcp/events \
+OJOB_MCP_HOOK_TIMEOUT=3000 \
+ojob my-mcp.yaml
+```
+
+Both events contain `phase` (`pre` or `post`), `callId` (a generated UUID shared by the pair), `startedAt` and `timestamp` (Unix milliseconds), `server` (serverInfo metadata), `transport` (`http` or `stdio`), `tool` (unprefixed name), and `wireTool` (exposed name). When `OJOB_MCP_HOOK_INCLUDE_ARGS=true`, they also contain `arguments` (a snapshot before job execution). HTTP events also include `client` with the same best-effort `ip`, `hip`, and `ua` metadata used by auditing.
+
+Post events always add `durationMs` and `isError`. When `OJOB_MCP_HOOK_INCLUDE_RESULT=true`, they also include `result` when defined. HTTP results are captured after oJobMCP response conversion, before protocol wrapping. STDIO results are the cleaned job return value before the OpenAF STDIO MCP layer formats it; thrown exceptions and `_err` failures instead set `error` to the error text when output inclusion is enabled. Only calls that resolve to a known, enabled tool fire hooks: an unknown or disabled tool name is attacker-controlled and unbounded, so it is answered with an error but never turned into a POST on the receiver. STDIO calls rejected by OpenAF before reaching a registered tool are likewise not reported.
+
+Delivery uses OpenAF `$doV` and does not wait for the receiver. The prehook cannot approve or block execution, and pre/post events may arrive out of order; correlate them with `callId`. Each event gets one delivery attempt, with no retry, persistence, or shutdown drain. Deliveries are capped at `OJOB_MCP_HOOK_MAX_INFLIGHT` at a time and anything above that is dropped rather than queued, so a slow or hanging receiver cannot make tool traffic pile up outstanding deliveries and sockets. A non-2xx response or delivery failure logs a generic error without changing the tool outcome. Pending events can be lost when the process exits.
+
+When enabled, payload fields include full tool arguments and results, which may contain sensitive data. Incoming HTTP request headers are not attached unless `OJOB_MCP_HOOK_INCLUDE_HEADERS=true`, and the MCP auth credential is stripped from them even then -- but headers still carry cookies and API keys, so enable it only against a trusted receiver. Set `OJOB_MCP_HOOK_AUTH_TOKEN` so the receiver can tell genuine events from forged ones, and prefer an `https://` URL: hook URLs are used as given and a cleartext `http://` receiver exposes everything the events carry. Account for any secrets returned by your tools or supplied in their arguments.
 
 ## oJobBrowse
 

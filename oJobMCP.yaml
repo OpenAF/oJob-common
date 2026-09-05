@@ -31,6 +31,7 @@ jobs:
         authapimethod  : authapimethod
         authapitimeout : authapitimeout
         authapicachettl: authapicachettl
+        authapicachemax: authapicachemax
         audit          : audit
         modern         : modern
   help    :
@@ -70,6 +71,8 @@ jobs:
       desc: (Number) Timeout in milliseconds for the authapiurl validation call (default 5000, or env OJOB_MCP_AUTH_API_TIMEOUT).
     - name: authapicachettl
       desc: (Number) If greater than 0, caches a token's authapiurl validation result in memory for this many milliseconds to avoid calling the validation service on every request (default 0, disabled; or env OJOB_MCP_AUTH_API_CACHE_TTL).
+    - name: authapicachemax
+      desc: (Number) Maximum number of entries kept in the authapiurl validation cache (default 1000, or env OJOB_MCP_AUTH_API_CACHE_MAX). Expired entries are evicted first, then the entry closest to expiring, so distinct credentials cannot grow the cache without limit.
     - name: audit
       desc: (Boolean) If true (or env OJOB_MCP_AUDIT), logs every tool call (tool name, arguments, User-Agent and, when available, client IP) via OpenAF's log() function. The IP is best-effort, read from the X-Forwarded-For/X-Real-IP request headers, since OpenAF's HTTP server does not expose the raw socket address -- it is only populated when a reverse proxy sets one of those headers. Default false (no auditing).
     - name: modern
@@ -94,6 +97,7 @@ jobs:
       authapimethod  : isString.default(__)
       authapitimeout : default(__)
       authapicachettl: default(__)
+      authapicachemax: default(__)
       audit          : default(__)
       modern         : default(__)
   deps    :
@@ -154,7 +158,26 @@ jobs:
     var _authApiTimeout  = Number(_$(args.authapitimeout).default(getEnv("OJOB_MCP_AUTH_API_TIMEOUT") || 5000))
     var _authApiCacheTTL = Number(_$(args.authapicachettl).default(getEnv("OJOB_MCP_AUTH_API_CACHE_TTL") || 0))
     var _authApiEnabled  = isString(_authApiUrl) && _authApiUrl.length > 0
+    // Bounded: the cache is keyed by the credential, so distinct (even invalid) tokens would otherwise
+    // grow it without limit. Expired entries go first, then the entry closest to expiring.
+    var _authApiCacheMax = Number(_$(args.authapicachemax).default(getEnv("OJOB_MCP_AUTH_API_CACHE_MAX") || 1000))
+    if (!isFinite(_authApiCacheMax) || _authApiCacheMax <= 0) _authApiCacheMax = 1000
     var _authApiCache    = {}
+    var _authApiCachePut = (key, ok) => {
+      if (_authApiCacheTTL <= 0) return
+      var _keys = Object.keys(_authApiCache)
+      if (_keys.length >= _authApiCacheMax) {
+        var _t = now()
+        _keys.forEach(k => { if (_authApiCache[k].exp <= _t) delete _authApiCache[k] })
+        _keys = Object.keys(_authApiCache)
+        if (_keys.length >= _authApiCacheMax) {
+          var _drop = _keys[0]
+          _keys.forEach(k => { if (_authApiCache[k].exp < _authApiCache[_drop].exp) _drop = k })
+          delete _authApiCache[_drop]
+        }
+      }
+      _authApiCache[key] = { ok: ok, exp: now() + _authApiCacheTTL }
+    }
     var _authApiMcpHeaders = {
       "X-OJob-MCP-URI"             : String(args.uri),
       "X-OJob-MCP-Port"            : String(args.port),
@@ -192,14 +215,16 @@ jobs:
         ow.loadObj()
         var _hdrs = merge({}, _authApiMcpHeaders)
         _hdrs[_authHeader] = headerValue
-        var _res = (new ow.obj.http()).exec(_authApiUrl, _authApiMethod, "", _hdrs, false, _authApiTimeout)
+        // arg 6 only sets the connect timeout; options.timeout is what bounds the whole call, so a
+        // validator that accepts the connection and never replies cannot hang the request thread
+        var _res = (new ow.obj.http()).exec(_authApiUrl, _authApiMethod, "", _hdrs, false, _authApiTimeout, false, { timeout: _authApiTimeout })
         _ok = isMap(_res) && _res.responseCode >= 200 && _res.responseCode < 300
       } catch(e) {
         if (args.debug) logErr("MCP auth API validation error: " + e.message)
         _ok = false
       }
 
-      if (_authApiCacheTTL > 0) _authApiCache[_key] = { ok: _ok, exp: now() + _authApiCacheTTL }
+      _authApiCachePut(_key, _ok)
       return _ok
     }
 
@@ -227,6 +252,110 @@ jobs:
     // Optional per-tool-call audit logging (opt-in; fails closed/off by default; logs via OpenAF's log() function)
     var _auditEnabled = toBoolean(_$(args.audit).default(getEnv("OJOB_MCP_AUDIT") || "false"))
     var _auditServer  = isMap(args.description) && isMap(args.description.serverInfo) ? args.description.serverInfo.name : "mcp"
+
+    // Optional best-effort audit webhooks. Snapshot before scheduling to isolate mutable job args.
+    var _preHookURL = String(getEnv("OJOB_MCP_PREHOOK_URL") || "").trim()
+    var _postHookURL = String(getEnv("OJOB_MCP_POSTHOOK_URL") || "").trim()
+    var _hookIncludeArgs = String(getEnv("OJOB_MCP_HOOK_INCLUDE_ARGS") || "").trim().toLowerCase() === "true"
+    var _hookIncludeResult = String(getEnv("OJOB_MCP_HOOK_INCLUDE_RESULT") || "").trim().toLowerCase() === "true"
+    // Request headers are never attached unless explicitly opted in; the auth credential is stripped either way
+    var _hookIncludeHeaders = String(getEnv("OJOB_MCP_HOOK_INCLUDE_HEADERS") || "").trim().toLowerCase() === "true"
+    var _hookTimeout = Number(getEnv("OJOB_MCP_HOOK_TIMEOUT") || 5000)
+    if (!isFinite(_hookTimeout) || _hookTimeout <= 0) _hookTimeout = 5000
+    // $doV is unbounded (virtual threads), so without a cap a slow/hanging receiver lets every tool call
+    // pile up an outstanding delivery and socket -- deliveries above the cap are dropped, never queued
+    var _hookMaxInFlight = Number(getEnv("OJOB_MCP_HOOK_MAX_INFLIGHT") || 64)
+    if (!isFinite(_hookMaxInFlight) || _hookMaxInFlight <= 0) _hookMaxInFlight = 64
+    // Hard ceiling on a single event body; an oversized event is sent as metadata only
+    var _hookMaxBody = Number(getEnv("OJOB_MCP_HOOK_MAX_BODY") || 65536)
+    if (!isFinite(_hookMaxBody) || _hookMaxBody <= 0) _hookMaxBody = 65536
+    // Optional credential so the receiver can authenticate the events it is sent
+    var _hookAuthToken = String(getEnv("OJOB_MCP_HOOK_AUTH_TOKEN") || "").trim()
+    var _hookAuthHeader = String(getEnv("OJOB_MCP_HOOK_AUTH_HEADER") || "authorization").trim()
+    var _hookAuthScheme = String(getEnv("OJOB_MCP_HOOK_AUTH_SCHEME") || "Bearer").trim()
+    var _hookEnabled = _preHookURL.length > 0 || _postHookURL.length > 0
+    if (_hookEnabled) ow.loadObj()
+    var _hookInFlight = $atomic(0, "long")
+    var _hookFailure = () => { try { logErr("MCP audit webhook delivery failed") } catch(ignore) {} }
+    var _hookDropped = () => { try { logErr("MCP audit webhook dropped (in-flight cap reached)") } catch(ignore) {} }
+    // Copies request headers for the receiver minus the MCP auth credential. Unlike _scrubAuthHeader this
+    // strips case-insensitively and unconditionally, so the secret never leaves the process through a hook.
+    var _hookHeaders = req => {
+      if (!_hookIncludeHeaders || !isMap(req) || !isMap(req.header)) return __
+      var _n = String(isString(args.authheader) && args.authheader.length > 0
+                      ? args.authheader
+                      : (getEnv("OJOB_MCP_AUTH_HEADER") || "authorization")).toLowerCase()
+      var _h = {}
+      Object.keys(req.header).forEach(k => {
+        var _lk = String(k).toLowerCase()
+        if (_lk != _n && _lk != "authorization") _h[k] = req.header[k]
+      })
+      return _h
+    }
+    // Keeps a single event from becoming an arbitrarily large POST on the audit receiver
+    var _hookBody = event => {
+      var _body = stringify(event, __, "")
+      if (isString(_body) && _body.length > _hookMaxBody) {
+        var _trimmed = merge({}, event)
+        delete _trimmed.arguments
+        delete _trimmed.result
+        delete _trimmed.error
+        delete _trimmed.headers
+        _trimmed.truncated = true
+        _body = stringify(_trimmed, __, "")
+      }
+      return _body
+    }
+    var _sendHook = (url, event) => {
+      if (!url) return
+      if (_hookInFlight.inc() > _hookMaxInFlight) { _hookInFlight.dec(); _hookDropped(); return }
+      try {
+        var body = _hookBody(event)
+        var _hdrs = { "Content-Type": "application/json" }
+        if (_hookAuthToken.length > 0) _hdrs[_hookAuthHeader] = (_hookAuthScheme.length > 0 ? _hookAuthScheme + " " : "") + _hookAuthToken
+        $doV(() => {
+          try {
+            var response = (new ow.obj.http()).exec(url, "POST", body,
+              _hdrs, false, _hookTimeout, false, { timeout: _hookTimeout })
+            if (!isMap(response) || response.responseCode < 200 || response.responseCode >= 300) _hookFailure()
+          } catch(e) {
+            _hookFailure()
+          } finally {
+            _hookInFlight.dec()
+          }
+        }, _hookFailure)
+      } catch(e) { _hookInFlight.dec(); _hookFailure() }
+    }
+    var _startHook = (tool, wireTool, toolArgs, client, headers) => {
+      if (!_hookEnabled) return __
+      try {
+        var context = {
+          callId: genUUID(), startedAt: now(), server: args.description.serverInfo,
+          transport: "http", tool: tool, wireTool: wireTool,
+          argumentCount: isMap(toolArgs) ? Object.keys(toolArgs).length : 0
+        }
+        if (_hookIncludeArgs) context.arguments = toolArgs
+        if (isDef(client)) context.client = client
+        if (isDef(headers)) context.headers = headers
+        // Retain an independent snapshot for post-only configurations too.
+        context = JSON.parse(stringify(context, __, ""))
+        _sendHook(_preHookURL, merge(context, { phase: "pre", timestamp: context.startedAt }))
+        return context
+      } catch(e) { _hookFailure(); return __ }
+    }
+    var _endHook = (context, result, error) => {
+      if (isUnDef(context) || !_postHookURL) return
+      try {
+        var finishedAt = now()
+        var event = merge(context, {
+          phase: "post", timestamp: finishedAt, durationMs: finishedAt - context.startedAt,
+          isError: isDef(error) || (isMap(result) && result.isError === true)
+        })
+        if (_hookIncludeResult && isDef(error)) event.error = String(isDef(error.message) ? error.message : error)
+        if (_hookIncludeResult && isDef(result)) event.result = result
+        _sendHook(_postHookURL, event)
+      } catch(e) { _hookFailure() }
+    }
     // Header lookup is case-insensitive: the JDK-backed impl preserves "User-Agent" casing while the default nano-based impl lowercases it
     var _getHeader = (req, name) => {
       if (!isMap(req) || !isMap(req.header)) return __
@@ -235,6 +364,20 @@ jobs:
     }
     // Sanitizes attacker-controlled header values before they reach the audit log (strips CR/LF, caps length)
     var _sanitizeAuditVal = v => isString(v) ? v.replace(/[\r\n]/g, " ").substring(0, 256) : __
+    // Tool arguments are attacker-controlled too, so scrub string leaves and keys before they reach the
+    // log. This copy is for logging only -- the tool job and the audit webhooks still get the raw values.
+    var _sanitizeAuditArgs = (o, d) => {
+      d = isDef(d) ? d : 0
+      if (d > 8) return "..."
+      if (isString(o)) return _sanitizeAuditVal(o)
+      if (isArray(o)) return o.map(v => _sanitizeAuditArgs(v, d + 1))
+      if (isMap(o)) {
+        var _r = {}
+        Object.keys(o).forEach(k => { _r[_sanitizeAuditVal(String(k))] = _sanitizeAuditArgs(o[k], d + 1) })
+        return _r
+      }
+      return o
+    }
     // OpenAF's HTTP server doesn't expose the raw socket's remote address to oJob, only headers -- so the "original"
     // client IP is best-effort and only available when a reverse proxy sets X-Forwarded-For/X-Real-IP
     var _getClientMeta = req => {
@@ -247,7 +390,7 @@ jobs:
     var _auditLog = (toolName, toolArgs, req) => {
       if (!_auditEnabled) return
       var _client = _getClientMeta(req)
-      var _entry = { server: _auditServer, tool: toolName, args: isMap(toolArgs) ? toolArgs : {} }
+      var _entry = { server: _auditServer, tool: _sanitizeAuditVal(String(toolName)), args: isMap(toolArgs) ? _sanitizeAuditArgs(toolArgs) : {} }
       if (isString(_client.ip) && _client.ip.length > 0) _entry.ip = _client.ip
       if (isString(_client.hip) && _client.hip.length > 0) _entry.hip = _client.hip
       if (isString(_client.ua) && _client.ua.length > 0) _entry.ua = _client.ua
@@ -308,14 +451,22 @@ jobs:
                   if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                   var _res
                   var _toolName = _resolveToolName(params.name)
+                  var _known    = _isToolEnabled(_toolName) && isDef(args.fns[_toolName])
+                  // Only a resolved, enabled tool may fire a hook: an unknown name is attacker-controlled
+                  // and unbounded, and must not be turned into a POST on the audit receiver
+                  var _hookContext = (_hookEnabled && _known)
+                    ? _startHook(_toolName, params.name, params.arguments || params.input || {}, _getClientMeta(req), _hookHeaders(req))
+                    : __
                   _auditLog(_toolName, params.arguments || params.input || {}, req)
-                  if (_isToolEnabled(_toolName) && isDef(args.fns[_toolName])) {
+                  if (_known) {
                     try {
                       if (isString(args.fns[_toolName])) {
                         _res = $job(args.fns[_toolName], merge({ _httprequest: _scrubAuthHeader(req) }, params.arguments || params.input || {}))
                         if (isMap(_res)) {
                           delete _res.objId
                           delete _res.execid
+                          // Never echo the request (cookies, api keys, auth header) back to the caller
+                          delete _res._httprequest
                           // Check for _err and treat it as an error
                           if (isDef(_res._err)) {
                             var errMsg = _res._err
@@ -375,6 +526,7 @@ jobs:
                   }
                   } catch(eee) { $err(eee) }
 
+                  _endHook(_hookContext, _res)
                   if (args.debug) log(`tools/call -- response: ${af.toCSLON(_res)}`)
                   return _res
               },
@@ -473,14 +625,22 @@ jobs:
                 if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                 var _res
                 var _toolName = _resolveToolName(params.name)
+                var _known    = _isToolEnabled(_toolName) && isDef(args.fns[_toolName])
+                // Only a resolved, enabled tool may fire a hook: an unknown name is attacker-controlled
+                // and unbounded, and must not be turned into a POST on the audit receiver
+                var _hookContext = (_hookEnabled && _known)
+                  ? _startHook(_toolName, params.name, params.arguments || params.input || {}, _getClientMeta(req), _hookHeaders(req))
+                  : __
                 _auditLog(_toolName, params.arguments || params.input || {}, req)
-                if (_isToolEnabled(_toolName) && isDef(args.fns[_toolName])) {
+                if (_known) {
                   try {
                     if (isString(args.fns[_toolName])) {
                       _res = $job(args.fns[_toolName], merge({ _httprequest: _scrubAuthHeader(req) }, params.arguments || params.input || {}))
                       if (isMap(_res)) {
                         delete _res.objId
                         delete _res.execid
+                        // Never echo the request (cookies, api keys, auth header) back to the caller
+                        delete _res._httprequest
                         // Check for _err and treat it as an error
                         if (isDef(_res._err)) {
                           var errMsg = _res._err
@@ -540,6 +700,7 @@ jobs:
                 }
                 } catch(eee) { $err(eee) }
 
+                _endHook(_hookContext, _res)
                 if (args.debug) log(`tools/call -- response: ${af.toCSLON(_res)}`)
                 return _res
             },
@@ -673,9 +834,129 @@ jobs:
     // Optional per-tool-call audit logging (opt-in; fails closed/off by default; logs via OpenAF's log() function)
     var _auditEnabled = toBoolean(_$(args.audit).default(getEnv("OJOB_MCP_AUDIT") || "false"))
     var _auditServer  = isMap(args.description) && isMap(args.description.serverInfo) ? args.description.serverInfo.name : "mcp"
+    // Sanitizes attacker-controlled values before they reach the audit log (strips CR/LF, caps length)
+    var _sanitizeAuditVal = v => isString(v) ? v.replace(/[\r\n]/g, " ").substring(0, 256) : __
+    // Tool arguments are attacker-controlled too, so scrub string leaves and keys before they reach the
+    // log. This copy is for logging only -- the tool job and the audit webhooks still get the raw values.
+    var _sanitizeAuditArgs = (o, d) => {
+      d = isDef(d) ? d : 0
+      if (d > 8) return "..."
+      if (isString(o)) return _sanitizeAuditVal(o)
+      if (isArray(o)) return o.map(v => _sanitizeAuditArgs(v, d + 1))
+      if (isMap(o)) {
+        var _r = {}
+        Object.keys(o).forEach(k => { _r[_sanitizeAuditVal(String(k))] = _sanitizeAuditArgs(o[k], d + 1) })
+        return _r
+      }
+      return o
+    }
+
+    // Optional best-effort audit webhooks. Snapshot before scheduling to isolate mutable job args.
+    var _preHookURL = String(getEnv("OJOB_MCP_PREHOOK_URL") || "").trim()
+    var _postHookURL = String(getEnv("OJOB_MCP_POSTHOOK_URL") || "").trim()
+    var _hookIncludeArgs = String(getEnv("OJOB_MCP_HOOK_INCLUDE_ARGS") || "").trim().toLowerCase() === "true"
+    var _hookIncludeResult = String(getEnv("OJOB_MCP_HOOK_INCLUDE_RESULT") || "").trim().toLowerCase() === "true"
+    // Request headers are never attached unless explicitly opted in; the auth credential is stripped either way
+    var _hookIncludeHeaders = String(getEnv("OJOB_MCP_HOOK_INCLUDE_HEADERS") || "").trim().toLowerCase() === "true"
+    var _hookTimeout = Number(getEnv("OJOB_MCP_HOOK_TIMEOUT") || 5000)
+    if (!isFinite(_hookTimeout) || _hookTimeout <= 0) _hookTimeout = 5000
+    // $doV is unbounded (virtual threads), so without a cap a slow/hanging receiver lets every tool call
+    // pile up an outstanding delivery and socket -- deliveries above the cap are dropped, never queued
+    var _hookMaxInFlight = Number(getEnv("OJOB_MCP_HOOK_MAX_INFLIGHT") || 64)
+    if (!isFinite(_hookMaxInFlight) || _hookMaxInFlight <= 0) _hookMaxInFlight = 64
+    // Hard ceiling on a single event body; an oversized event is sent as metadata only
+    var _hookMaxBody = Number(getEnv("OJOB_MCP_HOOK_MAX_BODY") || 65536)
+    if (!isFinite(_hookMaxBody) || _hookMaxBody <= 0) _hookMaxBody = 65536
+    // Optional credential so the receiver can authenticate the events it is sent
+    var _hookAuthToken = String(getEnv("OJOB_MCP_HOOK_AUTH_TOKEN") || "").trim()
+    var _hookAuthHeader = String(getEnv("OJOB_MCP_HOOK_AUTH_HEADER") || "authorization").trim()
+    var _hookAuthScheme = String(getEnv("OJOB_MCP_HOOK_AUTH_SCHEME") || "Bearer").trim()
+    var _hookEnabled = _preHookURL.length > 0 || _postHookURL.length > 0
+    if (_hookEnabled) ow.loadObj()
+    var _hookInFlight = $atomic(0, "long")
+    var _hookFailure = () => { try { logErr("MCP audit webhook delivery failed") } catch(ignore) {} }
+    var _hookDropped = () => { try { logErr("MCP audit webhook dropped (in-flight cap reached)") } catch(ignore) {} }
+    // Copies request headers for the receiver minus the MCP auth credential. Unlike _scrubAuthHeader this
+    // strips case-insensitively and unconditionally, so the secret never leaves the process through a hook.
+    var _hookHeaders = req => {
+      if (!_hookIncludeHeaders || !isMap(req) || !isMap(req.header)) return __
+      var _n = String(isString(args.authheader) && args.authheader.length > 0
+                      ? args.authheader
+                      : (getEnv("OJOB_MCP_AUTH_HEADER") || "authorization")).toLowerCase()
+      var _h = {}
+      Object.keys(req.header).forEach(k => {
+        var _lk = String(k).toLowerCase()
+        if (_lk != _n && _lk != "authorization") _h[k] = req.header[k]
+      })
+      return _h
+    }
+    // Keeps a single event from becoming an arbitrarily large POST on the audit receiver
+    var _hookBody = event => {
+      var _body = stringify(event, __, "")
+      if (isString(_body) && _body.length > _hookMaxBody) {
+        var _trimmed = merge({}, event)
+        delete _trimmed.arguments
+        delete _trimmed.result
+        delete _trimmed.error
+        delete _trimmed.headers
+        _trimmed.truncated = true
+        _body = stringify(_trimmed, __, "")
+      }
+      return _body
+    }
+    var _sendHook = (url, event) => {
+      if (!url) return
+      if (_hookInFlight.inc() > _hookMaxInFlight) { _hookInFlight.dec(); _hookDropped(); return }
+      try {
+        var body = _hookBody(event)
+        var _hdrs = { "Content-Type": "application/json" }
+        if (_hookAuthToken.length > 0) _hdrs[_hookAuthHeader] = (_hookAuthScheme.length > 0 ? _hookAuthScheme + " " : "") + _hookAuthToken
+        $doV(() => {
+          try {
+            var response = (new ow.obj.http()).exec(url, "POST", body,
+              _hdrs, false, _hookTimeout, false, { timeout: _hookTimeout })
+            if (!isMap(response) || response.responseCode < 200 || response.responseCode >= 300) _hookFailure()
+          } catch(e) {
+            _hookFailure()
+          } finally {
+            _hookInFlight.dec()
+          }
+        }, _hookFailure)
+      } catch(e) { _hookInFlight.dec(); _hookFailure() }
+    }
+    var _startHook = (tool, wireTool, toolArgs, client, headers) => {
+      if (!_hookEnabled) return __
+      try {
+        var context = {
+          callId: genUUID(), startedAt: now(), server: args.description.serverInfo,
+          transport: "stdio", tool: tool, wireTool: wireTool,
+          argumentCount: isMap(toolArgs) ? Object.keys(toolArgs).length : 0
+        }
+        if (_hookIncludeArgs) context.arguments = toolArgs
+        if (isDef(client)) context.client = client
+        if (isDef(headers)) context.headers = headers
+        // Retain an independent snapshot for post-only configurations too.
+        context = JSON.parse(stringify(context, __, ""))
+        _sendHook(_preHookURL, merge(context, { phase: "pre", timestamp: context.startedAt }))
+        return context
+      } catch(e) { _hookFailure(); return __ }
+    }
+    var _endHook = (context, result, error) => {
+      if (isUnDef(context) || !_postHookURL) return
+      try {
+        var finishedAt = now()
+        var event = merge(context, {
+          phase: "post", timestamp: finishedAt, durationMs: finishedAt - context.startedAt,
+          isError: isDef(error) || (isMap(result) && result.isError === true)
+        })
+        if (_hookIncludeResult && isDef(error)) event.error = String(isDef(error.message) ? error.message : error)
+        if (_hookIncludeResult && isDef(result)) event.result = result
+        _sendHook(_postHookURL, event)
+      } catch(e) { _hookFailure() }
+    }
     var _auditLog = (toolName, toolArgs) => {
       if (!_auditEnabled) return
-      log("[audit] " + af.toSLON({ server: _auditServer, tool: toolName, args: isMap(toolArgs) ? toolArgs : {} }))
+      log("[audit] " + af.toSLON({ server: _auditServer, tool: _sanitizeAuditVal(String(toolName)), args: isMap(toolArgs) ? _sanitizeAuditArgs(toolArgs) : {} }))
     }
 
     var fs = {}
@@ -709,19 +990,26 @@ jobs:
       var _toolName = _prefixToolName(f)
       fs[_toolName] = function(params) {
         var _jobName = _resolveToolName(_toolName)
-        _auditLog(_jobName, params)
-        var _r = $job(args.fns[_jobName], params)
-        if (isMap(_r)) {
-          delete _r.objId
-          delete _r.execid
-          // Check for _err and treat it as an error
-          if (isDef(_r._err)) {
-            var errMsg = _r._err
-            delete _r._err
-            throw String(errMsg)
+        var _hookContext = _startHook(_jobName, _toolName, params)
+        try {
+          _auditLog(_jobName, params)
+          var _r = $job(args.fns[_jobName], params)
+          if (isMap(_r)) {
+            delete _r.objId
+            delete _r.execid
+            // Check for _err and treat it as an error
+            if (isDef(_r._err)) {
+              var errMsg = _r._err
+              delete _r._err
+              throw String(errMsg)
+            }
           }
+          _endHook(_hookContext, _r)
+          return _r
+        } catch(e) {
+          _endHook(_hookContext, __, e)
+          throw e
         }
-        return _r
       }
     })
 
