@@ -275,6 +275,23 @@ jobs:
     var _hookAuthScheme = String(getEnv("OJOB_MCP_HOOK_AUTH_SCHEME") || "Bearer").trim()
     var _hookEnabled = _preHookURL.length > 0 || _postHookURL.length > 0
     if (_hookEnabled) ow.loadObj()
+    // Pre/post hook env vars silently change default behavior (outbound webhooks on every tool call) -- always
+    // announce them at startup, regardless of debug. The shared secret, if any, is redacted (presence only).
+    if (_hookEnabled) {
+      log("[mcp-hooks] info: pre/post hook variables detected, changing default behavior -- " + af.toSLON({
+        preHookURL    : _preHookURL.length > 0 ? _preHookURL : "not set",
+        postHookURL   : _postHookURL.length > 0 ? _postHookURL : "not set",
+        includeArgs   : _hookIncludeArgs,
+        includeResult : _hookIncludeResult,
+        includeHeaders: _hookIncludeHeaders,
+        timeoutMs     : _hookTimeout,
+        maxInFlight   : _hookMaxInFlight,
+        maxBodyBytes  : _hookMaxBody,
+        authHeader    : _hookAuthHeader,
+        authScheme    : _hookAuthScheme,
+        authToken     : _hookAuthToken.length > 0 ? "<redacted>" : "not set"
+      }))
+    }
     var _hookInFlight = $atomic(0, "long")
     var _hookFailure = () => { try { logErr("MCP audit webhook delivery failed") } catch(ignore) {} }
     var _hookDropped = () => { try { logErr("MCP audit webhook dropped (in-flight cap reached)") } catch(ignore) {} }
@@ -873,6 +890,23 @@ jobs:
     var _hookAuthScheme = String(getEnv("OJOB_MCP_HOOK_AUTH_SCHEME") || "Bearer").trim()
     var _hookEnabled = _preHookURL.length > 0 || _postHookURL.length > 0
     if (_hookEnabled) ow.loadObj()
+    // Pre/post hook env vars silently change default behavior (outbound webhooks on every tool call) -- always
+    // announce them at startup, regardless of debug. The shared secret, if any, is redacted (presence only).
+    if (_hookEnabled) {
+      log("[mcp-hooks] info: pre/post hook variables detected, changing default behavior -- " + af.toSLON({
+        preHookURL    : _preHookURL.length > 0 ? _preHookURL : "not set",
+        postHookURL   : _postHookURL.length > 0 ? _postHookURL : "not set",
+        includeArgs   : _hookIncludeArgs,
+        includeResult : _hookIncludeResult,
+        includeHeaders: _hookIncludeHeaders,
+        timeoutMs     : _hookTimeout,
+        maxInFlight   : _hookMaxInFlight,
+        maxBodyBytes  : _hookMaxBody,
+        authHeader    : _hookAuthHeader,
+        authScheme    : _hookAuthScheme,
+        authToken     : _hookAuthToken.length > 0 ? "<redacted>" : "not set"
+      }))
+    }
     var _hookInFlight = $atomic(0, "long")
     var _hookFailure = () => { try { logErr("MCP audit webhook delivery failed") } catch(ignore) {} }
     var _hookDropped = () => { try { logErr("MCP audit webhook dropped (in-flight cap reached)") } catch(ignore) {} }
