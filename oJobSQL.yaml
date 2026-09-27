@@ -124,6 +124,7 @@ jobs:
       } catch(e) {
         _met.error       = _$(_met.error).isNumber().default(0) + 1
         _met.exception   = String(e)
+        throw e
       } finally {
         if (isDef(args.metric)) {
           _met.id          = args.metric
@@ -131,8 +132,6 @@ jobs:
           ow.oJob.setMetric(args.metric, _met)
         }
       }
-
-      if (isDef(_met.exception)) throw _met.exception
 
   # ---------------
   - name: SQL Batch
@@ -213,4 +212,3 @@ jobs:
       
       var _s = new AF(args.raidURL);
       args._db = getRAIDDB(_s, args.raidDB, args.raidDBURL, args.raidDBPass, args.raidUseCIR);
-

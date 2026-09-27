@@ -1250,7 +1250,9 @@ Finds and replaces text in a file using regular expressions.
 | flags | String | No | Optional regular expression flags for search |
 | replace | String | Yes | The replace text |
 | separator | String | No | Separator (defaults to '\n') |
-| byline | Boolean | No | Load entire file vs. line by line (defaults to true) |
+| byline | Boolean | No | Replace line by line when true; load the whole file when false (defaults to true) |
+
+Line-by-line replacement applies `flags` to each line and writes to a temporary file beside the target. The target is replaced only after processing and stream closure succeed; failures remove the temporary file and leave the original intact.
 
 ### IO MV File
 

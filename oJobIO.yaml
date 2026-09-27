@@ -29,7 +29,7 @@ jobs:
         - flags      (String)   Optional regular expression flags for search.
         - replace    (String)   The replace text.
         - separator  (String)   Optional specify a different separator than '\n'.
-        - byline     (Boolean)  If true will load the file to memory as a all and changed it, if false will replace line by line (defaults to true).
+        - byline     (Boolean)  If true replaces line by line; if false loads and replaces the whole file (defaults to true).
     exec: |
       _$(args.target).isString().$_("A target needs to be provided.");
       _$(args.search).isString().$_("A search regexp needs to be provided.");
@@ -37,21 +37,30 @@ jobs:
       args.flags     = _$(args.flags).isString().default("");
       args.separator = _$(args.separator).isString().default("\n");
       args.byline    = _$(args.byline).isBoolean().default(true);
+      var regexp = new RegExp(args.search, args.flags);
 
       if (!args.byline) {
         var iss = io.readFileString(args.target);
-        iss = iss.replace(new RegExp(args.search, args.flags), args.replace);
+        iss = iss.replace(regexp, args.replace);
         io.writeFileString(args.target, iss);
       } else {
-        var is = io.readFileStream(args.target);
-        var os = io.writeFileStream("tmp_" + args.target + ".tmp");
-        ioStreamReadLines(is, (line) => {
-          line += args.separator;
-          ioStreamWrite(os, String(line).replace(new RegExp(args.search, args.flag), args.replace), line.length, false);
-        }, args.separator, false);
-        is.close();
-        os.close();
-        io.mv("tmp_" + args.target + ".tmp", args.target);
+        var parent = String(new java.io.File(io.getCanonicalPath(args.target)).getParent());
+        var temp = io.createTempFile("ojob-replace-", ".tmp", parent);
+        try {
+          var is = io.readFileStream(args.target);
+          try {
+            var os = io.writeFileStream(temp);
+            try {
+              ioStreamReadLines(is, (line) => {
+                line += args.separator;
+                ioStreamWrite(os, String(line).replace(regexp, args.replace), void 0, true);
+              }, args.separator, false);
+            } finally { os.close(); }
+          } finally { is.close(); }
+          io.mv(temp, args.target);
+        } finally {
+          if (io.fileExists(temp)) io.rm(temp);
+        }
       }
       
   ##################
@@ -189,5 +198,4 @@ jobs:
           io.writeFileString(args.file, args.replace, void 0, true); 
           break;
         }
-
 
