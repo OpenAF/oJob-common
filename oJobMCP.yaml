@@ -736,6 +736,29 @@ jobs:
       }
     }
 
+    // Accept the client lifecycle notifications before dispatch: older OpenAF JSON-RPC dispatchers
+    // reject roots/list_changed as an unknown method. These are no-ops here (no client roots cache
+    // or cancellable request registry), and Streamable HTTP requires an empty 202 acknowledgement.
+    // Keep this opt-in, including for legacy-handshake clients connecting with modern=true.
+    if (args.modern) {
+      var _notificationInnerFn = fns[args.uri]
+      fns[args.uri] = req => {
+        if (req.method == "POST") {
+          var _body = (isDef(req.files) && isDef(req.files.postData)) ? req.files.postData : req.data
+          var _notification
+          try { _notification = jsonParse(_body) } catch(ignore) {}
+          if (isMap(_notification) && _notification.jsonrpc === "2.0" &&
+              !Object.prototype.hasOwnProperty.call(_notification, "id") &&
+              (!Object.prototype.hasOwnProperty.call(_notification, "params") || isMap(_notification.params)) &&
+              ["notifications/initialized", "notifications/cancelled", "notifications/roots/list_changed"].indexOf(_notification.method) >= 0) {
+            if (args.debug) log("Notification received: " + _notification.method)
+            return { data: "", mimetype: "text/plain", status: 202, header: {} }
+          }
+        }
+        return _notificationInnerFn(req)
+      }
+    }
+
     // Wraps the MCP endpoint with a bearer-token check when auth is configured; no-op otherwise
     if (_authEnabled) {
       var _innerFn = fns[args.uri]
