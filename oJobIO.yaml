@@ -134,68 +134,34 @@ jobs:
         - find    (String) The string to find
         - replace (String) The string to replace
     exec: |
-      _$(args.file, "file").$_();
-      _$(args.find, "find").$_();
+      _$(args.file, "file").isString().$_();
+      _$(args.find, "find").isString().$_();
+      _$(args.replace, "replace").isString().$_();
 
-      args.op = "check";
+      args.found = false;
+      args.target = 0;
       if (!io.fileExists(args.file)) {
-         args.op = "create";
+        args.op = "create";
+        io.writeFileString(args.file, args.replace);
       } else {
-         args.op = "append";
-         var lst = args.find.split(/\n/); lst.pop();
-         var found = false, pfound = false, ptarget = lst.length, target = 0;
-       
-         var stream = io.readFileStream(args.file);
-         ioStreamReadLines(stream, line => {
-            if (line == lst[lst.length - ptarget]) {
-              ptarget--;
-              pfound = true;
-            } else {
-              pfound = false; 
-              ptarget = lst.length;
-            }
+        var source = io.readFileString(args.file);
+        var position = source.indexOf(args.find);
+        args.found = position >= 0;
+        args.op = args.found ? "replace" : "append";
+        args.target = source.substring(0, args.found ? position : source.length).split("\n").length - 1;
 
-            if (pfound && ptarget <= 0) {
-               found = true;
-               args.op = "replace";
-               target = target - (lst.length -1);
-               return true;
-            } 
-            target++;
-         });
-         args.found = found;
-         args.target = target;
-      } 
-
-      switch(args.op) {
-        case "create" : 
-          io.writeFileString(args.file, args.replace);
-          break;
-        case "replace" : 
-          var ft = io.createTempFile("tmp_" + nowNano() + ".txt");
-          var wstream = io.writeFileStream(ft);
-          var rstream = io.readFileStream(args.file);
-          var cline = 0, cignore = false, csource = args.find.split(/\n/).length -1;
-          ioStreamReadLines(rstream, line => {
-             if (!cignore && cline == args.target) { 
-                ioStreamWrite(wstream, args.replace); 
-                cline++;
-                csource--;
-                if (csource > 0) cignore = true;
-             } else {
-                if (!cignore) {
-                   ioStreamWrite(wstream, line + "\n"); 
-                   cline++;
-                } else {
-                   csource--;
-                   if (csource <= 0) { cignore = false; };
-                }
-             }
-          });
-          io.mv(ft, args.file);
-          break;
-        case "append":
-          io.writeFileString(args.file, args.replace, void 0, true); 
-          break;
+        if (args.found) {
+          // Slice explicitly so replacement text such as "$&" stays literal.
+          var result = source.substring(0, position) + args.replace + source.substring(position + args.find.length);
+          var parent = String(new java.io.File(io.getCanonicalPath(args.file)).getParent());
+          var temp = io.createTempFile("ojob-modify-", ".tmp", parent);
+          try {
+            io.writeFileString(temp, result);
+            io.mv(temp, args.file);
+          } finally {
+            if (io.fileExists(temp)) io.rm(temp);
+          }
+        } else {
+          io.writeFileString(args.file, args.replace, void 0, true);
         }
-
+      }

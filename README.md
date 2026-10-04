@@ -1302,7 +1302,7 @@ List filenames from a local filepath to args.files array.
 
 ### IO Modify text file
 
-Finds and replaces text in a configuration file (exact match, not regex).
+Replaces the first exact occurrence of `find` in a configuration file, preserving surrounding text and line endings. Both `find` and `replace` are literal strings and may span multiple lines; no trailing newline is required. If no match exists, appends `replace`; if the file is missing, creates it. Replacement is staged in a temporary file before updating the original.
 
 | Argument | Type | Mandatory | Description |
 |----------|------|-----------|-------------|

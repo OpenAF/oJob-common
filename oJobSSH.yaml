@@ -59,7 +59,7 @@ jobs:
     exec        : >
       plugin("SSH");
       var iio = !args.quiet;
-      if (isUnDef(args.host) && isUnDef(args.chHosts) && $ch().list().indexOf("hosts")) args.chHosts = "hosts";
+      if (isUnDef(args.host) && isUnDef(args.chHosts) && $ch().list().indexOf("hosts") >= 0) args.chHosts = "hosts";
       if (isUnDef(args.parallel)) args.parallel = false;
       if (args.prefix && !args.quiet) {
         iio = false;
@@ -88,29 +88,32 @@ jobs:
             if (isUnDef(args.exitcode)) args.exitcode = 0;
 
             var s = new SSH(r.host, r.port, r.login, r.pass, r.key, true);
-            if (iio) log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "]");
-            if (isArray(args.cmd)) {
-               for(var i in args.cmd) {
+            try {
+              if (iio) log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "]");
+              if (isArray(args.cmd)) {
+                 for(var i in args.cmd) {
+                   var res;
+                   if (!args.sudo)
+                      res = s.exec(templify(args.cmd[i], args), args.stdin, iio, void 0, true, cmdf);
+                   else
+                      res = s.execSudo(templify(args.cmd[i], args), args.sudo, args.stdin, iio, void 0, true, cmdf);
+                   args.stdout += res.stdout;
+                   args.stderr += res.stderr;
+                   if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
+                 }
+              } else {
                  var res;
-                 if (!args.sudo) 
-                    res = s.exec(templify(args.cmd[i], args), args.stdin, iio, void 0, true, cmdf);
+                 if (!args.sudo)
+                    res = s.exec(templify(args.cmd, args), args.stdin, iio, void 0, true, cmdf);
                  else
-                    res = s.execSudo(templify(args.cmd[i], args), args.sudo, args.stdin, iio, void 0, true, cmdf);
+                    res = s.execSudo(templify(args.cmd, args), args.sudo, args.stdin, iio, void 0, true, cmdf);
                  args.stdout += res.stdout;
                  args.stderr += res.stderr;
-                 if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
-               }
-            } else {
-               var res;
-               if (!args.sudo)
-                  res = s.exec(templify(args.cmd, args), args.stdin, iio, void 0, true, cmdf);
-               else
-                  res = s.execSudo(templify(args.cmd, args), args.sudo, args.stdin, iio, void 0, true, cmdf);
-               args.stdout += res.stdout;
-               args.stderr += res.stderr;
-               if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd + "'): " + res.exitcode;               
+                 if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd + "'): " + res.exitcode;
+              }
+            } finally {
+              s.close();
             }
-            s.close();
          }
          if (args.parallel) 
           $from($ch(args.chHosts).getAll()).pselect(tfunc);
@@ -131,32 +134,35 @@ jobs:
         if (isUnDef(args.exitcode)) args.exitcode = 0;
 
         var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
-        if (iio) log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "]");
-        args.stdout = "";
-        args.stderr = "";
+        try {
+          if (iio) log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "]");
+          args.stdout = "";
+          args.stderr = "";
 
-        if (isArray(args.cmd)) {
-          for (var i in args.cmd) {
+          if (isArray(args.cmd)) {
+            for (var i in args.cmd) {
+              var res;
+              if (!args.sudo)
+                res = s.exec(templify(args.cmd[i], args), args.stdin, iio, void 0, true, cmdf);
+              else
+                res = s.execSudo(templify(args.cmd[i], args), args.sudo, args.stdin, iio, void 0, true, cmdf);
+              args.stdout += res.stdout;
+              args.stderr += res.stderr;
+              if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
+            }
+          } else {
             var res;
-            if (!args.sudo) 
-              res = s.exec(templify(args.cmd[i], args), args.stdin, iio, void 0, true, cmdf);
+            if (!args.sudo)
+              res = s.exec(templify(args.cmd, args), args.stdin, iio, void 0, true, cmdf);
             else
-              res = s.execSudo(templify(args.cmd[i], args), args.sudo, args.stdin, iio, void 0, true, cmdf);
+              res = s.execSudo(templify(args.cmd, args), args.sudo, args.stdin, iio, void 0, true, cmdf);
             args.stdout += res.stdout;
             args.stderr += res.stderr;
-            if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd[i] + "'): " + res.exitcode;
+            if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd + "'): " + res.exitcode;
           }
-        } else {
-          var res;
-          if (!args.sudo)
-            res = s.exec(templify(args.cmd, args), args.stdin, iio, void 0, true, cmdf);
-          else
-            res = s.execSudo(templify(args.cmd, args), args.sudo, args.stdin, iio, void 0, true, cmdf); 
-          args.stdout += res.stdout;
-          args.stderr += res.stderr;
-          if (String(res.exitcode) != String(args.exitcode)) throw "Exit code (for command '" + args.cmd + "'): " + res.exitcode;
+        } finally {
+          s.close();
         }
-        s.close();
       }
 
   # Copies files over SSH
@@ -173,24 +179,30 @@ jobs:
         - args.key      (String)   The path to a SSH key file
     exec        : >
       plugin("SSH");
-      if (isUnDef(args.host) && isUnDef(args.chHosts) && $ch().list().indexOf("hosts")) args.chHosts = "hosts";
+      if (isUnDef(args.host) && isUnDef(args.chHosts) && $ch().list().indexOf("hosts") >= 0) args.chHosts = "hosts";
 
       if (isDef(args.chHosts)) {
          $from($ch(args.chHosts).getAll()).select(function(r) {
             if (isUnDef(r.port)) r.port = 22;
 
             var s = new SSH(r.host, r.port, r.login, r.pass, r.key, true);
-            log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "] Copying '" + args.source + "' to '" + args.target + "'");
-            s.put(args.source, args.target);
-            s.close();
+            try {
+              log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "] Copying '" + args.source + "' to '" + args.target + "'");
+              s.put(args.source, args.target);
+            } finally {
+              s.close();
+            }
          })
       } else {
         if (isUnDef(args.port)) args.port = 22;
 
         var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
-        log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "] Copying '" + args.source + "' to '" + args.target + "'");
-        s.put(args.source, args.target);
-        s.close();
+        try {
+          log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "] Copying '" + args.source + "' to '" + args.target + "'");
+          s.put(args.source, args.target);
+        } finally {
+          s.close();
+        }
       }
 
   # Retrieves remote files over SSH
@@ -207,22 +219,28 @@ jobs:
         - args.key      (String)   The path to a SSH key file
     exec        : >
       plugin("SSH");
-      if (isUnDef(args.host) && isUnDef(args.chHosts) && $ch().list().indexOf("hosts")) args.chHosts = "hosts";
+      if (isUnDef(args.host) && isUnDef(args.chHosts) && $ch().list().indexOf("hosts") >= 0) args.chHosts = "hosts";
 
       if (isDef(args.chHosts)) {
          $from($ch(args.chHosts).getAll()).select(function(r) {
             if (isUnDef(r.port)) r.port = 22;
 
             var s = new SSH(r.host, r.port, r.login, r.pass, r.key, true);
-            log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "] Getting '" + args.source + "' to '" + args.target + "'");
-            s.get(args.source, args.target);
-            s.close();
+            try {
+              log("[" + (isDef(r.name) ? r.name : r.host + ":" + r.port) + "] Getting '" + args.source + "' to '" + args.target + "'");
+              s.get(args.source, args.target);
+            } finally {
+              s.close();
+            }
          })
       } else {
         if (isUnDef(args.port)) args.port = 22;
 
         var s = new SSH(args.host, args.port, args.login, args.pass, args.key, true);
-        log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "] Getting '" + args.source + "' to '" + args.target + "'");
-        s.get(args.source, args.target);
-        s.close();
+        try {
+          log("[" + (isDef(args.name) ? args.name : args.host + ":" + args.port) + "] Getting '" + args.source + "' to '" + args.target + "'");
+          s.get(args.source, args.target);
+        } finally {
+          s.close();
+        }
       }      
