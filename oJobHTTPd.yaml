@@ -356,6 +356,7 @@ jobs:
         path       : path
         healthz    : healthz
         openmetrics: openmetrics
+        openMetricsStrict: openMetricsStrict
   help :
    text: Adds a healthz URI
    expects:
@@ -367,13 +368,18 @@ jobs:
      desc: A custom function to return the /healthz result (defaults to ow.metrics.getAll with status 200 or "error" with status 500 if an exception is thrown)
    - name: openmetrics
      desc: If openmetrics = true the output will be in openmetrics/prometheus instead of json
+   - name: openMetricsStrict
+     desc: Strict OpenMetrics 1.0 output (default true); false selects legacy output. Requires the OpenAF strict formatter.
   exec: | #js
       ow.loadMetrics()
       args.port    = _$(args.port).isNumber().default(8091)
       args.uri     = _$(args.uri).isString().default("/healthz")
 
+      args.openMetricsStrict = _$(args.openMetricsStrict).isBoolean().default(true);
+      if (args.openmetrics && args.openMetricsStrict && !isString(args.healthz) && !isFunction(ow.metrics._fromObj2OpenMetricsStrict))
+        throw new Error("Strict OpenMetrics requires an OpenAF runtime with strict formatter support; use openMetricsStrict: false for legacy output.");
       var s1 = " try { return ow.server.httpd.reply(ow.metrics.getAll()); } catch(e) { return ow.server.httpd.reply(\"error\", 500, void 0, {}); } "
-      var s2 = " try { return ow.metrics.fromObj2OpenMetrics(ow.metrics.getAll()); } catch(e) { return ow.server.httpd.reply(\"error\", 500, void 0, {}); } "
+      var s2 = "try { var rrr = server.reply(ow.metrics.fromObj2OpenMetrics(ow.metrics.getAll(), void 0, void 0, void 0, void 0, " + args.openMetricsStrict + "), \"" + (args.openMetricsStrict ? "application/openmetrics-text; version=1.0.0; charset=utf-8" : "text/plain; version=0.0.4; charset=utf-8") + "\", 200, {}); rrr.data = String(rrr.data); return rrr; } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; }";
       args.healthz = _$(args.healthz).isString().default(args.openmetrics ? s2 : s1)
       args.execURI = args.healthz
 
@@ -391,7 +397,8 @@ jobs:
         uri    : uri
         metrics: metrics
         prefix : prefix
-        helpmap: helpmap 
+        helpmap: helpmap
+        openMetricsStrict: openMetricsStrict
   help :
    text: Adds a metrics URI with a OpenMetrics/Prometheus output
    expects:
@@ -405,12 +412,17 @@ jobs:
      desc: OpenMetrics/Prometheus metrics' name prefix
    - name: helpmap
      desc: OpenMetrics/Prometheus metrics' help map (see help ow.metrics.fromObj2OpenMetrics)
+   - name: openMetricsStrict
+     desc: Strict OpenMetrics 1.0 output (default true); false selects legacy output. Requires the OpenAF strict formatter.
   exec : | #js
     ow.loadMetrics()
     args.port    = _$(args.port).isNumber().default(8091)
     args.uri     = _$(args.uri).isString().default("/metrics")
     
-    args.metrics = _$(args.metrics).isString().default("try { var rrr = ow.server.httpd.reply(ow.metrics.fromObj2OpenMetrics((isDef(request.params.s) ? ow.metrics.getSome(request.params.s.split(\",\")) : ow.metrics.getAll()), " + stringify(args.prefix) + ", now(), " + stringify(args.helpmap,__,'') + ")); rrr.data = String(rrr.data); return rrr; } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; } ")
+    args.openMetricsStrict = _$(args.openMetricsStrict).isBoolean().default(true);
+    if (args.openMetricsStrict && !isString(args.metrics) && !isFunction(ow.metrics._fromObj2OpenMetricsStrict))
+      throw new Error("Strict OpenMetrics requires an OpenAF runtime with strict formatter support; use openMetricsStrict: false for legacy output.");
+    args.metrics = _$(args.metrics).isString().default("try { var rrr = server.reply(ow.metrics.fromObj2OpenMetrics((isDef(request.params) && isDef(request.params.s) ? ow.metrics.getSome(request.params.s.split(\",\")) : ow.metrics.getAll()), " + stringify(args.prefix) + ", " + (args.openMetricsStrict ? "void 0" : "now()") + ", " + stringify(args.helpmap, __, "") + ", void 0, " + args.openMetricsStrict + "), \"" + (args.openMetricsStrict ? "application/openmetrics-text; version=1.0.0; charset=utf-8" : "text/plain; version=0.0.4; charset=utf-8") + "\", 200, {}); rrr.data = String(rrr.data); return rrr; } catch(e) { logErr(e); return { data: \"error\", status: 500, mimetype: \"text/plain\" }; }");
     args.execURI = args.metrics
 
 # ----------------------

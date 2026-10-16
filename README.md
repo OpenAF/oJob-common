@@ -1485,6 +1485,22 @@ jobs:
 
 ### oJobHTTPd.yaml
 
+`HTTP Metrics` and `REST Metrics` default to strict OpenMetrics 1.0 text with
+`application/openmetrics-text; version=1.0.0; charset=utf-8`, grouped metadata,
+and a final `# EOF` line. Scrape timestamps are omitted. `HTTP Healthz` and
+`REST Healthz` use the same strict format when `openmetrics: true`.
+
+Strict mode requires an OpenAF runtime providing the sixth `aStrict` argument of
+`ow.metrics.fromObj2OpenMetrics`. It supports scalar unknown, gauge and counter
+families; structured types are rejected by the formatter. Set
+`openMetricsStrict: false` on these jobs (or `((openMetricsStrict)): false` on
+the HTTP shortcuts) for legacy output, including compatibility with older OpenAF
+runtimes. Custom `metrics` and `healthz` handler code keeps control of its response.
+The JSON health response remains the default when `openmetrics` is omitted.
+Run `openaf -f tests/openmetrics.js` from this checkout with the updated runtime
+to check the default handlers across all three HTTP backends.
+
+
 ```yaml
 todo:
 # Starts the server
