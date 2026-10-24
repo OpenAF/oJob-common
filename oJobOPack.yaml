@@ -23,32 +23,70 @@ jobs:
 
        if (getVersion() < 20171106) logWarn("It's advisable to use an OpenAF version equal or greater than 20171106.");
 
-       io.rm(args.tmpDir);
-       io.mkdir(args.tmpDir);
+       var ownedSource = isUnDef(args.filePath);
+       if (ownedSource) {
+         io.rm(args.tmpDir);
+         io.mkdir(args.tmpDir);
+       } else {
+         args.tmpDir = args.filePath;
+       }
        io.mkdir(args.outputDir);
 
+       var pack, cleanup;
+       var component = value => {
+         if (isNumber(value) && isFinite(value)) value = String(value);
+         if (!isString(value) || value.length == 0 || value == "." || value == ".." || /[\/\\:\x00-\x1f]/.test(value)) throw new Error("Invalid package name or version");
+         return value;
+       };
+       var validateTree = () => {
+         var root = new java.io.File(args.tmpDir).getCanonicalFile().toPath();
+         // pack regenerates its manifest. Validate every file it can discover, not just old entries.
+         var follow = java.lang.reflect.Array.newInstance(java.lang.Class.forName("java.nio.file.FileVisitOption"), 1);
+         follow[0] = java.nio.file.FileVisitOption.FOLLOW_LINKS;
+         var paths = java.nio.file.Files.walk(root, follow);
+         try {
+           var entries = paths.iterator();
+           while (entries.hasNext()) {
+             if (!entries.next().toFile().getCanonicalFile().toPath().startsWith(root)) throw new Error("Package symlink outside source directory");
+           }
+         } finally { paths.close(); }
+       };
+       var validate = complete => {
+         validateTree();
+         try { pack = io.readFile(args.tmpDir + "/.package.json"); }
+         catch(e) { pack = io.readFileYAML(args.tmpDir + "/.package.yaml"); }
+         if (complete || isDef(pack.name)) pack.name = component(pack.name);
+         if (complete || isDef(pack.version)) pack.version = component(pack.version);
+         if (!complete && isUnDef(pack.files)) pack.files = [];
+         if (!isArray(pack.files)) throw new Error("Invalid package file list");
+         var root = new java.io.File(args.tmpDir).getCanonicalFile().toPath();
+         cleanup = pack.files.map(file => {
+           if (!isString(file) || /[\\\x00]/.test(file) || /^(\/|[a-z]:)/i.test(file)) throw new Error("Invalid package file path");
+           var target = new java.io.File(args.tmpDir + "/" + file).getCanonicalFile().toPath();
+           if (target.equals(root) || !target.startsWith(root)) throw new Error("Package file outside source directory");
+           return String(target);
+         });
+       };
        sync(() => {
-          if (isDef(args.name)) oPack("install " + args.name + " -d " + args.tmpDir + " -justcopy");
-          if (isDef(args.filePath)) args.tmpDir = args.filePath;
+          if (ownedSource && isDef(args.name)) oPack("install " + args.name + " -d " + args.tmpDir + " -justcopy");
+          validate();
           oPack("pack " + args.tmpDir);
+          validate(true);
        }, oPack);
-
-       var pack;
-       try {
-          pack = io.readFile(args.tmpDir + "/.package.json");
-       } catch(e) {
-          pack = io.readFileYAML(args.tmpDir + "/.package.yaml");
-       }
 
        if (!args.noVersion) {
          io.mv(pack.name + "-" + pack.version + ".opack", args.outputDir + "/" + pack.name + "-" + pack.version + ".opack");
        } else {
-         io.mv(pack.name + ".opack", args.outputDir + "/" + pack.name + ".opack");
+         io.mv(pack.name + "-" + pack.version + ".opack", args.outputDir + "/" + pack.name + ".opack");
        }
-       if (args.withSymLink) 
-         sh("ln -s " + args.outputDir + "/" + pack.name + "-" + pack.version + ".opack " + args.outputDir + "/" + args.name + ".opack");
+       if (args.withSymLink) {
+         var archive = pack.name + (args.noVersion ? "" : "-" + pack.version) + ".opack";
+         var link = new java.io.File(args.outputDir + "/" + pack.name + ".opack").toPath();
+         var target = new java.io.File(args.outputDir + "/" + archive).getCanonicalFile().toPath();
+         if (!args.noVersion) java.nio.file.Files.createSymbolicLink(link, target);
+       }
          
-       for(var file in pack.files) {
-         io.rm(args.tmpDir + "/" + pack.files[file]);
+       if (ownedSource) {
+         cleanup.forEach(file => io.rm(file));
+         io.rm(args.tmpDir);
        }
-       io.rm(args.tmpDir);

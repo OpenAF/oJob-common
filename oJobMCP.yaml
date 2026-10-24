@@ -103,6 +103,26 @@ jobs:
   deps    :
   - HTTP Start Server
   exec    : | #js
+    // Copy JSON tool data without invoking prototype setters or deep-merging it.
+    var _toolArguments = value => {
+      var copy = v => {
+        if (isArray(v)) return v.map(copy)
+        if (!isMap(v)) return v
+        var result = {}
+        Object.keys(v).forEach(k => {
+          if (k == "__proto__" || k == "constructor" || k == "prototype") throw new Error("Invalid tool argument key")
+          Object.defineProperty(result, k, { value: copy(v[k]), enumerable: true, writable: true, configurable: true })
+        })
+        return result
+      }
+      return copy(value || {})
+    }
+    var _httpToolArguments = (req, value) => {
+      var result = _toolArguments(value)
+      if (!isMap(result)) throw new Error("Tool arguments must be an object")
+      result._httprequest = _scrubAuthHeader(req)
+      return result
+    }
     var _applyTemplate = (meta, allStrings) => {
       if (!args.tplDesc) return meta
       var _walk = obj => {
@@ -241,11 +261,12 @@ jobs:
 
     // Strips the auth credential before it reaches tool jobs (avoids leaking the shared secret via echoed args/errors)
     var _scrubAuthHeader = req => {
-      if (!_authEnabled || !isMap(req) || !isMap(req.header)) return req
-      var _r = merge({}, req)
-      _r.header = merge({}, req.header)
-      delete _r.header[_authHeader]
-      delete _r.header.authorization
+      if (!isMap(req) || !isMap(req.header)) return _toolArguments(req)
+      var _r = _toolArguments(req)
+      Object.keys(_r.header).forEach(k => {
+        var name = String(k).toLowerCase()
+        if (name == _authHeader || name == "authorization") delete _r.header[k]
+      })
       return _r
     }
 
@@ -313,7 +334,8 @@ jobs:
     var _hookBody = event => {
       var _body = stringify(event, __, "")
       if (isString(_body) && _body.length > _hookMaxBody) {
-        var _trimmed = merge({}, event)
+        var _trimmed = {}
+        Object.keys(event).forEach(k => Object.defineProperty(_trimmed, k, { value: event[k], enumerable: true, configurable: true }))
         delete _trimmed.arguments
         delete _trimmed.result
         delete _trimmed.error
@@ -356,7 +378,7 @@ jobs:
         if (isDef(headers)) context.headers = headers
         // Retain an independent snapshot for post-only configurations too.
         context = JSON.parse(stringify(context, __, ""))
-        _sendHook(_preHookURL, merge(context, { phase: "pre", timestamp: context.startedAt }))
+        _sendHook(_preHookURL, Object.assign({}, context, { phase: "pre", timestamp: context.startedAt }))
         return context
       } catch(e) { _hookFailure(); return __ }
     }
@@ -364,7 +386,7 @@ jobs:
       if (isUnDef(context) || !_postHookURL) return
       try {
         var finishedAt = now()
-        var event = merge(context, {
+        var event = Object.assign({}, context, {
           phase: "post", timestamp: finishedAt, durationMs: finishedAt - context.startedAt,
           isError: isDef(error) || (isMap(result) && result.isError === true)
         })
@@ -422,7 +444,7 @@ jobs:
     _toolsInclude.forEach(n => _$(n, "OJOB_MCP_TOOLS_INCLUDE entry").isString().$_("OJOB_MCP_TOOLS_INCLUDE entries must be strings"))
     _toolsExclude.forEach(n => _$(n, "OJOB_MCP_TOOLS_EXCLUDE entry").isString().$_("OJOB_MCP_TOOLS_EXCLUDE entries must be strings"))
 
-    fns = {}
+    fns = Object.create(null)
 
     var _applyTemplateToDescriptions = meta => _applyTemplate(meta, false)
 
@@ -468,7 +490,7 @@ jobs:
                   if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                   var _res
                   var _toolName = _resolveToolName(params.name)
-                  var _known    = _isToolEnabled(_toolName) && isDef(args.fns[_toolName])
+                  var _known    = _isToolEnabled(_toolName) && Object.prototype.hasOwnProperty.call(args.fns, _toolName) && isDef(args.fns[_toolName])
                   // Only a resolved, enabled tool may fire a hook: an unknown name is attacker-controlled
                   // and unbounded, and must not be turned into a POST on the audit receiver
                   var _hookContext = (_hookEnabled && _known)
@@ -478,7 +500,7 @@ jobs:
                   if (_known) {
                     try {
                       if (isString(args.fns[_toolName])) {
-                        _res = $job(args.fns[_toolName], merge({ _httprequest: _scrubAuthHeader(req) }, params.arguments || params.input || {}))
+                        _res = $job(args.fns[_toolName], _httpToolArguments(req, params.arguments || params.input || {}))
                         if (isMap(_res)) {
                           delete _res.objId
                           delete _res.execid
@@ -642,7 +664,7 @@ jobs:
                 if (args.debug) log(`tools/call -- ${af.toCSLON(params)}`)
                 var _res
                 var _toolName = _resolveToolName(params.name)
-                var _known    = _isToolEnabled(_toolName) && isDef(args.fns[_toolName])
+                var _known    = _isToolEnabled(_toolName) && Object.prototype.hasOwnProperty.call(args.fns, _toolName) && isDef(args.fns[_toolName])
                 // Only a resolved, enabled tool may fire a hook: an unknown name is attacker-controlled
                 // and unbounded, and must not be turned into a POST on the audit receiver
                 var _hookContext = (_hookEnabled && _known)
@@ -652,7 +674,7 @@ jobs:
                 if (_known) {
                   try {
                     if (isString(args.fns[_toolName])) {
-                      _res = $job(args.fns[_toolName], merge({ _httprequest: _scrubAuthHeader(req) }, params.arguments || params.input || {}))
+                      _res = $job(args.fns[_toolName], _httpToolArguments(req, params.arguments || params.input || {}))
                       if (isMap(_res)) {
                         delete _res.objId
                         delete _res.execid
@@ -775,7 +797,7 @@ jobs:
       return { data: "{}", mimetype: "application/json", status: 404, header: {} }
     }*/
 
-    ow.server.httpd.route(global.__ojobHttp[args.port], merge(global.__ojobRoutes[args.port], fns))
+    ow.server.httpd.route(global.__ojobHttp[args.port], Object.assign({}, global.__ojobRoutes[args.port], fns))
     log("READY [" + args.port + "]")
 
 # --------------------------
@@ -821,6 +843,20 @@ jobs:
       audit      : default(__)
       modern     : default(__)
   exec    : | #js
+    // Copy JSON tool data without invoking prototype setters or deep-merging it.
+    var _toolArguments = value => {
+      var copy = v => {
+        if (isArray(v)) return v.map(copy)
+        if (!isMap(v)) return v
+        var result = {}
+        Object.keys(v).forEach(k => {
+          if (k == "__proto__" || k == "constructor" || k == "prototype") throw new Error("Invalid tool argument key")
+          Object.defineProperty(result, k, { value: copy(v[k]), enumerable: true, writable: true, configurable: true })
+        })
+        return result
+      }
+      return copy(value || {})
+    }
     var _applyTemplate = (meta, allStrings) => {
       if (!args.tplDesc) return meta
       var _walk = obj => {
@@ -951,7 +987,8 @@ jobs:
     var _hookBody = event => {
       var _body = stringify(event, __, "")
       if (isString(_body) && _body.length > _hookMaxBody) {
-        var _trimmed = merge({}, event)
+        var _trimmed = {}
+        Object.keys(event).forEach(k => Object.defineProperty(_trimmed, k, { value: event[k], enumerable: true, configurable: true }))
         delete _trimmed.arguments
         delete _trimmed.result
         delete _trimmed.error
@@ -994,7 +1031,7 @@ jobs:
         if (isDef(headers)) context.headers = headers
         // Retain an independent snapshot for post-only configurations too.
         context = JSON.parse(stringify(context, __, ""))
-        _sendHook(_preHookURL, merge(context, { phase: "pre", timestamp: context.startedAt }))
+        _sendHook(_preHookURL, Object.assign({}, context, { phase: "pre", timestamp: context.startedAt }))
         return context
       } catch(e) { _hookFailure(); return __ }
     }
@@ -1002,7 +1039,7 @@ jobs:
       if (isUnDef(context) || !_postHookURL) return
       try {
         var finishedAt = now()
-        var event = merge(context, {
+        var event = Object.assign({}, context, {
           phase: "post", timestamp: finishedAt, durationMs: finishedAt - context.startedAt,
           isError: isDef(error) || (isMap(result) && result.isError === true)
         })
@@ -1016,7 +1053,7 @@ jobs:
       log("[audit] " + af.toSLON({ server: _auditServer, tool: _sanitizeAuditVal(String(toolName)), args: isMap(toolArgs) ? _sanitizeAuditArgs(toolArgs) : {} }))
     }
 
-    var fs = {}
+    var fs = Object.create(null)
     var _applyTemplateToDescriptions = meta => _applyTemplate(meta, false)
 
     var _prefixToolName = n => (isString(args.toolPrefix) && args.toolPrefix.length > 0 ? args.toolPrefix + n : n)
@@ -1050,7 +1087,7 @@ jobs:
         var _hookContext = _startHook(_jobName, _toolName, params)
         try {
           _auditLog(_jobName, params)
-          var _r = $job(args.fns[_jobName], params)
+          var _r = $job(args.fns[_jobName], _toolArguments(params))
           if (isMap(_r)) {
             delete _r.objId
             delete _r.execid

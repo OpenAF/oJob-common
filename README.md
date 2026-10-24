@@ -856,6 +856,11 @@ The job "oPack Pack external" expects:
 | tmpDir | String | No | The temporary folder to use during the process (defaults to ./tmp) |
 | outputDir | String | No | Output folder where the oPack will be placed (defaults to .) |
 
+With `filePath`, the existing source directory is preserved. Package file entries
+must remain inside that directory, including symlink targets. Package names and
+versions must be single path components. `withSymLink` creates
+`<pack.name>.opack` using the filesystem API, without invoking a shell.
+
 Example:
 
 ````yaml
@@ -1021,6 +1026,11 @@ Starts a MCP server that listens for HTTP requests and executes jobs based on th
 | audit | Boolean | No | If true (or env `OJOB_MCP_AUDIT`), logs every tool call (tool name, arguments, User-Agent and, when available, client IP) via OpenAF's `log()` function (defaults to false). The IP is best-effort, read from the `X-Forwarded-For`/`X-Real-IP` request headers, since OpenAF's HTTP server does not expose the raw socket address — it is only populated behind a reverse proxy that sets one of those headers. Logged values are attacker-controlled, so the tool name, argument keys and string values are stripped of CR/LF and capped at 256 characters before being written, keeping one audit record on one line; the tool job and any audit webhooks still receive the untouched values. The client IP is taken from request headers a caller can set, so treat it as a hint rather than as proof of origin |
 
 With `modern: true` (or `OJOB_MCP_MODERN=true`), both HTTP response modes acknowledge client notifications `notifications/initialized`, `notifications/cancelled`, and `notifications/roots/list_changed` with HTTP 202 and an empty body, including for clients using the legacy initialize handshake. This avoids older OpenAF dispatchers returning “Method not found” for roots-change notifications (for example, from Google Antigravity). These notifications are accepted as no-ops; the job does not cache client roots or implement cancellation. Authentication still applies. This compatibility handling does not change STDIO or `modern: false` behavior.
+
+HTTP dispatch accepts only own entries in `fns`. HTTP and STDIO reject nested
+tool argument keys `__proto__`, `constructor` and `prototype` before job execution.
+HTTP `_httprequest` metadata is server-owned: client arguments cannot replace it,
+and credential headers are removed before it reaches the job.
 
 **Error Handling:** Jobs can signal errors by returning a map with an `_err` property. When `_err` is present in the job result, the MCP server will treat it as an error response with `isError: true` and return the error message to the client.
 
@@ -1485,6 +1495,17 @@ jobs:
 
 ### oJobHTTPd.yaml
 
+`HTTP Service` and `HTTP SSE Service` preserve an explicit `execPre`; when omitted,
+they use `HTTP Default Auth`. An explicit empty string overrides that default.
+Browse jobs confine their built-in filesystem callbacks to the configured root,
+including symlink targets. `HTTP File Browse` applies `restrict` patterns to
+listing, direct reads, downloads and default documents. Supply patterns as an
+array or comma-separated string. Upload filenames must be plain basenames;
+absolute paths, directory separators and destinations outside the upload root
+are rejected. Custom browse callbacks remain responsible for their own access
+policy. These services still require an appropriate authentication policy when
+exposed to untrusted clients.
+
 `HTTP Metrics` and `REST Metrics` default to strict OpenMetrics 1.0 text with
 `application/openmetrics-text; version=1.0.0; charset=utf-8`, grouped metadata,
 and a final `# EOF` line. Scrape timestamps are omitted. `HTTP Healthz` and
@@ -1544,9 +1565,11 @@ jobs:
 # Job test is written in shell code
 - name: test
   lang: shell
+  typeArgs:
+    noTemplate: true
   exec: |
-    # Sets ANSWER in shell script
-    ANSWER="Echo from the shell (a: {{params.a}})"
+    # Request values arrive as environment data, never as shell source.
+    ANSWER="Echo from the shell (a: $params_a)"
 
     # return ANSWER
 

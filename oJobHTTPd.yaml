@@ -40,6 +40,33 @@ jobs:
   exec : | #js
       ow.loadServer()
 
+      // Request paths are already decoded by the HTTP backend. Never decode again.
+      global.__ojobHttpRelativePath = (value, route) => {
+        var base = String(route).replace(/\/+$/, ""), value = String(value)
+        if (value == base) return ""
+        if (!value.startsWith(base + "/")) throw new Error("Invalid browse route")
+        return value.substring(base.length + 1)
+      }
+      global.__ojobHttpResolveFile = (root, relative, restrict) => {
+        var deny = message => { var error = new Error(message); error.httpStatus = 403; throw error }
+        relative = String(relative)
+        if (/[\\\x00]/.test(relative) || /^(\/|[a-z]:)/i.test(relative)) deny("Invalid relative path")
+        var base = new java.io.File(String(root)).getCanonicalFile().toPath()
+        var target = base.resolve(relative).toFile().getCanonicalFile().toPath()
+        if (!target.startsWith(base)) deny("Path outside browse root")
+        var patterns = isString(restrict) ? restrict.split(",") : (isArray(restrict) ? restrict : [])
+        // Check aliases and parent directories too, so denied directories cannot be read directly.
+        var lexical = base.resolve(relative).normalize()
+        ;[target, lexical].forEach(candidate => {
+          for (var current = candidate; current != null && current.startsWith(base); current = current.getParent()) {
+            if (patterns.some(p => new RegExp(p).test(String(current).replace(/\\/g, "/")))) deny("File access denied")
+          }
+        })
+        return String(target)
+      }
+      global.__ojobHttpEscapeText = value => String(value).replace(/[&<>"'`\\\[\]()*_{}|#!]/g, c => "&#" + c.charCodeAt(0) + ";")
+      global.__ojobHttpFileLink = value => encodeURIComponent(String(value)).replace(/[!'()*]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase())
+
       var ks
       if (isUnDef(global.__ojobHttp)) global.__ojobHttp = {}
       if (isUnDef(global.__ojobRoutes)) global.__ojobRoutes = {}
@@ -179,11 +206,7 @@ jobs:
       args.execPre       = _$(args.execPre).isString().default(__)
       args.auditTemplate = _$(args.auditTemplate).default("AUDIT HTTP | {{method}} {{uri}} {{reply.status}} {{{reply.mimetype}}} ({{header.remote-addr}}; {{header.user-agent}})")     
 
-      if (isUnDef(args.execPre) && isDef(global.__ojobPreRoutes[args.port])) {
-        args.execPre = global.__ojobPreRoutes[args.port]
-      } else {
-        args.execPre = ""
-      }
+      if (isUnDef(args.execPre)) args.execPre = _$(global.__ojobPreRoutes[args.port]).default("")
 
       var fn = __
       if (args.audit) {
@@ -206,7 +229,7 @@ jobs:
          try {
             var res = (new Function("var request = arguments[0]; var server = global.__ojobHttp[" + args.port + "]; var port = " + String(args.port) + "; var uri = '" + args.uri + "'; " + args.execPre + "; " + args.execURI))(r)
             if (!isMap(res)) res = ow.server.httpd.reply(res, void 0, void 0, {})
-            fn(r, res)
+            if (fn) fn(r, res)
             return res
          } catch(e) {
             if (args.error) {
@@ -329,17 +352,24 @@ jobs:
     eURI: |
       if (isDef(request.params) && isDef(request.params.data) && request.method == "POST") {
          log("Received file '" + request.params.data + "'...")
-         io.cp(request.files.data, '{{{path}}}/' + request.params.data)
+         var filename = String(request.params.data)
+         if (filename == "." || filename == ".." || /[\/\\\x00]/.test(filename) || /^[a-z]:/i.test(filename) || filename.length == 0) {
+           return { data: "Invalid upload filename", mimetype: "text/plain", status: 400, header: {} }
+         }
+         var destination
+         try { destination = global.__ojobHttpResolveFile({{{path}}}, filename) }
+         catch(e) { return { data: "Invalid upload destination", mimetype: "text/plain", status: 403, header: {} } }
+         io.cp(request.files.data, destination)
          return "ok"
       } else {
-         return server.replyOKHTML("<html><body><form action=\"" + request.uri + "\" enctype=\"multipart/form-data\" method=\"POST\"><input type=\"file\" name=\"data\" value=\"data\" id=\"data\"/><input type=\"submit\" value=\"submit\"/></form></body></html>")
+         return server.replyOKHTML("<html><body><form enctype=\"multipart/form-data\" method=\"POST\"><input type=\"file\" name=\"data\" value=\"data\" id=\"data\"/><input type=\"submit\" value=\"submit\"/></form></body></html>")
       }
   exec: | #js
       args.path = _$(args.path, "path").default(".")
       args.uri  = _$(args.uri).isString().default("/upload")
 
       io.mkdir(args.path)
-      args.execURI = (isDef(args.execURI) ? args.execURI : "") + "\n" + templify(args.eURI, { path: args.path })
+      args.execURI = (isDef(args.execURI) ? args.execURI : "") + "\n" + templify(args.eURI, { path: stringify(String(new java.io.File(args.path).getCanonicalPath()), __, "") })
 
 # -------------------
 - name : HTTP Healthz
@@ -582,9 +612,13 @@ jobs:
       }
 
       var content = ""
-      var puri = String(request.uri).replace(new RegExp("^" + uri), (uri == "/" ? "" : "/")).replace(/\/+/g, "/")
-      var furi = String((new java.io.File(new java.io.File(String((new java.io.File(path + "/" + puri)).getCanonicalFile()).replace(/\\+/g, "/")))))
+      var puri = global.__ojobHttpRelativePath(request.uri, uri)
+      var furi
+      try { furi = global.__ojobHttpResolveFile(path, puri, restrict) }
+      catch(e) { return { data: "Forbidden", mimetype: "text/plain", status: 403, header: {} } }
 
+      var replyFile = target => server.replyStream(io.readFileStream(target), ow.server.httpd.getMimeType(target))
+      var replyMD = target => server.replyOKHTML(ow.template.parseMD2HTML(io.readFileString(target), true, __, __, __, uriPrefix))
       var finfo
       try { 
          finfo = io.fileInfo(furi)
@@ -601,10 +635,13 @@ jobs:
             return ow.server.httpd.replyRedirect(server, redirectURI + (!redirectURI.endsWith("/") ? "/" : "") + q, {})
          }
          } catch(eee) { $err(eee) }
-         if (!puri.endsWith("/")) puri += "/"
+         if (puri.length > 0 && !puri.endsWith("/")) puri += "/"
          if (isDef(fdefault) && io.fileExists(furi + "/" + fdefault)) {
+            var defaultFile
+            try { defaultFile = global.__ojobHttpResolveFile(path, (puri == "" ? "" : puri + "/") + fdefault, restrict) }
+            catch(e) { return { data: "Forbidden", mimetype: "text/plain", status: 403, header: {} } }
             return (fdefault.endsWith(".md") ? 
-                    ow.server.httpd.replyFileMD(server, path, uri, request.uri + "/" + fdefault) : ow.server.httpd.replyFile(server, path, uri, request.uri + "/" + fdefault))
+                    replyMD(defaultFile) : replyFile(defaultFile))
          } else {
             if (shouldBrowse) { 
               content += tmplh({ puri: (!puri.startsWith("/") ? "/" + puri : puri) })
@@ -613,7 +650,10 @@ jobs:
               if (puri != "/" && puri != "") 
                 content += "| <span style=\"color: #a0a0a0;\">&#8598;</span> | __[..](<../>)__ | | |\n"
 
-              var theList = $from(io.listFiles(furi).files).sort("-isDirectory", "filename").select(f => {
+              var theList = $from(io.listFiles(furi).files.filter(f => {
+                try { global.__ojobHttpResolveFile(path, puri + f.filename, restrict); return true }
+                catch(e) { return false }
+              })).sort("-isDirectory", "filename").select(f => {
                 //if (f.filename.endsWith("/")) f.filename = f.filename.substr(0, f.filename.length-1)
                 return merge(f, {
                   fLastModified: ow.format.fromDate(new Date(f.lastModified), 'yyyy-MM-dd HH:mm:ss'),
@@ -621,17 +661,13 @@ jobs:
                   puri         : puri
                 })
               })
-              if (isDef(restrict)) {
-                if (isString(restrict)) restrict = [ restrict ]
-                lst = lst.filter(f => restrict.reduce((aP, aC) => (aP && !(new RegExp(aC)).test(f.filepath)), true))
-              }
               content += tmplb(theList)
             }
          }
       } else {
          if (puri.endsWith("/")) puri = puri.replace(/\/+$/, "")
          if (request.params.raw == "true") {
-            return ow.server.httpd.replyFile(server, path, uri, request.uri)
+            return replyFile(furi)
          } else {
             var ext = String(furi).replace(/^.*\./, "")
             var _downloadcode = `<span><script>
@@ -648,13 +684,11 @@ jobs:
                 URL.revokeObjectURL(url)
               }
             </script></span>`
-            var fn = () => ow.server.httpd.replyFileMD(server, path, uri, request.uri)
+            var fn = () => replyMD(furi)
             var fnLang = lang => {
                ow.loadTemplate()
-               var _displayURI = uri.replace(/\/$/, "")
-               _displayURI = _displayURI.replace(new RegExp("^" + uri), "")
-               _displayURI += puri
-               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs '" + _displayURI + "' '" + uri + "' " + incURI + " false}}}") + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText('" + puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1) + "')\">&darr;</a></span>\n\n```" + lang + "\n" + io.readFileString(furi) + "\n```\n" + _downloadcode, true, true), "text/html", 200)
+               var _displayURI = puri
+               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs path route incURI false}}}", { path: _displayURI, route: uri, incURI: incURI }) + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\">&darr;</a></span>\n\n<pre><code class=\"language-" + lang + "\">" + ow.format.escapeHTML(io.readFileString(furi)) + "</code></pre>\n" + _downloadcode, true, true), "text/html", 200)
             }
             switch(ext) {
             case "md"  : return fn()
@@ -681,10 +715,10 @@ jobs:
             case "adoc":
               if (isDef(getOPackPath("Asciidoc"))) {
                 loadLib("asciidoc.js")
-                return ow.server.httpd.replyAsciidoc(server, path, uri, request.uri)
+                return ow.server.httpd.replyAsciidoc(server, io.readFileStream(furi))
               }              
             default: 
-              return ow.server.httpd.replyFile(server, path, uri, request.uri)
+              return replyFile(furi)
             }
          }
       }
@@ -699,6 +733,8 @@ jobs:
   exec : | #js
       ow.loadTemplate(); ow.loadFormat()
       ow.template.addHelper("encodeURI", encodeURI)
+      ow.template.addHelper("ojh-fileLink", global.__ojobHttpFileLink)
+      ow.template.addHelper("ojh-fileText", global.__ojobHttpEscapeText)
 
       args.uri  = _$(args.uri).isString().default("/")
       args.path = _$(args.path).isString().default(".")
@@ -726,7 +762,7 @@ jobs:
         if (!_incURI) 
           html = `<a href="${rootURI}" title="Navigate to root"> / </a>`
         else 
-          html = `<a href="${rootURI}" title="Navigate to root"> ${_uri.replace(/^\//, "/ ")} / </a>`
+          html = `<a href="${rootURI}" title="Navigate to root"> ${global.__ojobHttpEscapeText(_uri.replace(/^\//, "/ "))} / </a>`
         
         segments.forEach((segment, index) => {
           // Add separator before each segment.
@@ -734,10 +770,10 @@ jobs:
           
           // If it's the last segment (current location), show as plain text.
           if (index === segments.length - 1) {
-            html += `<span>${segment}</span>`
+            html += `<span>${global.__ojobHttpEscapeText(segment)}</span>`
           } else {
             const targetURI = relDir(Math.max(0, baseDepth - index - 1))
-            html += `<a href="${targetURI}" title="Navigate to ${segment}">${segment}</a>`
+            html += `<a href="${targetURI}" title="Navigate to ${global.__ojobHttpEscapeText(segment)}">${global.__ojobHttpEscapeText(segment)}</a>`
           }
         })
 
@@ -747,7 +783,7 @@ jobs:
       args.logo = prefixURL(_$(args.logo, "logo").isString().default("/fonts/openaf_small.png"))
 
       var temph = _$(args.templateHead).isString().default("## {{{ojh-buildBreadcrumbs puri '" + args.uri + "' " + args.incURI + " true}}}<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + args.logo + "\">\n")
-      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}<span style=\"color: #a0a0a0;\">&#8600;</span>{{else}}<a href=\"{{encodeURI filename}}?raw=true\" download=\"{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{escapeMDTable filename}}](<{{encodeURI filename}}/>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
+      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}<span style=\"color: #a0a0a0;\">&#8600;</span>{{else}}<a href=\"{{ojh-fileLink filename}}?raw=true\" download=\"{{ojh-fileLink filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{ojh-fileText filename}}](<{{ojh-fileLink filename}}/>)__ | {{fLastModified}} | | {{else}} [{{ojh-fileText filename}}](<{{ojh-fileLink filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
 
       global.__MHTTPD = _$(global.__MHTTPD).isMap().default({})
       global.__MHTTPD[String(args.port) + args.uri] = {
@@ -805,11 +841,7 @@ jobs:
       args.execPre       = _$(args.execPre).isString().default(__)
       args.auditTemplate = _$(args.auditTemplate).default("AUDIT SSE | {{method}} {{uri}} ({{header.remote-addr}}; {{header.user-agent}})")
 
-      if (isUnDef(args.execPre) && isDef(global.__ojobPreRoutes[args.port])) {
-        args.execPre = global.__ojobPreRoutes[args.port]
-      } else {
-        args.execPre = ""
-      }
+      if (isUnDef(args.execPre)) args.execPre = _$(global.__ojobPreRoutes[args.port]).default("")
 
       var fn = __
       if (args.audit) {
