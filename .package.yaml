@@ -37,7 +37,7 @@ name: oJob-common
 main: ''
 mainJob: ''
 license: Apache 2.0
-version: '20261004'
+version: '20261024'
 dependencies:
   openaf: '>=20251115'
 files:
