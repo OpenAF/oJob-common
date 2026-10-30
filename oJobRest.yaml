@@ -134,7 +134,7 @@ jobs:
         if (isUnDef(args.port)) args.port = 8091;
         if (isDef(args.cp)) af.externalAddClasspath(args.cp);
         if (isDef(args.keystore)) ks = "/" + args.keystore;
-        if (isUnDef(__pmIn.__ojobHttp[args.port])) __pmIn.__ojobHttp[args.port] = (isDef(args.hs) ? hs : ow.server.httpd.start(args.port, args.host, ks, args.pass));
+        if (isUnDef(__pmIn.__ojobHttp[args.port])) __pmIn.__ojobHttp[args.port] = (isDef(args.hs) ? args.hs : ow.server.httpd.start(args.port, args.host, ks, args.pass));
         __pmIn.__ojobRoutes[args.port] = {};
         __pmIn.__ojobRoutesMetrics[args.port] = {};
 

@@ -531,7 +531,7 @@ jobs:
       _$(args.A, "A").$_();
       _$(args.B, "B").$_();
 
-      $doA2B(new Function("fn", args.A), new Function("valuesk", args.B), args.numThreads, args.timeout);
+      $doA2B(new Function("fn", args.A), new Function("values", args.B), args.numThreads, args.timeout);
 
   # -----------------------
   - name: oJob Get settings

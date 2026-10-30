@@ -923,9 +923,9 @@ Expects:
 | checks.pid.file | String | No | If a pid file location is provided it will check if the corresponding pid is running. If not it sets to trigger a stop and start operation. |
 | checks.log.folder | String | No | Folder where the log files to check are located. |
 | checks.log.fileRE | String | No | Checks for files matching fileRE choosing the latest by modified date. |
-| checks.log.stringRE | String | No | Array of regular expressions strings to look for. If found assumes a restart is needed. |
-| checks.log.histFile | String | No | The file where to store the history of findings on the file to avoid duplicate findings. |
-| checks.log.olderMin | Number | No | Checks if the latest log file (fileRE) by modified date is older than x minutes and if yes assumes it needs to be restarted. | 
+| checks.log.stringRE | String/Array | No | Regular expression or array of expressions to look for. A match triggers recovery independently of `olderMin`. |
+| checks.log.histFile | String | For pattern checks | Stores the history of findings to avoid duplicate findings. Not needed for age-only checks. |
+| checks.log.olderMin | Number | No | Triggers recovery if the latest matching log file is older than this many minutes. Does not require `stringRE` or `histFile`. |
 | checks.custom.exec | String | No | Executes the corresponding code in a function and passes if returns true or fails assuming a restart is needed if returns false. |
 | quiet | Boolean | No | If true will only produce logging if something is not right (default is true) |
 | cmdToStop | String | No | If defined will execute the command on the stop event. |
@@ -1217,7 +1217,7 @@ Creates a buffering channel between a source and a target channel.
 | filterFunc | String | No | Function to filter what gets buffered |
 | bufferFunc | String | No | Function to determine when to flush the buffer |
 
-Note: Use oJob Ch Stop Buffering to ensure proper release of resources.
+Note: Use oJob Ch Stop Buffering to flush pending records and release the buffer's resources. It removes all subscriptions registered by Start Buffering for the source and keeps the source and destination channels available.
 
 ### oJob Ch Stop Buffering
 
@@ -1264,7 +1264,7 @@ Finds and replaces text in a file using regular expressions.
 | separator | String | No | Separator (defaults to '\n') |
 | byline | Boolean | No | Replace line by line when true; load the whole file when false (defaults to true) |
 
-Line-by-line replacement applies `flags` to each line and writes to a temporary file beside the target. The target is replaced only after processing and stream closure succeed; failures remove the temporary file and leave the original intact.
+Line-by-line replacement applies `flags` to each line and writes to a temporary file beside the resolved target, preserving its file attributes. Symbolic links remain links and their targets are updated. The target is replaced only after processing and stream closure succeed; failures remove the temporary file and leave the original intact.
 
 ### IO MV File
 
@@ -1312,7 +1312,7 @@ List filenames from a local filepath to args.files array.
 
 ### IO Modify text file
 
-Replaces the first exact occurrence of `find` in a configuration file, preserving surrounding text and line endings. Both `find` and `replace` are literal strings and may span multiple lines; no trailing newline is required. If no match exists, appends `replace`; if the file is missing, creates it. Replacement is staged in a temporary file before updating the original.
+Replaces the first exact occurrence of `find` in a configuration file, preserving surrounding text and line endings. Both `find` and `replace` are literal strings and may span multiple lines; no trailing newline is required. If no match exists, appends `replace`; if the file is missing, creates it. Replacement is staged in a temporary file with the original's file attributes. Symbolic links remain links and their targets are updated.
 
 | Argument | Type | Mandatory | Description |
 |----------|------|-----------|-------------|

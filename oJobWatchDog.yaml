@@ -52,8 +52,6 @@ jobs:
       args.quiet               = _$(args.quiet).isBoolean().default(true);
       args.jobToNotify         = _$(args.jobToNotify).isString().default(void 0);
       
-      var shouldRestart = false;
-
       // Checks
       // ------
 
@@ -78,8 +76,7 @@ jobs:
 
           if (!running) {
             logWarn("'" + args.checks.pid.file + "' not running.");
-            if (isDef(args.cmdToStart)) {
-              shouldRestart = true;
+            if (isDef(args.cmdToStart) || isDef(args.execToStart) || isDef(args.jobToStart)) {
               args.__watchdog.shouldRestart = true;
             }
           }
@@ -101,7 +98,7 @@ jobs:
           var f = new Function("args", args.checks.custom.exec);
           var r = f(args);
           args.__watchdog.checks.custom = r;
-          if (!r) { shouldRestart = true; args.__watchdog.shouldRestart = true; }
+          if (!r) args.__watchdog.shouldRestart = true;
         } catch(e) {
           logErr("Found problem while custom checking (" + String(e) + ")");
           throw e;
@@ -112,11 +109,10 @@ jobs:
       // --------------
       if (isDef(args.checks.log) && 
           isDef(args.checks.log.fileRE) && 
-          isDef(args.checks.log.histFile) && 
-          isDef(args.checks.log.folder) &&
-          isDef(args.checks.log.olderMin)) {
+          isDef(args.checks.log.folder)) {
         try {
           if (isString(args.checks.log.stringRE)) args.checks.log.stringRE = [ args.checks.log.stringRE ];
+          args.checks.log.stringRE = _$(args.checks.log.stringRE).isArray().default([]);
 
           if (!args.quiet) log("Checking log file at " + args.checks.log.folder + " for patterns like '" + args.checks.log.stringRE.join("', ''") + "'...");
           var f = $from(io.listFiles(args.checks.log.folder).files).match("filename", args.checks.log.fileRE).max("lastModified");
@@ -127,48 +123,52 @@ jobs:
             logWarn("Log is older than " + args.checks.log.olderMin + " minutes (" + new Date(f.lastModified) + ")");
           }
 
-          var history;
-          if (io.fileExists(args.checks.log.histFile)) {
-            history = io.readFile(args.checks.log.histFile);
-            if (history.file != f.filename || history.size > f.size) {
+          if (args.checks.log.stringRE.length > 0) {
+            _$(args.checks.log.histFile, "checks.log.histFile").isString().$_();
+            var history;
+            if (io.fileExists(args.checks.log.histFile)) {
+              history = io.readFile(args.checks.log.histFile);
+              if (history.file != f.filename || history.size > f.size) {
+                history = {
+                  file  : f.filename,
+                  size  : f.size,
+                  line  : 0
+                }
+              }
+            } else {
               history = {
                 file  : f.filename,
                 size  : f.size,
                 line  : 0
-              }
+              };
             }
-          } else {
-            history = {
-              file  : f.filename,
-              size  : f.size,
-              line  : 0
-            };
-          }
 
-          args.__watchdog.checks.log = { history: history };
+            args.__watchdog.checks.log = { history: history, lines: [] };
 
-          var str = io.readFileStream(f.canonicalPath);
-          var c = 0;
-          ioStreamReadLines(str, (l) => {
-            c++;
-            if (c > history.line) {
-              args.__watchdog.checks.log.lines = [];
-              for(var ii in args.checks.log.stringRE) {
-                if (l.match(new RegExp(args.checks.log.stringRE[ii], "i"))) {
-                  shouldRestart = true;
-                  history.line = c;
-                  args.__watchdog.shouldRestart = true;
-                  args.__watchdog.checks.log.lines.push({ lineNum: l, line: c, file: f.canonicalPath });
-                  logWarn("Found line '" + l + "' on line " + c + " of " + f.canonicalPath + ".");
+            var str = io.readFileStream(f.canonicalPath);
+            var c = 0;
+            try {
+              ioStreamReadLines(str, (l) => {
+                c++;
+                if (c > history.line) {
+                  for(var ii in args.checks.log.stringRE) {
+                    if (l.match(new RegExp(args.checks.log.stringRE[ii], "i"))) {
+                      history.line = c;
+                      args.__watchdog.shouldRestart = true;
+                      args.__watchdog.checks.log.lines.push({ lineNum: l, line: c, file: f.canonicalPath });
+                      logWarn("Found line '" + l + "' on line " + c + " of " + f.canonicalPath + ".");
+                    }
+                  }
                 }
-              }
+              });
+            } finally {
+              str.close();
             }
-          });
-          history.line = c;
-          history.size = io.fileInfo(f.canonicalPath).size;
-          str.close();
+            history.line = c;
+            history.size = io.fileInfo(f.canonicalPath).size;
 
-          io.writeFile(args.checks.log.histFile, history);
+            io.writeFile(args.checks.log.histFile, history);
+          }
         } catch(e) {
           logErr("Found problem while checking for log entries in '" + args.checks.log.folder + "'");
           throw e;
@@ -187,7 +187,7 @@ jobs:
 
       // Restart
       // -------
-      if (shouldRestart || (isDef(args.STOP) && args.STOP)) {
+      if (args.__watchdog.shouldRestart || (isDef(args.STOP) && args.STOP)) {
         args.__watchdog.phase = "stop";
         // STOP
         // ----

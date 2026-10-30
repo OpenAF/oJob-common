@@ -44,10 +44,13 @@ jobs:
         iss = iss.replace(regexp, args.replace);
         io.writeFileString(args.target, iss);
       } else {
-        var parent = String(new java.io.File(io.getCanonicalPath(args.target)).getParent());
+        var target = io.getCanonicalPath(args.target);
+        var parent = String(new java.io.File(target).getParent());
         var temp = io.createTempFile("ojob-replace-", ".tmp", parent);
         try {
-          var is = io.readFileStream(args.target);
+          // Seed the staging file with the target's attributes before rewriting it.
+          io.cp(target, temp);
+          var is = io.readFileStream(target);
           try {
             var os = io.writeFileStream(temp);
             try {
@@ -57,7 +60,7 @@ jobs:
               }, args.separator, false);
             } finally { os.close(); }
           } finally { is.close(); }
-          io.mv(temp, args.target);
+          io.mv(temp, target);
         } finally {
           if (io.fileExists(temp)) io.rm(temp);
         }
@@ -144,7 +147,8 @@ jobs:
         args.op = "create";
         io.writeFileString(args.file, args.replace);
       } else {
-        var source = io.readFileString(args.file);
+        var target = io.getCanonicalPath(args.file);
+        var source = io.readFileString(target);
         var position = source.indexOf(args.find);
         args.found = position >= 0;
         args.op = args.found ? "replace" : "append";
@@ -153,11 +157,12 @@ jobs:
         if (args.found) {
           // Slice explicitly so replacement text such as "$&" stays literal.
           var result = source.substring(0, position) + args.replace + source.substring(position + args.find.length);
-          var parent = String(new java.io.File(io.getCanonicalPath(args.file)).getParent());
+          var parent = String(new java.io.File(target).getParent());
           var temp = io.createTempFile("ojob-modify-", ".tmp", parent);
           try {
+            io.cp(target, temp);
             io.writeFileString(temp, result);
-            io.mv(temp, args.file);
+            io.mv(temp, target);
           } finally {
             if (io.fileExists(temp)) io.rm(temp);
           }

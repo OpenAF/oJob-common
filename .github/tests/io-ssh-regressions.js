@@ -44,7 +44,7 @@ try {
     var path = dir + '/input.txt';
     io.writeFileString(path, 'old\n');
     var fakeIO = {}, error = new Error('write failed'), caught;
-    ['fileExists', 'readFileString', 'getCanonicalPath', 'createTempFile', 'mv', 'rm'].forEach(function(method) {
+    ['fileExists', 'readFileString', 'getCanonicalPath', 'createTempFile', 'cp', 'mv', 'rm'].forEach(function(method) {
       fakeIO[method] = function() { return io[method].apply(io, arguments); };
     });
     fakeIO.writeFileString = function() { throw error; };

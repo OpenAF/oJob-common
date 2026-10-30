@@ -25,7 +25,14 @@ jobs:
       if (isUnDef(global.__ojobcommon.bufferSubs)) global.__ojobcommon.bufferSubs = {};
       if (isUnDef(global.__ojobcommon.bufferSubs[args.source])) global.__ojobcommon.bufferSubs[args.source] = [];
 
-      global.__ojobcommon.bufferSubs[args.source].push($ch(args.source).subscribe(ow.ch.utils.getBufferSubscriber(args.source, args.id, args.byNumber, args.byTimeInMs, args.target, args.filterFunc, args.bufferFunc)));
+      // closeBuffer also destroys its output channel, so forward through an owned sink.
+      var target = _$(args.target).isString().default(args.source + "::buffer");
+      var bufferTarget = args.source + "::__bufferTarget";
+      var needsForwarding = $ch().list().indexOf(bufferTarget) < 0;
+      $ch(target).create(1, "dummy");
+      var subscriber = ow.ch.utils.getBufferSubscriber(args.source, args.id, args.byNumber, args.byTimeInMs, bufferTarget, void 0, args.filterFunc, args.bufferFunc);
+      if (needsForwarding) $ch(bufferTarget).subscribe(ow.ch.utils.getMirrorSubscriber(target));
+      global.__ojobcommon.bufferSubs[args.source].push($ch(args.source).subscribe(subscriber));
 
   ##############################
   - name: oJob Ch Stop Buffering
@@ -36,11 +43,14 @@ jobs:
          target     (String)       The target channel name
     exec: |
       if (isDef(global.__ojobcommon) && isDef(global.__ojobcommon.bufferSubs) && isDef(global.__ojobcommon.bufferSubs[args.source])) {
-        $ch(args.source).unsubscribe(global.__ojobcommon.bufferSubs[args.source]);
+        global.__ojobcommon.bufferSubs[args.source].forEach(id => $ch(args.source).unsubscribe(id));
+        $ch(args.source).waitForJobs();
         delete global.__ojobcommon.bufferSubs[args.source];
       }
 
-      ow.ch.utils.closeBuffer(args.source + "::__bufferTransit");
+      if ($ch().list().indexOf(args.source + "::__bufferTransit") >= 0) {
+        ow.ch.utils.closeBuffer(args.source + "::__bufferTransit");
+      }
 
   #############################
   - name: oJob Ch Wait For Jobs
