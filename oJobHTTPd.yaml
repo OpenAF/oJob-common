@@ -734,7 +734,9 @@ jobs:
       ow.loadTemplate(); ow.loadFormat()
       ow.template.addHelper("encodeURI", encodeURI)
       ow.template.addHelper("ojh-fileLink", global.__ojobHttpFileLink)
-      ow.template.addHelper("ojh-fileText", global.__ojobHttpEscapeText)
+      // The helper already escapes HTML and Markdown metacharacters.
+      var handlebars = ow.template.__requireHB()
+      ow.template.addHelper("ojh-fileText", value => new handlebars.SafeString(global.__ojobHttpEscapeText(value)))
 
       args.uri  = _$(args.uri).isString().default("/")
       args.path = _$(args.path).isString().default(".")
