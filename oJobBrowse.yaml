@@ -3,6 +3,219 @@
 include:
 - oJobHTTPd.yaml
 
+code:
+  ojob-browse-contract.js: |
+    exports.capabilities = { contract: 1, query: 1, previewFormats: 1, boundedPreview: 1, operations: 1 }
+    exports.error = function(status, message) { var e = new Error(message); e.httpStatus = status; throw e }
+    exports.check = function(options, capabilities) {
+      options = options || {}
+      var required = []
+      if (options.query && options.query.enabled) required.push("query")
+      if (options.preview && isMap(options.preview.formats)) required.push("previewFormats")
+      if (options.preview && isDef(options.preview.maxBytes)) required.push("boundedPreview")
+      if (options.operations && options.operations.enabled) required.push("operations")
+      required.forEach(function(key) {
+        if (!capabilities || capabilities[key] !== 1) throw new Error("Browse capability " + key + " requires an updated browse implementation")
+      })
+      var limits={pageSize:500,maxPageSize:500,maxScanned:1000000,maxResults:1000,maxQueryLength:4096,timeoutMs:60000}
+      if(options.query)Object.keys(limits).forEach(function(key){var n=options.query[key];if(isDef(n)&&(!isNumber(n)||!isFinite(n)||n<1||Math.floor(n)!=n||n>limits[key]))exports.error(400,"Invalid query option "+key)})
+      if(options.preview && isDef(options.preview.maxBytes)){var n=options.preview.maxBytes;if(!isNumber(n)||!isFinite(n)||n<1||Math.floor(n)!=n||n>16777216)exports.error(400,"Invalid preview.maxBytes")}
+      if(options.preview && isMap(options.preview.formats))Object.keys(options.preview.formats).forEach(function(k){if(!/^(name:.+|[a-z0-9]+)$/.test(k)||!isString(options.preview.formats[k])||!/^[a-z][a-z0-9-]*$/.test(options.preview.formats[k]))exports.error(400,"Invalid preview format")})
+    }
+    exports.query = function(result, request, options) {
+      if (!result.isList || !options.query || !options.query.enabled || result.queryInfo && result.queryInfo.applied) return result
+      if (result.pageInfo && result.pageInfo.pageSize > 0) exports.error(501, "Provider must query before pagination")
+      var p = request.params || {}, c = options.query
+      var integer = function(value, fallback, max) {
+        var n = Number(isDef(value) ? value : fallback)
+        if (!isFinite(n) || n < 1 || Math.floor(n) != n || n > max) exports.error(400, "Invalid browse integer")
+        return n
+      }
+      var size = integer(isDef(p.size) ? p.size : p.pageSize, c.pageSize || 100, c.maxPageSize || 500)
+      var page = integer(p.page, 1, 9007199254740991), key = String(result.key)
+      var field = p.sort || key, order = p.order || "asc"
+      if (result.fields.indexOf(field) < 0 || ["asc", "desc"].indexOf(order) < 0) exports.error(400, "Invalid sort")
+      var rows = result.list.slice()
+      rows.sort(function(a, b) {
+        if (!!a.isDirectory != !!b.isDirectory) return a.isDirectory ? -1 : 1
+        var av = a.sortValues && isDef(a.sortValues[field]) ? a.sortValues[field] : a.values[field]
+        var bv = b.sortValues && isDef(b.sortValues[field]) ? b.sortValues[field] : b.values[field]
+        if(field=="Size" && isNumber(a.values["Size in bytes"]) && isNumber(b.values["Size in bytes"])){av=a.values["Size in bytes"];bv=b.values["Size in bytes"]}
+        var n = isNumber(av) && isNumber(bv) ? av - bv : String(av).localeCompare(String(bv))
+        return n ? n * (order == "desc" ? -1 : 1) : String(a.values[key]).localeCompare(String(b.values[key]))
+      })
+      var total = rows.length, pages = Math.max(1, Math.ceil(total / size))
+      page = Math.min(page, pages)
+      return Object.assign({}, result, {defaultPresent:!p.q && rows.some(function(row){return row.values[key]==options.default}),list:rows.slice((page-1)*size,page*size),pageInfo:{page:page,pageSize:size,total:total,totalPages:pages,hasPrevious:page>1,hasNext:page<pages},sortInfo:{field:field,order:order},queryInfo:{applied:true}})
+    }
+    exports.format = function(name, preview, defaults) {
+      var formats = isMap(preview.formats) ? preview.formats : defaults
+      var ext = name.indexOf(".") < 0 ? "" : name.substring(name.lastIndexOf(".")+1).toLowerCase()
+      var own = function(k) { return Object.prototype.hasOwnProperty.call(formats, k) }
+      var type = own("name:"+name) ? formats["name:"+name] : (own(ext) ? formats[ext] : __)
+      if (isDef(type) && (!isString(type) || !/^[a-z][a-z0-9-]*$/.test(type))) exports.error(400, "Invalid preview format")
+      return type
+    }
+    exports.readPreview = function(stream, type, limit) {
+      var output = new java.io.ByteArrayOutputStream(), count = 0, n
+      try {
+        if (isDef(limit) && (!isNumber(limit) || !isFinite(limit) || limit < 1 || limit > 16777216 || Math.floor(limit) != limit)) exports.error(400, "Invalid preview byte limit")
+        var max = isDef(limit) ? limit + 1 : 2147483647
+        var buffer = java.lang.reflect.Array.newInstance(java.lang.Byte.TYPE, 8192)
+        while (count < max && (n = stream.read(buffer, 0, Math.min(buffer.length, max-count))) != -1) {
+          if (n > 0) { output.write(buffer,0,n); count += n }
+        }
+      } finally { stream.close() }
+      var bytes = output.toByteArray(), truncated = isDef(limit) && bytes.length > limit
+      if (truncated) bytes = java.util.Arrays.copyOf(bytes, limit)
+      var decoder = java.nio.charset.StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.IGNORE)
+      var data = String(decoder.decode(java.nio.ByteBuffer.wrap(bytes)))
+      if (truncated) return {data:data+"\n\n[Preview truncated; download the complete file.]",type:"text",truncated:true}
+      if (type == "json") return {data:jsonParse(data),type:"json"}
+      if (type == "asciidoc") return {stream:new java.io.ByteArrayInputStream(bytes),type:"asciidoc"}
+      return {data:data,type:type == "markdown" ? "md" : type}
+    }
+    exports.defaults = {md:"markdown",yml:"yaml",yaml:"yaml",css:"css",sh:"sh",js:"js",java:"java",py:"python",toml:"toml",hbs:"handlebars",json:"json",adoc:"asciidoc"}
+    exports.matchesUnit = function(path,key,base) {
+      path=String(path).replace(/\/+$/,"")
+      var location
+      if(isDef(key.domain))location=[key.domain,key.repository,key.format,key.namespace,key.package,key.version].filter(function(x){return isDef(x)&&x!==""}).join("/")
+      else location=isDef(key.puri)?String(key.puri):String(key.image || key.uri || "")
+      base=String(base || "").replace(/^\/+/,"")
+      if(base && location.startsWith(base))location=location.substring(base.length).replace(/^\/+/,"")
+      location=location.replace(/\/+$/,"")
+      return !path || !location || path==location || path.startsWith(location+"/") || location.startsWith(path+"/")
+    }
+    exports.provider = function(options) {
+      var units=Object.create(null), namespace="browse-"+genUUID(), active=$atomic(0)
+      var stats={hits:0,misses:0,loads:0,errors:0}, stores=Object.create(null)
+      var unitLocks=[], stateLock=new java.lang.Object()
+      for(var stripe=0;stripe<64;stripe++)unitLocks.push(new java.lang.Object())
+      var enhanced=options.query && options.query.enabled || options.operations && options.operations.enabled || options.preview
+      return {
+        cache:function(name) {
+          if(stores[name])return stores[name]
+          var ttl=5000, loader, cache=$cache(namespace+"-"+name), lock=namespace+"-"+name
+          var facade={
+            ttl:function(value){ttl=isNumber(value)?value:5000;cache.ttl(ttl);return facade},
+            fn:function(fn){loader=fn;cache.fn(fn);return facade},
+            byDefault:function(a,b){if(!enhanced)cache.byDefault(a,b);return facade},
+            create:function(){cache.create();return facade},
+            get:function(key){
+              if(!enhanced)return cache.get(key)
+              var id=name+":"+stringify(key,__,"")
+              return syncFn(function(){
+                if(units[id] && now()<units[id].expiresAt){stats.hits++;return units[id].value}
+                stats.misses++
+                if(active.inc()>4){active.dec();exports.error(503,"Provider busy")}
+                try{
+                  var value=loader(key), t=now();stats.loads++
+                  if(!isObject(value))value={result:value}
+                  syncFn(function(){
+                    if(Object.keys(units).length>=1000){var keys=Object.keys(units).sort(function(a,b){return units[a].loadedAt-units[b].loadedAt});delete units[keys[0]]}
+                    units[id]={key:key,name:name,value:value,loadedAt:t,expiresAt:t+ttl}
+                  },stateLock)
+                  return value
+                }catch(e){stats.errors++;throw e}finally{active.dec()}
+              },unitLocks[(new java.lang.String(id).hashCode() & 2147483647)%unitLocks.length])
+            }
+          }
+          stores[name]=facade
+          return facade
+        },
+        invalidate:function(predicate){Object.keys(units).forEach(function(id){if(predicate(units[id].name,units[id].key))delete units[id]})},
+        entries:function(name){return Object.keys(units).map(function(id){return units[id]}).filter(function(unit){return unit.name==name})},
+        status:function(){return {cache: Object.assign({},stats),units:Object.keys(units).length}},
+        freshness:function(predicate){var rows=Object.keys(units).map(function(id){return units[id]}).filter(function(u){return !predicate || predicate(u.name,u.key)});var loaded=rows.length?Math.min.apply(null,rows.map(function(u){return u.loadedAt})):null,expires=rows.length?Math.min.apply(null,rows.map(function(u){return u.expiresAt})):null;return {loadedAt:loaded,expiresAt:expires,stale:expires==null || now()>=expires,refreshing:false,generation:stats.loads}}
+      }
+    }
+    exports.installOperations = function(options, validate) {
+      if (!options.operations || !options.operations.enabled) return
+      var records = Object.create(null), lock = "browse-operations-" + genUUID(), active = $atomic(0)
+      var metrics = {requests:0,errors:0,durationMs:0,refreshes:0,searches:0,searchTruncations:0,previewTruncations:0}
+      var csrf = genUUID(), hooks = options._fns, ttl = options.operations.ttlMs || 30000
+      var record = function(path) {
+        var t = now()
+        Object.keys(records).forEach(function(k) { if (t-records[k].touched > 1800000 && !records[k].refreshing) delete records[k] })
+        if (!records[path]) {
+          var keys = Object.keys(records)
+          if (keys.length >= 1000) {
+            keys.sort(function(a,b){return records[a].touched-records[b].touched})
+            var victim = keys.filter(function(k){return !records[k].refreshing})[0]
+            if (isUnDef(victim)) exports.error(503,"Browse busy")
+            delete records[victim]
+          }
+          records[path] = {loadedAt:null,expiresAt:null,generation:0,refreshing:false,lastRefresh:0}
+        }
+        records[path].touched = t
+        return records[path]
+      }
+      var snapshot = function(path) { var r=record(path); return {loadedAt:r.loadedAt,expiresAt:r.expiresAt,stale:r.expiresAt == null || now()>=r.expiresAt,refreshing:r.refreshing,generation:r.generation,lastError:r.lastError || null} }
+      var originalFreshness = hooks.getFreshness, originalStatus = hooks.getStatus, originalRefresh = hooks.refresh
+      ;["getList","getObj","search"].forEach(function(name) {
+        if (!isFunction(hooks[name])) return
+        var original = hooks[name]
+        hooks[name] = function(request, opts) {
+          var began=now(), result
+          try {
+            result=original(request,opts)
+            if(!isFunction(originalFreshness))syncFn(function(){var r=record(request.uri);r.loadedAt=now();r.expiresAt=now()+ttl},lock)
+            syncFn(function(){metrics.requests++;if(name=="search")metrics.searches++;if(result && result.searchInfo && result.searchInfo.truncated)metrics.searchTruncations++;if(result && result.truncated)metrics.previewTruncations++},lock)
+            return result
+          } catch(e) { syncFn(function(){metrics.errors++},lock); throw e }
+          finally { syncFn(function(){metrics.durationMs+=now()-began},lock) }
+        }
+      })
+      hooks.getFreshness = function(request,opts) {
+        validate(request,opts)
+        if (isFunction(originalFreshness)) return originalFreshness(request,opts)
+        return syncFn(function(){return snapshot(request.uri)},lock)
+      }
+      hooks.getStatus = function(request,opts) {
+        validate(request,opts)
+        return {capabilities:opts.capabilities,metrics:Object.assign({},metrics),provider:isFunction(originalStatus)?originalStatus(request,opts):{},trackedLocations:Object.keys(records).length}
+      }
+      hooks.refresh = function(request,opts) {
+        validate(request,opts)
+        if (request.method != "POST") exports.error(405,"Refresh requires POST")
+        var path=request.uri, owner=false, retry
+        syncFn(function(){var r=record(path);retry=Math.max(0,10000-(now()-r.lastRefresh));if(!r.refreshing && !retry){r.refreshing=true;r.lastRefresh=now();owner=true}},lock)
+        if (!owner) return {refreshed:false,retryIn:Math.ceil(retry/1000),refreshing:snapshot(path).refreshing}
+        if(active.inc()>4){active.dec();syncFn(function(){record(path).refreshing=false},lock);exports.error(503,"Browse busy")}
+        try {
+          if(isFunction(originalRefresh)) originalRefresh(request,opts)
+          else {var r=hooks.getList(request,opts);if(r.isFile){var obj=hooks.getObj(request,opts);if(obj.stream)obj.stream.close()}}
+          syncFn(function(){var r=record(path);r.loadedAt=now();r.expiresAt=now()+ttl;r.generation++;r.lastError=null;metrics.refreshes++},lock)
+          return {refreshed:true,freshness:snapshot(path)}
+        } catch(e){syncFn(function(){record(path).lastError="Refresh failed"},lock);throw e}
+        finally{active.dec();syncFn(function(){record(path).refreshing=false},lock)}
+      }
+      options._operation = function(action,request,server,api) {
+        if(!api && action=="refresh" && (request.params||{}).csrf!==csrf) exports.error(403,"Invalid refresh token")
+        if(action=="status")return ow.server.httpd.reply(hooks.getStatus(request,options))
+        if(action=="freshness")return ow.server.httpd.reply(hooks.getFreshness(request,options))
+        if(action=="refresh")return ow.server.httpd.reply(hooks.refresh(request,options))
+        if(action=="metrics"){
+          validate(request,options);ow.loadMetrics()
+          if(!isFunction(ow.metrics._fromObj2OpenMetricsStrict))exports.error(501,"Strict OpenMetrics requires an updated OpenAF runtime")
+          return {data:ow.metrics.fromObj2OpenMetrics(metricSnapshot(),"browse",__,__,__,true),status:200,mimetype:"application/openmetrics-text; version=1.0.0; charset=utf-8",header:{}}
+        }
+        exports.error(404,"Unknown browse operation")
+      }
+      options._refreshToken = csrf
+      var metricSnapshot=function(){
+        var out=Object.assign({},metrics)
+        if(isFunction(originalStatus)){
+          var status=originalStatus({uri:options.parentURI,params:{}},options) || {}, cache=status.cache || {}
+          ;["hits","misses","loads","errors"].forEach(function(key){if(isNumber(cache[key]))out["cache_"+key]=cache[key]})
+          if(isNumber(status.units))out.cache_units=status.units
+        }
+        return out
+      }
+      ow.loadMetrics()
+      ow.metrics.add("browse_"+sha256(String(options.port)+options.parentURI).substring(0,16),metricSnapshot)
+    }
+
 jobs:
 # -------------------
 - name : HTTP Browser
@@ -48,7 +261,10 @@ jobs:
     global.__GBHTTPD = global.__GBHTTPD || {}
 
     if (isUnDef(ow.server.httpd.browse[args.type])) throw new Error("Invalid type provided: " + args.type)
-    global.__GBHTTPD[String(args.port) + args.uri] = ow.server.httpd.browse[args.type](args.uri, args.options)
+    args.options = Object.assign({},args.options || {},{port:args.port})
+    var definition = ow.server.httpd.browse[args.type](args.uri, args.options)
+    require("ojob-browse-contract.js").check(args.options, definition.capabilities)
+    global.__GBHTTPD[String(args.port) + args.uri] = definition
 
 # --------------------------
 - name : HTTP Browse generic
@@ -92,7 +308,14 @@ jobs:
       try {
         var _options = global.__GBHTTPD[String(port) + uri]
         var _out = ""
-        var _lst = _options._fns.getList(request, _options)
+        var relative = global.__ojobHttpRelativePath(request.uri, _options.parentURI)
+        if (_options._operation && relative.startsWith("@@/")) {
+          var operation = relative.substring(3), target = Object.assign({},request)
+          target.uri = _options.parentURI.replace(/\/$/,"") + "/" + String((request.params||{}).path||"").replace(/^\/+/,"")
+          return _options._operation(operation,target,server,false)
+        }
+        var _lst = _options.query && _options.query.enabled && request.params.q && isFunction(_options._fns.search)
+          ? _options._fns.search(request, _options) : _options._fns.getList(request, _options)
         if (_lst.isList) {
             _out = _options._fns.renderList(_lst, server, request, _options)
             if (isMap(_out)) return _out
@@ -108,6 +331,7 @@ jobs:
         return server.replyOKHTML( String(_out) )
       } catch(e) {
         if (e.httpStatus == 403) return { data: "Forbidden", mimetype: "text/plain", status: 403, header: {} }
+        if ([400,404,405,501,503].indexOf(e.httpStatus)>=0) return { data: "Browse request rejected", mimetype: "text/plain", status: e.httpStatus, header: {} }
         logErr(`Error: ${e.message} | ` + $err(e,__,true))
         return { data: "Internal error", mimetype: "text/plain", status: 500, header: {} }
       }
@@ -116,6 +340,7 @@ jobs:
 
     const escapeText = global.__ojobHttpEscapeText
     const fileLink = global.__ojobHttpFileLink
+    var defaultFilesystem = !isFunction(args.fns.getList) && !isFunction(args.fns.getObj)
 
     // Check the functions provided
     args.fns.getList = _$(args.fns.getList, "args.fns.getList").isFunction().default((request, options) => {
@@ -142,6 +367,7 @@ jobs:
           key        : "Filename",
           list       : lst.map(r => ({
               isDirectory: r.isDirectory,
+              sortValues : { Size:r.size, "Last modified":r.lastModified },
               values     : {
                   Filename        : r.filename,
                   "Last modified" : ow.format.fromDate(new Date(r.lastModified), "yyyy-MM-dd HH:mm:ss"),
@@ -155,6 +381,42 @@ jobs:
       const uri = request.uri
       var puri = global.__ojobHttpRelativePath(uri, options.parentURI)
       var file = global.__ojobHttpResolveFile(options.parentPath, puri)
+
+      // Preview settings affect HTML only; API object reads remain complete.
+      var preview = options.preview || {}
+      if (!options._api && request.params.raw != "true" && (isMap(preview.formats) || isDef(preview.maxBytes))) {
+        var name = String(new java.io.File(file).getName())
+        var ext = name.indexOf(".") < 0 ? "" : name.substring(name.lastIndexOf(".") + 1).toLowerCase()
+        var defaults = {md:"markdown",yml:"yaml",yaml:"yaml",css:"css",sh:"sh",js:"js",java:"java",py:"python",toml:"toml",hbs:"handlebars",json:"json",adoc:"asciidoc"}
+        var formats = isMap(preview.formats) ? preview.formats : defaults
+        var own = key => Object.prototype.hasOwnProperty.call(formats, key)
+        var format = own("name:" + name) ? formats["name:" + name] : (own(ext) ? formats[ext] : __)
+        if (!isString(format)) return { file: file }
+        if (!/^[a-z][a-z0-9-]*$/.test(format)) throw new Error("Invalid preview format")
+        var limit = isDef(preview.maxBytes) ? Number(preview.maxBytes) : __
+        if (isDef(limit) && (!isFinite(limit) || limit < 1 || Math.floor(limit) != limit || limit > 16777216)) throw new Error("preview.maxBytes must be an integer from 1 to 16777216")
+        var stream = io.readFileStream(file), bytes, truncated = false
+        try {
+          if (isDef(limit)) {
+            var output = new java.io.ByteArrayOutputStream(), count = 0, n
+            var buffer = java.lang.reflect.Array.newInstance(java.lang.Byte.TYPE, Math.min(8192, limit + 1))
+            while (count <= limit && (n = stream.read(buffer, 0, Math.min(buffer.length, limit + 1 - count))) != -1) {
+              if (n == 0) continue
+              output.write(buffer, 0, n); count += n
+            }
+            bytes = output.toByteArray()
+            truncated = bytes.length > limit
+            if (truncated) bytes = java.util.Arrays.copyOf(bytes, limit)
+          } else bytes = stream.readAllBytes()
+        } finally { stream.close() }
+        var decoder = java.nio.charset.StandardCharsets.UTF_8.newDecoder()
+        decoder.onMalformedInput(java.nio.charset.CodingErrorAction.IGNORE)
+        var data = String(decoder.decode(java.nio.ByteBuffer.wrap(bytes)))
+        if (truncated) return { data: data + "\n\n[Preview truncated; use the raw download for the complete file.]", type: "text", truncated: true }
+        if (format == "json") return { data: jsonParse(data), type: "json" }
+        if (format == "asciidoc") return { stream: new java.io.ByteArrayInputStream(bytes), type: "asciidoc" }
+        return { data: data, type: format == "markdown" ? "md" : format }
+      }
       
       if (request.params.raw == "true") {
         return { stream: io.readFileStream(file) }
@@ -193,7 +455,7 @@ jobs:
 
       var puri = global.__ojobHttpRelativePath(uri, options.parentURI).replace(/\/$/, "")
       const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
-      const fileLink = global.__ojobHttpFileLink
+      const fileLink = value => lst.searchInfo ? String(value).split("/").map(global.__ojobHttpFileLink).join("/") : global.__ojobHttpFileLink(value)
       if (!uri.endsWith("/")) {
         var _qs = isMap(request.params) ? request.params["NanoHttpd.QUERY_STRING"] : __
         var q = (isString(_qs) && _qs.length > 0) ? "?" + _qs : ""
@@ -211,7 +473,7 @@ jobs:
       if (!isNumber(_page) || _page <= 0) _page = 1
       if (!isNumber(_pageSize) || _pageSize < 0) _pageSize = 0
 
-      if (isDef(options.default) && lst.list.filter(r => r.values[lst.key] == options.default).length == 1) {
+      if (isDef(options.default) && (lst.defaultPresent || !(request.params || {}).q && lst.list.filter(r => r.values[lst.key] == options.default).length == 1)) {
         request.uri = request.uri.replace(/\/+$/, "") + "/" + options.default
         return options._fns.renderObj(options._fns.getObj(request, options), server, request, options)
       }
@@ -235,6 +497,11 @@ jobs:
 
       const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
       var content = "## " + breadcrumb( puri ) + "<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + logo + "\">\n\n"
+      if (options.query && options.query.enabled) {
+        content += '<form method="get"><label>Search <input name="q" value="' + escapeText((request.params||{}).q || '') + '"></label> <label>Sort <select name="sort">'
+        ;(lst.sortFields || lst.fields).forEach(field => { content += '<option value="' + escapeText(field) + '"' + (lst.sortInfo && lst.sortInfo.field == field ? ' selected' : '') + '>' + escapeText(field) + '</option>' })
+        content += '</select></label> <select name="order"><option value="asc">Ascending</option><option value="desc"' + (lst.sortInfo && lst.sortInfo.order == 'desc' ? ' selected' : '') + '>Descending</option></select> <label>Per page <input type="number" name="size" min="1" max="' + (options.query.maxPageSize || 500) + '" value="' + (_pageSize || options.query.pageSize || 100) + '"></label> <button type="submit">Apply</button></form>\n'
+      }
 
       // Pagination controls (if metadata is provided)
       if (isDef(lst.pageInfo) && isDef(lst.pageInfo.pageSize) && lst.pageInfo.pageSize > 0) {
@@ -242,8 +509,13 @@ jobs:
         if (_totalPages == 1 && _page <= 1) {
           // Don't render pagination for a single page.
         } else {
-        var _prev = _page > 1 ? ("?page=" + (_page - 1)) : __
-        var _next = (_page < _totalPages) ? ("?page=" + (_page + 1)) : __
+        var pageURL = page => {
+          var params = request.params || {}
+          var keys = Object.keys(params).filter(k => ["page", "NanoHttpd.QUERY_STRING"].indexOf(k) < 0 && !k.startsWith("NanoHttpd."))
+          return "?" + keys.map(k => encodeURIComponent(k) + "=" + encodeURIComponent(params[k])).concat(["page=" + page]).join("&amp;")
+        }
+        var _prev = _page > 1 ? pageURL(_page - 1) : __
+        var _next = (_page < _totalPages) ? pageURL(_page + 1) : __
         var _pager = "<div style=\"margin: 0.25em 0 0.75em 0; padding-left: 0.5em; font-family: -apple-system, Calibri, DejaVu Sans;\">"
         if (isDef(_prev) && String(_prev).length > 0) {
           _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _prev + "\">&#8592;</a>"
@@ -281,7 +553,8 @@ jobs:
             content += "| <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8598;</span> | __[..](<../>)__ | | |\n"
           }
 
-          $from(lst.list).sort("-isDirectory", "values." + lst.key).select(r => {
+          var rows = lst.queryInfo && lst.queryInfo.applied ? lst.list : $from(lst.list).sort("-isDirectory", "values." + lst.key).select()
+          rows.forEach(r => {
               content += "|"
               if (r.isDirectory) {
                   content += " <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8600;</span> |"
@@ -308,8 +581,11 @@ jobs:
       if (isDef(options.footer)) {
           content += "\n" + options.footer + "\n"
       }
+      if (options._operation) {
+        content += '<form method="post" action="' + prefixURL(options.parentURI.replace(/\/$/,"") + '/@@/refresh') + '"><input type="hidden" name="path" value="' + escapeText(puri) + '"><input type="hidden" name="csrf" value="' + options._refreshToken + '"><button type="submit">Refresh now</button> <a href="' + prefixURL(options.parentURI.replace(/\/$/,"") + '/@@/status') + '">Status</a></form>\n'
+      }
 
-      if (options.sortTab) {
+      if (options.sortTab && !(lst.queryInfo && lst.queryInfo.applied)) {
           content += "<script src=\"" + prefixURL("/js/mdtablesort.js") + "\"></script>\n"
           if (options.sortTabAsc) {
               content += "<script>document.addEventListener('DOMContentLoaded', function() { var t = document.querySelector('table'); if (!t) return; var row = t.querySelector('thead tr') || t.querySelector('tr'); if (!row) return; var cell = row.querySelectorAll('th, td')[1]; if (!cell) return; if (typeof updateSortState === 'function') updateSortState(cell, 'asc', t); });</script>\n"
@@ -458,12 +734,100 @@ jobs:
 
     var _options = args.options
     _options._fns = args.fns
-    _options._fns.init()
     if (isUnDef(global.__GBHTTPD)) global.__GBHTTPD = {}
 
     _options.parentURI  = args.uri
     _options.parentPath = args.path
     _options.port       = args.port
+    _options.capabilities = { contract: 1, query: 1, previewFormats: 1, boundedPreview: 1, operations: 1 }
+    if (_options.query && _options.query.enabled || _options.preview || _options.operations && _options.operations.enabled) require("ojob-browse-contract.js").check(_options,_options.capabilities)
+
+    // Apply query processing once, before rendering or API serialization.
+    if (defaultFilesystem && isUnDef(_options._fns.search)) _options._fns.search = (request, options) => {
+      if (!options.query || !options.query.enabled) { var unsupported = new Error("Search not enabled"); unsupported.httpStatus = 501; throw unsupported }
+      var query = String((request.params || {}).q || "")
+      if (query.length > (options.query.maxQueryLength || 256)) { var invalid = new Error("Query too long"); invalid.httpStatus = 400; throw invalid }
+      var relative = global.__ojobHttpRelativePath(request.uri, options.parentURI)
+      var start = global.__ojobHttpResolveFile(options.parentPath, relative)
+      var pending = [start], seen = {}, rows = [], scanned = 0, began = now(), timedOut = false
+      var maxScan = options.query.maxScanned || 10000, maxResults = options.query.maxResults || 1000
+      while (pending.length && scanned < maxScan && rows.length < maxResults) {
+        if (now() - began >= (options.query.timeoutMs || 5000)) { timedOut = true; break }
+        var directory = pending.pop()
+        if (seen[directory]) continue
+        seen[directory] = true
+        if (!new java.io.File(directory).isDirectory()) continue
+        var directoryStream = java.nio.file.Files.newDirectoryStream(new java.io.File(directory).toPath())
+        try {
+        var children = directoryStream.iterator()
+        while (children.hasNext()) {
+          if (scanned >= maxScan || rows.length >= maxResults || now() - began >= (options.query.timeoutMs || 5000)) {
+            timedOut = now() - began >= (options.query.timeoutMs || 5000)
+            pending.push(directory); break
+          }
+          scanned++
+          var child = children.next().toFile(), path = String(new java.io.File(start).toPath().relativize(child.toPath())).replace(/\\/g, "/")
+          if (java.nio.file.Files.isSymbolicLink(child.toPath())) continue
+          try { global.__ojobHttpResolveFile(options.parentPath, (relative ? relative.replace(/\/$/, "") + "/" : "") + path) } catch(e) { continue }
+          if (child.isDirectory()) pending.push(String(child.getCanonicalPath()))
+          if (query && path.toLowerCase().indexOf(query.toLowerCase()) >= 0) rows.push({isDirectory:child.isDirectory(),values:{Filename:path}})
+        }
+        } finally { directoryStream.close() }
+      }
+      var complete = pending.length == 0 && !timedOut
+      return {isList:true,fields:["Filename"],alignFields:["left"],key:"Filename",list:rows,searchInfo:{complete:complete,truncated:!complete,timedOut:timedOut,scanned:scanned,totalExact:complete}}
+    }
+    var applyQuery = (result, request, options) => {
+      if (!result.isList || !options.query || !options.query.enabled || result.queryInfo && result.queryInfo.applied) return result
+      if (result.pageInfo && result.pageInfo.pageSize > 0) throw new Error("Provider must apply enhanced queries before pagination")
+      var params = request.params || {}, config = options.query
+      var invalid = () => { var e = new Error("Invalid browse query"); e.httpStatus = 400; throw e }
+      var integer = (value, fallback, max) => {
+        if (isUnDef(value)) return fallback
+        var n = Number(value)
+        if (!isFinite(n) || n < 1 || Math.floor(n) != n || n > max) return invalid()
+        return n
+      }
+      var size = integer(params.size || params.pageSize, config.pageSize || 100, config.maxPageSize || 500)
+      var page = integer(params.page, 1, Number.MAX_SAFE_INTEGER)
+      var field = params.sort || String(result.key), order = params.order || "asc"
+      if (result.fields.indexOf(field) < 0 || ["asc", "desc"].indexOf(order) < 0) invalid()
+      var rows = result.list.slice()
+      rows.sort((a, b) => {
+        if (!!a.isDirectory != !!b.isDirectory) return a.isDirectory ? -1 : 1
+        var av = a.sortValues && isDef(a.sortValues[field]) ? a.sortValues[field] : a.values[field]
+        var bv = b.sortValues && isDef(b.sortValues[field]) ? b.sortValues[field] : b.values[field]
+        if(field=="Size" && isNumber(a.values["Size in bytes"]) && isNumber(b.values["Size in bytes"])){av=a.values["Size in bytes"];bv=b.values["Size in bytes"]}
+        var n = isNumber(av) && isNumber(bv) ? av - bv : String(av).localeCompare(String(bv))
+        return n ? n * (order == "desc" ? -1 : 1) : String(a.values[result.key]).localeCompare(String(b.values[result.key]))
+      })
+      var total = rows.length, pages = Math.max(1, Math.ceil(total / size))
+      page = Math.min(page, pages)
+      result.defaultPresent = !(request.params || {}).q && rows.some(row => row.values[result.key] == options.default)
+      result.list = rows.slice((page - 1) * size, page * size)
+      result.pageInfo = {page:page,pageSize:size,total:total,totalPages:pages,hasPrevious:page>1,hasNext:page<pages}
+      result.sortInfo = {field:field,order:order}
+      result.queryInfo = {applied:true}
+      return result
+    }
+    var originalGetList = _options._fns.getList, originalSearch = _options._fns.search
+    _options._fns.getList = (request, options) => applyQuery(originalGetList(request, options), request, options)
+    if (isFunction(originalSearch)) _options._fns.search = (request, options) => applyQuery(originalSearch(request, options), request, options)
+    if (isFunction(_options._fns.validate)) {
+      var validateProvider = _options._fns.validate
+      ;["getList","getObj","search"].forEach(name => {
+        if (!isFunction(_options._fns[name])) return
+        var original = _options._fns[name]
+        _options._fns[name] = (request,options) => { validateProvider(request,options);return original(request,options) }
+      })
+    }
+    _options._fns.init(_options)
+    if (_options.operations && _options.operations.enabled) {
+      var support = require("ojob-browse-contract.js")
+      var validate = defaultFilesystem ? (request,options) => global.__ojobHttpResolveFile(options.parentPath,global.__ojobHttpRelativePath(request.uri,options.parentURI)) : _options._fns.validate
+      if (!isFunction(validate)) throw new Error("Provider operations require a validate callback")
+      support.installOperations(_options,validate)
+    }
     global.__GBHTTPD[String(args.port) + args.uri] = _options
 
 # ----------------------
@@ -482,6 +846,7 @@ jobs:
       args  :
         uri       : uri
         browseUri : browseUri
+        operationsBrowseUris: operationsBrowseUris
   help :
    text   : Provides a HTTP API to access getList/getObj for any HTTP Browse generic implementation.
    expects:
@@ -513,6 +878,10 @@ jobs:
         if (isUnDef(_options)) {
           return { data: "Unknown browseUri", mimetype: "text/plain", status: 404, header: {} }
         }
+        if (_cfg.requiredOptions) {
+          try { require("ojob-browse-contract.js").check(_cfg.requiredOptions,_options.capabilities) }
+          catch(e) { return ow.server.httpd.reply({error:"Target browser lacks the requested capability"},501,"application/json",{}) }
+        }
 
         var targetPath = _$(_params.path).isString().default("")
         var _req = {}
@@ -521,6 +890,15 @@ jobs:
         _req.uri    = (targetUri + "/" + targetPath.replace(/^\/+/, "")).replace(/\/{2,}/g, "/").replace(/\/$/, "") || "/"
 
         var action = _$(_params.action).isString().default("list")
+        if (["status","freshness","refresh","metrics"].indexOf(action)>=0) {
+          if (!isArray(_cfg.operationsBrowseUris) || _cfg.operationsBrowseUris.indexOf(targetUri)<0) return ow.server.httpd.reply({error:"Operation target not authorized"},403,"application/json",{})
+          if (!_options._operation) return ow.server.httpd.reply({error:"Operations not supported"},501,"application/json",{})
+          return _options._operation(action,_req,server,true)
+        }
+        if (action == "preview") {
+          if (!_options.capabilities || !_options.capabilities.previewFormats) return ow.server.httpd.reply({error:"Preview not supported"},501,"application/json",{})
+          return _options._fns.renderObj(_options._fns.getObj(_req,Object.assign({},_options,{_api:false})),server,_req,_options)
+        }
         if (action == "obj") {
           var _obj = _options._fns.getObj(_req, merge(_options, { _api: true }))
           //if (request.params.raw == "true") {
@@ -549,9 +927,10 @@ jobs:
         return ow.server.httpd.reply(_lst)
       } catch(e) {
         if (e.httpStatus == 403) return { data: "Forbidden", mimetype: "text/plain", status: 403, header: {} }
+        if ([400,404,405,501,503].indexOf(e.httpStatus)>=0) return { data: "Browse request rejected", mimetype: "text/plain", status: e.httpStatus, header: {} }
         logErr(`Error: ${e.message} | ` + $err(e,__,true))
         return { data: "Internal error", mimetype: "text/plain", status: 500, header: {} }
       }
   exec : | #js
     if (isUnDef(global.__GBHTTPDAPI)) global.__GBHTTPDAPI = {}
-    global.__GBHTTPDAPI[String(args.port) + args.uri] = { browseUri: args.browseUri }
+    global.__GBHTTPDAPI[String(args.port) + args.uri] = { browseUri: args.browseUri, operationsBrowseUris: args.operationsBrowseUris || [], requiredOptions: args.options }
