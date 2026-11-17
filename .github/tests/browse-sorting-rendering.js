@@ -52,7 +52,7 @@ try {
   equal(header.indexOf('id="filename<span'), -1)
   equal(header.indexOf('_aria-label='), -1)
   equal((html.match(/class="browse-controls" method="get"/g) || []).length, 1)
-  equal(html.indexOf('<label class="browse-search">Search') >= 0, true)
+  equal(html.indexOf('<label for="browse-search-input">Search</label>') >= 0, true)
   equal(html.indexOf('name="csrf"') >= 0, true)
   equal(html.indexOf('action="/browse/@@/refresh"') >= 0, true)
   equal(html.indexOf('data-url="/browse/@@/status?path="') >= 0, true)
@@ -79,6 +79,13 @@ try {
   equal(html.indexOf('Press Apply to search') >= 0, true)
   equal(html.indexOf("searchInput.addEventListener('input', queueSearch)") >= 0, true)
   equal(html.indexOf("searchForm.addEventListener('submit', cancelLiveSearch)") >= 0, true)
+  equal(popover.indexOf('id="browse-clear-search"') >= 0, true)
+  equal(popover.indexOf('aria-label="Clear search"') >= 0, true)
+  equal(/id="browse-clear-search"[^>]*><svg/.test(popover), true)
+  var searchFormHTML = popover.match(/<form class="browse-controls"[\s\S]*?<\/form>/)[0]
+  equal((searchFormHTML.match(/type="submit"/g) || []).length, 1)
+  equal(searchFormHTML.indexOf('class="browse-apply" type="submit"') >= 0, true)
+  equal(searchFormHTML.indexOf('id="browse-clear-search" class="browse-icon" type="button"') >= 0, true)
   var previousTheme = __flags.MD_DARKMODE
   try {
     ;['false', 'true'].forEach(theme => {
