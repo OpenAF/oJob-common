@@ -57,6 +57,59 @@ code:
       })
     }
 
+    // Compare browse values using SemVer precedence before the existing value fallback.
+    exports.compareValues = (function() {
+      // Parse complete SemVer 2 values; retain the existing optional v display prefix.
+      function parseSemVer(value) {
+        if (value === null || value === undefined) return null
+        var match = String(value).trim().match(/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/)
+        if (!match) return null
+        var prerelease = match[4] ? match[4].split('.') : []
+        if (prerelease.some(id => /^\d+$/.test(id) && id.length > 1 && id[0] === '0')) return null
+        return { major:match[1], minor:match[2], patch:match[3], prerelease:prerelease }
+      }
+
+      function isNumericIdentifier(value) {
+        return /^\d+$/.test(value)
+      }
+
+      // Digit strings preserve precedence beyond Number's safe integer range.
+      function compareSemVerNumber(a, b) {
+        if (a.length !== b.length) return a.length < b.length ? -1 : 1
+        return a === b ? 0 : (a < b ? -1 : 1)
+      }
+
+      function compareSemVer(a, b) {
+        var keys = ['major', 'minor', 'patch']
+        for (var part = 0; part < keys.length; part++) {
+          var key = keys[part]
+          var result = compareSemVerNumber(a[key], b[key])
+          if (result) return result
+        }
+        if (!a.prerelease.length && !b.prerelease.length) return 0
+        if (!a.prerelease.length) return 1
+        if (!b.prerelease.length) return -1
+        for (var i = 0; i < Math.max(a.prerelease.length, b.prerelease.length); i++) {
+          var ai = a.prerelease[i], bi = b.prerelease[i]
+          if (ai === undefined) return -1
+          if (bi === undefined) return 1
+          if (ai === bi) continue
+          var an = isNumericIdentifier(ai), bn = isNumericIdentifier(bi)
+          if (an && bn) return compareSemVerNumber(ai, bi)
+          if (an !== bn) return an ? -1 : 1
+          return ai < bi ? -1 : 1
+        }
+        return 0
+      }
+      return function(a, b) {
+        if (isNumber(a) && isNumber(b)) return a - b
+        var av = parseSemVer(a), bv = parseSemVer(b)
+        if (!!av != !!bv) return av ? -1 : 1
+        if (av && bv) return compareSemVer(av, bv)
+        return String(a).localeCompare(String(b))
+      }
+    })()
+
     // Sort and paginate provider results
     exports.query = function(result, request, options) {
       if (!result.isList || !options.query || !options.query.enabled || result.queryInfo && result.queryInfo.applied) return result
@@ -85,8 +138,8 @@ code:
           av = a.values["Size in bytes"]
           bv = b.values["Size in bytes"]
         }
-        var n = isNumber(av) && isNumber(bv) ? av - bv : String(av).localeCompare(String(bv))
-        return n ? n * (order == "desc" ? -1 : 1) : String(a.values[key]).localeCompare(String(b.values[key]))
+        var n = exports.compareValues(av, bv)
+        return n ? n * (order == "desc" ? -1 : 1) : (field == key ? 0 : String(a.values[key]).localeCompare(String(b.values[key])))
       })
 
       // Build pagination metadata
@@ -899,6 +952,7 @@ jobs:
           '.browse-icon:focus-visible,.browse-controls input:focus-visible,.browse-apply:focus-visible,.browse-status:focus-visible{outline:2px solid var(--browse-fg);outline-offset:2px}',
           '.browse-status{box-sizing:border-box;width:max-content;min-width:18em;max-width:min(48em,calc(100vw - 2em));max-height:80vh;padding:1em;border:1px solid var(--browse-border);border-radius:6px;background:var(--browse-bg);color:var(--browse-hover);box-shadow:0 8px 30px #0003}',
           '.browse-status::backdrop{background:#0005}.browse-status-heading{display:flex;align-items:center;justify-content:space-between;gap:1em;margin-bottom:0.75em;font-weight:600}.browse-status-content{overflow:auto;max-height:65vh;font-size:0.9em}',
+          '.browse-search-help,.browse-shortcut-setting{font-size:0.8em}.browse-shortcut-setting{display:flex;align-items:center;gap:0.4em;margin-top:0.75em}.browse-shortcut-setting input{margin:0}.browse-search-help{line-height:1.5}',
           '.browse-status-content table{margin:0}.browse-status-content td{white-space:normal;overflow-wrap:anywhere}'
         ].join('') + '</style>\n\n'
       }
@@ -906,8 +960,9 @@ jobs:
         content += '<div id="browse-options" class="browse-options" popover="auto" role="dialog" aria-label="Table options">'
         if (hasQuery) {
           var sortInputs = '<input type="hidden" name="sort" value="' + escapeText(lst.sortInfo ? lst.sortInfo.field : String(lst.key)) + '"><input type="hidden" name="order" value="' + (lst.sortInfo && lst.sortInfo.order == 'desc' ? 'desc' : 'asc') + '">'
-          content += '<form class="browse-controls" method="get"><div class="browse-search"><label for="browse-search-input">Search</label><div class="browse-search-row"><input id="browse-search-input" type="search" name="q" autofocus value="' + escapeText((request.params||{}).q || '') + '"><button id="browse-clear-search" class="browse-icon" type="button" title="Clear search" aria-label="Clear search"' + (hasSearch ? '' : ' disabled') + '>' + icon('clear') + '</button></div></div>' + sortInputs
-          content += '<div class="browse-options-row"><label>Per page <input type="number" name="size" min="1" max="' + (options.query.maxPageSize || 500) + '" value="' + pageSize + '"></label><button class="browse-apply" type="submit">Apply</button></div><span class="browse-live-status" role="status"></span></form>'
+          content += '<form class="browse-controls" method="get"><div class="browse-search"><label for="browse-search-input">Search</label><div class="browse-search-row"><input id="browse-search-input" type="search" name="q" aria-describedby="browse-search-help" autofocus value="' + escapeText((request.params||{}).q || '') + '"><button id="browse-clear-search" class="browse-icon" type="button" title="Clear search" aria-label="Clear search"' + (hasSearch ? '' : ' disabled') + '>' + icon('clear') + '</button></div></div>' + sortInputs
+          content += '<div class="browse-options-row"><label>Per page <input type="number" name="size" min="1" max="' + (options.query.maxPageSize || 500) + '" value="' + pageSize + '"></label><button class="browse-apply" type="submit">Apply</button></div><span class="browse-live-status" role="status"></span><span id="browse-search-help" class="browse-search-help">Enter: apply &middot; Shift+Enter: clear</span></form>'
+          content += '<label class="browse-shortcut-setting"><input id="browse-shortcut-enabled" type="checkbox" checked> Enable / shortcut to search</label>'
         }
         if (options._operation) {
           var operationsURL = prefixURL(options.parentURI.replace(/\/$/, "") + '/@@/')
@@ -1063,7 +1118,7 @@ jobs:
               if (open) {
                 positionOptions()
                 var search = optionsPanel.querySelector('input[name=q]')
-                if (search) search.focus()
+                if (search) { search.focus(); search.select() }
               }
             })
             optionsPanel.addEventListener('keydown', function(event) {
@@ -1084,6 +1139,31 @@ jobs:
           if (searchForm) {
             var searchInput = searchForm.querySelector('input[name=q]')
             var clearSearch = document.getElementById('browse-clear-search')
+            var shortcutSetting = document.getElementById('browse-shortcut-enabled')
+            var shortcutEnabled = true
+            try { shortcutEnabled = localStorage.getItem('openaf.browse.slashShortcut') != 'off' } catch (error) {}
+            var updateShortcut = function() {
+              shortcutSetting.checked = shortcutEnabled
+              if (shortcutEnabled) optionsButton.setAttribute('aria-keyshortcuts', '/')
+              else optionsButton.removeAttribute('aria-keyshortcuts')
+            }
+            updateShortcut()
+            shortcutSetting.addEventListener('change', function() {
+              shortcutEnabled = this.checked
+              try { localStorage.setItem('openaf.browse.slashShortcut', shortcutEnabled ? 'on' : 'off') } catch (error) {}
+              updateShortcut()
+            })
+            document.addEventListener('keydown', function(event) {
+              if (!shortcutEnabled || event.defaultPrevented || event.isComposing || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.key != '/') return
+              var target = event.target
+              if (target instanceof Element && (target.isContentEditable || target.closest('input, textarea, select, [role="textbox"]'))) return
+              if (document.querySelector('dialog[open]')) return
+              event.preventDefault()
+              if (!optionsPanel.matches(':popover-open')) optionsPanel.showPopover()
+              positionOptions()
+              searchInput.focus()
+              searchInput.select()
+            })
             var syncClearSearch = function() {
               clearSearch.disabled = !searchInput.value && !new URLSearchParams(window.location.search).get('q')
             }
@@ -1121,6 +1201,7 @@ jobs:
                 document.getElementById('browse-pagination').replaceWith(pager)
                 optionsButton = document.getElementById('browse-options-toggle')
                 optionsButton.setAttribute('aria-expanded', String(optionsPanel.matches(':popover-open')))
+                updateShortcut()
                 window.history.replaceState(null, '', url)
                 syncClearSearch()
                 showSearchMessage('Results updated')
@@ -1143,10 +1224,18 @@ jobs:
             searchInput.addEventListener('compositionend', queueSearch)
             searchForm.querySelector('input[name=size]').addEventListener('input', cancelLiveSearch)
             searchForm.addEventListener('submit', cancelLiveSearch)
-            clearSearch.addEventListener('click', function() {
+            var clearAndApply = function() {
               cancelLiveSearch()
               searchInput.value = ''
               searchForm.requestSubmit(searchForm.querySelector('.browse-apply'))
+            }
+            clearSearch.addEventListener('click', clearAndApply)
+            searchInput.addEventListener('keydown', function(event) {
+              if (event.key == 'Enter' && event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing && event.keyCode != 229) {
+                event.preventDefault()
+                event.stopPropagation()
+                clearAndApply()
+              }
             })
           }
           var dialog = document.getElementById('browse-status')
@@ -1490,6 +1579,7 @@ jobs:
       if (result.fields.indexOf(field) < 0 || ["asc", "desc"].indexOf(order) < 0) invalid()
 
       // Sort directories and field values
+      var compareValues = require("ojob-browse-contract.js").compareValues
       var rows = result.list.slice()
       rows.sort((a, b) => {
         if (!!a.isDirectory != !!b.isDirectory) return a.isDirectory ? -1 : 1
@@ -1499,8 +1589,8 @@ jobs:
           av = a.values["Size in bytes"]
           bv = b.values["Size in bytes"]
         }
-        var n = isNumber(av) && isNumber(bv) ? av - bv : String(av).localeCompare(String(bv))
-        return n ? n * (order == "desc" ? -1 : 1) : String(a.values[result.key]).localeCompare(String(b.values[result.key]))
+        var n = compareValues(av, bv)
+        return n ? n * (order == "desc" ? -1 : 1) : (field == result.key ? 0 : String(a.values[result.key]).localeCompare(String(b.values[result.key])))
       })
 
       // Build pagination metadata
