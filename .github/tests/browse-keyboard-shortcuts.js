@@ -35,7 +35,7 @@ function setup() {
   button.getBoundingClientRect = panel.getBoundingClientRect
   form.querySelector = selector => ({'input[name=q]':input, 'input[name=size]':size, '.browse-apply':apply, '.browse-live-status':message})[selector]
   form.requestSubmit = submitter => { equal(submitter, apply); applied++; form.fire('submit') }
-  const nodes = {'browse-options-toggle':button, 'browse-options':panel, 'browse-clear-search':clear, 'browse-shortcut-enabled':setting}
+  const nodes = {'browse-options-toggle':button, 'browse-options':panel, 'browse-clear-search':clear, 'browse-shortcut-enabled':setting, 'browse-search-notice':{dataset:{}}}
   const document = new Element()
   document.getElementById = id => nodes[id] || null
   document.querySelector = () => modal ? {} : null
@@ -45,7 +45,7 @@ function setup() {
   vm.runInNewContext(script, {
     document, window, Element, URLSearchParams,
     localStorage: {getItem:key => saved.get(key), setItem:(key,value) => saved.set(key,value)},
-    ResizeObserver: class { observe() {} }, clearTimeout, setTimeout:() => 1
+    ResizeObserver: class { observe() {} }, clearTimeout, setTimeout:() => 1, setInterval:() => 1
   })
   document.fire('DOMContentLoaded')
   const key = (key, properties = {}, target = new Element()) => {

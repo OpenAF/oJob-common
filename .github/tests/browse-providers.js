@@ -16,9 +16,10 @@ function FakeS3(){clients++}
 FakeS3.prototype.listObjects=function(bucket,prefix){prefixes.push(prefix);return [{filename:'a.xml',isFile:true,size:20,lastModified:1711050000000}]}
 FakeS3.prototype.walkObjects=function(bucket,prefix,callback){scans++;callback({filename:prefix+'a.xml',isFile:true,size:20,lastModified:1711050000000});return {complete:true,totalExact:true,scanned:1}}
 FakeS3.prototype.getObjectStream=function(bucket,key,offset,len){return af.fromString2InputStream('<root>complete</root>'.substring(0,len||100))}
-function run(file,name,args,missing){var job=io.readFileYAML(file).jobs.filter(j=>j.name==name)[0];new Function('args','loadLib','load','AWS','S3','require',job.exec)(args,function(){},function(){},FakeAWS,FakeS3,function(){if(missing)throw Error('missing');return support});return args}
+function run(file,name,args,missing,schedule){var job=io.readFileYAML(file).jobs.filter(j=>j.name==name)[0];new Function('args','loadLib','load','AWS','S3','require','$doV',job.exec)(args,function(){},function(){},FakeAWS,FakeS3,function(){if(missing)throw Error('missing');return support},schedule || $doV);return args}
 function options(args){var o=Object.assign({},args.options,{parentURI:args.uri,parentPath:args.path||'',port:1});args.fns.init(o);return o}
-var ecr='../openaf-opacks/AWS/oJobECR.yaml', s3='../openaf-opacks/S3/oJobS3.yaml'
+var packs = getEnv('BROWSE_OPACKS') || '../openaf-opacks'
+var ecr=packs+'/AWS/oJobECR.yaml', s3=packs+'/S3/oJobS3.yaml'
 var failed=false
 try{run(ecr,'HTTP Browse - ecr',{options:{query:{enabled:true}}},true)}catch(e){failed=true}
 equal(failed,true);equal(clients,0)
@@ -55,7 +56,7 @@ equal(sa.fns.search(req,so).list.length,1);sa.fns.search(req,so);equal(scans,1)
 equal(sa.fns.getObj({uri:'/s3/a.xml',params:{}},so).truncated,true)
 var raw=sa.fns.getObj({uri:'/s3/a.xml',params:{raw:'true'}},so)
 try{equal(String(af.fromInputStream2String(raw.stream)),'<root>complete</root>')}finally{raw.stream.close()}
-var ca=run('../openaf-opacks/AWS/oJobCodeArtifact.yaml','HTTP Browse - codeartifact',{port:3,uri:'/ca',path:'',options:{query:{enabled:true,pageSize:1}}})
+var ca=run(packs+'/AWS/oJobCodeArtifact.yaml','HTTP Browse - codeartifact',{port:3,uri:'/ca',path:'',options:{query:{enabled:true,pageSize:1}}})
 var co=options(ca)
 equal(domainCalls,1)
 equal(ca.fns.getList({uri:'/ca/',params:{}},co).list[0].values.Created,'2024-03-21 19:40:00')
@@ -82,7 +83,7 @@ var installedGeneric=io.readFileYAML('/Applications/OpenAF/oJob-common/oJobBrows
 new Function('args',installedGeneric.exec)(legacy)
 var registered=global.__GBHTTPD['4/legacy']
 equal(registered._fns.getList({uri:'/legacy/',params:{}},registered).isList,true)
-var legacyCA=run('../openaf-opacks/AWS/oJobCodeArtifact.yaml','HTTP Browse - codeartifact',{port:6,uri:'/legacyca',path:'',templates:{},options:{}},true)
+var legacyCA=run(packs+'/AWS/oJobCodeArtifact.yaml','HTTP Browse - codeartifact',{port:6,uri:'/legacyca',path:'',templates:{},options:{}},true)
 legacyCA.templates={}
 new Function('args',installedGeneric.exec)(legacyCA)
 var oldCA=global.__GBHTTPD['6/legacyca']
@@ -100,4 +101,94 @@ FakeAWS.prototype.ECR_DescribeRepositories=function(){return [{repositoryName:'t
 var hidden=run(ecr,'HTTP Browse - ecr',{port:5,uri:'/hidden',path:'',restrict:['team$'],options:{query:{enabled:true}}}),ho=options(hidden)
 equal(hidden.fns.getList({uri:'/hidden/',params:{}},ho).list.length,0)
 equal(hidden.fns.search({uri:'/hidden/',params:{q:'private'}},ho).list.length,0)
+// A search consumes published batches without scheduling another remote load.
+var scheduled = [], stagedScans = 0
+var pollHeaders = {"x-openaf-browse-fragment":"1"}
+var browserSearch = (uri, q, fragment, all) => ({
+  uri: uri, method: "GET", params: { q: q, searchAll: all ? "1" : undefined }, header: fragment ? pollHeaders : {}
+})
+var progressive = run(s3, 'HTTP Browse - s3',
+  {url:'http://example.invalid',bucket:'b',port:9,uri:'/progress',path:'',options:{query:{enabled:true}}},
+  false, fn => scheduled.push(fn))
+var progressOptions = options(progressive)
+var pollS3 = q => progressive.fns.search(browserSearch('/progress/', q, true), progressOptions)
+FakeS3.prototype.walkObjects = function(bucket, prefix, visit) {
+  stagedScans++
+  visit({filename:prefix+'alpha',isFile:true,size:1})
+  equal(pollS3('alpha').list.length, 1)
+  equal(pollS3('beta').searchInfo.refreshing, true)
+  visit({filename:prefix+'beta',isFile:true,size:1})
+  return {scanned:2,complete:false,timedOut:true}
+}
+equal(pollS3('alpha').searchInfo.ready, false)
+equal(scheduled.length, 0)
+equal(progressive.fns.search(browserSearch('/progress/', 'alpha'), progressOptions).searchInfo.refreshing, true)
+progressive.fns.search(browserSearch('/progress/', 'beta'), progressOptions)
+equal(scheduled.length, 1)
+scheduled.shift()()
+equal(pollS3('beta').list.length, 1)
+equal(pollS3('beta').searchInfo.message.includes('scan limit reached'), true)
+equal(stagedScans, 1)
+
+var stagedPackages = 0
+var artifact = run(packs+'/AWS/oJobCodeArtifact.yaml', 'HTTP Browse - codeartifact',
+  {port:10,uri:'/packages',path:'',restrict:['private$'],options:{query:{enabled:true}}},
+  false, fn => scheduled.push(fn))
+var artifactOptions = options(artifact)
+var pollPackages = q => artifact.fns.search(browserSearch('/packages/d/', q, true), artifactOptions)
+FakeAWS.prototype.CODEARTIFACT_ListRepositories = () => [{domainName:'d',name:'r'},{domainName:'d',name:'private'}]
+FakeAWS.prototype.CODEARTIFACT_ListPackages = (region, repository, domain, format, namespace, publish) => {
+  stagedPackages++
+  var first = {format:'generic',package:'alpha'}, second = {format:'generic',package:'beta'}
+  publish([first])
+  equal(pollPackages('alpha').list.length, 1)
+  equal(pollPackages('beta').searchInfo.refreshing, true)
+  publish([second])
+  return [first, second]
+}
+equal(pollPackages('alpha').searchInfo.canExpand, true)
+equal(scheduled.length, 0)
+var incomplete = artifact.fns.search(browserSearch('/packages/d/', 'alpha', false, true), artifactOptions)
+equal(incomplete.searchInfo.message.includes('0 of 1'), true)
+equal(scheduled.length, 1)
+scheduled.shift()()
+equal(pollPackages('beta').searchInfo.complete, true)
+equal(pollPackages('beta').list.length, 1)
+equal(stagedPackages, 1)
+
+FakeAWS.prototype.ECR_DescribeRepositories = () => [{repositoryName:'repo'}]
+var imageDigest = 'sha256:' + 'a'.repeat(64)
+FakeAWS.prototype.ECR_DescribeImages = () => [
+  {imageDigest:imageDigest,imageTags:['1.10.0','1.2.0'],imagePushedAt:1711050000,imageSizeInBytes:42},
+  {imageDigest:'sha256:' + 'b'.repeat(64),imageTags:['2.0.0'],imagePushedAt:1711050100,imageSizeInBytes:24}
+]
+var images = run(ecr, 'HTTP Browse - ecr',
+  {port:11,uri:'/images',path:'',options:{query:{enabled:true},imageDetails:true}})
+var imageOptions = Object.assign(options(images), {sortTab:true})
+var listingRequest = browserSearch('/images/repo/', '')
+listingRequest.params.size = '1'
+var imageListing = images.fns.getList(listingRequest, imageOptions)
+var firstImagePage = support.query(imageListing, listingRequest, imageOptions)
+equal(firstImagePage.sortInfo.field, 'Pushed')
+equal(firstImagePage.sortInfo.order, 'desc')
+equal(firstImagePage.list[0].values.Tag, '2.0.0')
+var legacyTags = images.fns.getObj(browserSearch('/images/repo/', ''), imageOptions).data
+equal(legacyTags.indexOf('>2.0.0</a>') < legacyTags.indexOf('>1.2.0</a>'), true)
+equal(legacyTags.includes('aria-label="Descending Pushed at" title="Descending Pushed at" aria-current="true"'), true)
+equal(imageListing.isList, true)
+equal(imageListing.content.includes('/js/mdtablesort.js'), false)
+equal((imageListing.content.match(/ecr-server-sort" tabindex/g) || []).length, 7)
+var pullDescending = browserSearch('/images/repo/', '')
+Object.assign(pullDescending.params, {detailTable:'pull',detailSort:'Tag',detailOrder:'desc'})
+var sortedDetails = images.fns.getList(pullDescending, imageOptions).content
+equal(sortedDetails.indexOf('>1.10.0</a>') < sortedDetails.indexOf('>1.2.0</a>'), true)
+equal(sortedDetails.includes('aria-label="Descending Tag" title="Descending Tag" aria-current="true"'), true)
+equal(images.fns.getObj(browserSearch('/images/repo/', ''), imageOptions).data.includes('/js/mdtablesort.js'), false)
+var imageRequest = browserSearch('/images/repo/', 'aaaa', true)
+imageRequest.params.sort = 'Tag'
+var matches = support.query(images.fns.search(imageRequest, imageOptions), imageRequest, imageOptions).list
+equal(matches.length, 2)
+equal(matches[0].values.Tag, '1.2.0')
+equal(matches[0].imageDigest, imageDigest)
+equal(images.fns.search(browserSearch('/images/repo/', '1.10', true), imageOptions).list.length, 1)
 print('PASS '+checks+' provider assertions')

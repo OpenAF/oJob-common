@@ -759,7 +759,9 @@ jobs:
             }
         }
 
-        return server.replyOKHTML( String(_out) )
+        var reply = server.replyOKHTML(String(_out))
+        if (_options.query && _options.query.enabled) reply.header = Object.assign({}, reply.header, { Vary: "X-OpenAF-Browse-Fragment" })
+        return reply
       } catch(e) {
         if (e.httpStatus == 403) return { data: "Forbidden", mimetype: "text/plain", status: 403, header: {} }
         if ([400, 404, 405, 501, 503].indexOf(e.httpStatus) >= 0) return {
@@ -1012,21 +1014,23 @@ jobs:
           }
         }
       }
+      var fragment = hasQuery && request.method == "GET" && (request.header || {})["x-openaf-browse-fragment"] === "1"
       var searchInfo = hasSearch && lst.searchInfo
       var searchPending = searchInfo && searchInfo.refreshing === true
-      var searchNotice = searchPending ? 'Loading more cached data…' :
-        searchInfo && searchInfo.truncated ? 'Search results are limited.' :
-        searchInfo && searchInfo.complete === false && searchInfo.coverage == 'loaded package hierarchies' ? 'Searched loaded package trees.' :
-        searchInfo && searchInfo.complete === false ? 'Search results are partial.' : ''
+      var searchNotice = searchInfo && (searchInfo.message || (searchPending ? 'Loading more cached data…' :
+        searchInfo.truncated ? 'Search results are limited.' :
+        searchInfo.complete === false && searchInfo.coverage == 'loaded package hierarchies' ? 'Searched loaded package trees.' :
+        searchInfo.complete === false ? 'Search results are partial.' : !lst.list.length ? 'No matches.' : ''))
+      var cacheMarkup = cacheTime ? 'Cache updated <time datetime="' + cacheTime + '">' + escapeText(cacheAge) + '</time>' : ''
       var pageSize = _pageSize || (options.query || {}).pageSize || 100
-      if (hasQuery || options._operation) {
+      if (!fragment && (hasQuery || options._operation)) {
         content += '<style>' + [
           '.markdown-body{--browse-fg:#747d86;--browse-hover:#414951;--browse-border:#c6cbd1;--browse-bg:#fff;--browse-soft:#f6f8fa;--browse-dark:0}',
           '.markdown-body-dark{--browse-fg:#919ba6;--browse-hover:#d0d7de;--browse-border:#444c56;--browse-bg:#0d1117;--browse-soft:#161b22;--browse-dark:1;color-scheme:dark}',
           '.browse-actions{display:flex;align-items:center;gap:0.5em;margin:0.75em 0 0;padding:0.6em 0 0;border-top:1px solid var(--browse-border);color:var(--browse-fg)}.browse-actions form{display:inline-flex;margin:0}.browse-actions .browse-icon{width:auto;gap:0.4em;padding:4px 6px;font-size:0.9em}',
           '.browse-options{position:fixed;inset:auto;margin:0;box-sizing:border-box;width:19em;min-width:min(19em,calc(100vw - 16px));max-width:calc(100vw - 16px);resize:horizontal;overflow:auto;padding:0.85em;border:1px solid var(--browse-border);border-radius:6px;background:var(--browse-bg);color:var(--browse-fg);box-shadow:0 4px 16px #0002;font-size:0.9em}',
           '.browse-controls{display:grid;gap:0.75em;margin:0;font-family:-apple-system,Calibri,"DejaVu Sans",sans-serif}.browse-controls label{display:flex;align-items:center;gap:0.5em;min-width:0}',
-          '.browse-cache-age,.browse-search-notice{font-size:0.85em;color:var(--browse-hover)}.browse-cache-age{margin-top:0.65em}.browse-cache-age:empty,.browse-search-notice:empty{display:none}.browse-search-notice{margin:0 0 0.5em}.browse-search-notice[data-pending=true]::before{content:"";display:inline-block;width:0.7em;height:0.7em;margin-right:0.45em;border:1px solid currentColor;border-right-color:transparent;border-radius:50%;animation:browse-spin 0.8s linear infinite}@keyframes browse-spin{to{transform:rotate(1turn)}}@media(prefers-reduced-motion:reduce){.browse-search-notice[data-pending=true]::before{animation:none}}',
+          '.browse-cache-age,.browse-search-notice{font-size:0.85em;color:var(--browse-hover)}.browse-cache-age{margin-top:0.65em}.browse-cache-age:empty,.browse-search-notice:has(>span:only-child:empty){display:none}.browse-search-notice{margin:0 0 0.5em}.browse-search-notice[data-pending=true]::before{content:"";display:inline-block;width:0.7em;height:0.7em;margin-right:0.45em;border:1px solid currentColor;border-right-color:transparent;border-radius:50%;animation:browse-spin 0.8s linear infinite}@keyframes browse-spin{to{transform:rotate(1turn)}}@media(prefers-reduced-motion:reduce){.browse-search-notice[data-pending=true]::before{animation:none}}',
           '.browse-live-status{font-size:0.85em}.browse-live-status:empty{display:none}.browse-controls .browse-search{display:grid;gap:0.35em}.browse-options-row{display:flex;align-items:center;justify-content:space-between;gap:1em}',
           '.browse-controls input{box-sizing:border-box;min-width:0;max-width:100%;padding:0.2em 0.25em;border:0;border-bottom:1px solid var(--browse-border);border-radius:0;background:transparent;color:var(--browse-hover);font:inherit}',
           '.browse-controls input[name=q]{width:100%}.browse-controls input[name=size]{width:4.5em}.browse-search-row{display:flex;align-items:center;gap:0.6em}.browse-search-row input{flex:1}.browse-search-row button{flex:none}.browse-search-row input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}',
@@ -1042,15 +1046,15 @@ jobs:
           '.browse-status-content table{margin:0}.browse-status-content td{white-space:normal;overflow-wrap:anywhere}'
         ].join('') + '</style>\n\n'
       }
-      if (hasQuery || options._operation) {
+      if (!fragment && (hasQuery || options._operation)) {
         content += '<div id="browse-options" class="browse-options" popover="auto" role="dialog" aria-label="Table options">'
         if (hasQuery) {
           var sortInputs = '<input type="hidden" name="sort" value="' + escapeText(lst.sortInfo ? lst.sortInfo.field : String(lst.key)) + '"><input type="hidden" name="order" value="' + (lst.sortInfo && lst.sortInfo.order == 'desc' ? 'desc' : 'asc') + '">'
-          content += '<form class="browse-controls" method="get"><div class="browse-search"><label for="browse-search-input">Search</label><div class="browse-search-row"><input id="browse-search-input" type="search" name="q" aria-describedby="browse-search-help" autofocus value="' + escapeText((request.params||{}).q || '') + '"><button id="browse-clear-search" class="browse-icon" type="button" title="Clear search" aria-label="Clear search"' + (hasSearch ? '' : ' disabled') + '>' + icon('clear') + '</button></div></div>' + sortInputs
+          content += '<form id="browse-search-form" class="browse-controls" method="get"><div class="browse-search"><label for="browse-search-input">Search</label><div class="browse-search-row"><input id="browse-search-input" type="search" name="q" aria-describedby="browse-search-help" autofocus value="' + escapeText((request.params||{}).q || '') + '"><button id="browse-clear-search" class="browse-icon" type="button" title="Clear search" aria-label="Clear search"' + (hasSearch ? '' : ' disabled') + '>' + icon('clear') + '</button></div></div>' + sortInputs
           content += '<div class="browse-options-row"><label>Per page <input type="number" name="size" min="1" max="' + (options.query.maxPageSize || 500) + '" value="' + pageSize + '"></label><button class="browse-apply" type="submit">Apply</button></div><span class="browse-live-status" role="status"></span><span id="browse-search-help" class="browse-search-help">Enter: apply &middot; Shift+Enter: clear</span></form>'
           content += '<label class="browse-shortcut-setting"><input id="browse-shortcut-enabled" type="checkbox" checked> Enable / shortcut to search</label>'
         }
-        content += '<div id="browse-cache-age" class="browse-cache-age">' + (cacheTime ? 'Cache updated <time datetime="' + cacheTime + '">' + escapeText(cacheAge) + '</time>' : '') + '</div>'
+        content += '<div id="browse-cache-age" class="browse-cache-age">' + cacheMarkup + '</div>'
         if (options._operation) {
           var operationsURL = prefixURL(options.parentURI.replace(/\/$/, "") + '/@@/')
           content += '<div class="browse-actions"><form id="browse-refresh" method="post" action="' + operationsURL + 'refresh"><input type="hidden" name="path" value="' + escapeText(puri) + '"><input type="hidden" name="csrf" value="' + options._refreshToken + '"><button class="browse-icon" type="submit" title="Refresh now" aria-label="Refresh now">' + icon('refresh') + '<span>Refresh</span></button></form>'
@@ -1059,7 +1063,14 @@ jobs:
         content += '</div>\n\n'
       }
 
-      if (hasQuery) content += '<div id="browse-search-notice" class="browse-search-notice" role="status" data-pending="' + !!searchPending + '">' + escapeText(searchNotice) + '</div>\n'
+      if (fragment) content = '<div id="browse-cache-age">' + cacheMarkup + '</div>\n\n'
+      if (hasQuery) {
+        content += '<div id="browse-search-notice" class="browse-search-notice" data-pending="' + !!searchPending + '"><span role="status">' + escapeText(searchNotice || '') + '</span>'
+        if (searchInfo && searchInfo.canExpand) {
+          content += ' <button type="submit" form="browse-search-form" name="searchAll" value="1">Search remaining repositories</button>'
+        }
+        content += '</div>\n\n'
+      }
       // Pagination controls (if metadata is provided)
       content += '<div id="browse-pagination">\n'
       if (isDef(lst.pageInfo) && isDef(lst.pageInfo.pageSize) && lst.pageInfo.pageSize > 0) {
@@ -1069,7 +1080,7 @@ jobs:
         } else {
         var pageURL = page => {
           var params = request.params || {}
-          var keys = Object.keys(params).filter(k => ["page", "NanoHttpd.QUERY_STRING"].indexOf(k) < 0 && !k.startsWith("NanoHttpd."))
+          var keys = Object.keys(params).filter(k => ["page", "searchAll", "NanoHttpd.QUERY_STRING"].indexOf(k) < 0 && !k.startsWith("NanoHttpd."))
           return "?" + keys.map(k => encodeURIComponent(k) + "=" + encodeURIComponent(params[k])).concat(["page=" + page]).join("&amp;")
         }
         var _prev = _page > 1 ? pageURL(_page - 1) : __
@@ -1102,8 +1113,9 @@ jobs:
         var optionsTitle = 'Table options' + (hasSearch ? ' (search: ' + (request.params || {}).q + ')' : '')
         headerControls[0] = '<button id="browse-options-toggle" class="browse-icon' + (hasSearch ? ' browse-filtered' : '') + '" type="button" title="' + escapeText(optionsTitle) + '" aria-label="' + escapeText(optionsTitle) + '" aria-haspopup="dialog" aria-controls="browse-options" aria-expanded="false" popovertarget="browse-options"><span aria-hidden="true">&#8943;</span></button>'
       }
-      if (hasQuery || options.sortTab && lst.sortInfo) {
-        content += '<style>' + [
+      var serverSort = hasQuery || options.sortTab && lst.sortInfo
+      if (serverSort) {
+        if (!fragment) content += '<style>' + [
           '.sorter-container{float:right;font-size:10px;margin-left:4px}',
           '.sorter-container .sort-button{display:none;padding:0;margin:0 2px;border:none;background:transparent;cursor:pointer;text-decoration:none;transition:color 0.2s ease}',
           'th:hover .sorter-container .sort-button,th:focus-within .sorter-container .sort-button,.sorter-container .sort-button:focus,.sorter-container .sort-button.active{display:inline-block}',
@@ -1113,7 +1125,7 @@ jobs:
         ].join('') + '</style>\n'
         var sortURL = (field, order) => {
           var params = request.params || {}
-          var keys = Object.keys(params).filter(k => ["page", "sort", "order"].indexOf(k) < 0 && !k.startsWith("NanoHttpd."))
+          var keys = Object.keys(params).filter(k => ["page", "sort", "order", "searchAll"].indexOf(k) < 0 && !k.startsWith("NanoHttpd."))
           var query = keys.map(k => encodeURIComponent(k) + "=" + encodeURIComponent(params[k]))
           if (order != "none") query = query.concat(["sort=" + encodeURIComponent(field), "order=" + order])
           return "?" + query.concat(["page=1"]).join("&amp;")
@@ -1152,7 +1164,9 @@ jobs:
           var rows = lst.sortInfo || lst.queryInfo && lst.queryInfo.applied ? lst.list : $from(lst.list).sort("-isDirectory", "values." + lst.key).select()
           rows.forEach(r => {
               content += "|"
-              if (r.isDirectory) {
+              if (r.imageDigest && /^sha256:[a-f0-9]{64}$/.test(r.imageDigest)) {
+                  content += " |"
+              } else if (r.isDirectory) {
                   content += " <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8600;</span> |"
               } else {
                   content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + fileLink(r.values[lst.key]) + "?raw=true\" download=\"" + escapeText(r.values[lst.key]) + "\">&darr;</a></span> |"
@@ -1161,16 +1175,19 @@ jobs:
                 if (r.isDirectory) {
                     content += " " + (i == 0 ? "__[" + escapeText(r.values[f]) + "](<" + fileLink(r.values[lst.key]) + "/>)__" : escapeText(r.values[f])) + " |"
                 } else {
-                    content += " " + (i == 0 ? "[" + escapeText(r.values[f]) + "](<" + fileLink(r.values[lst.key]) + ">)" : escapeText(r.values[f])) + " |"
+                    content += " " + (i == 0 ? "[" + escapeText(r.values[f]) + "](<" + (/^sha256:[a-f0-9]{64}$/.test(r.imageDigest || "") ? "?image=" + encodeURIComponent(r.imageDigest) : fileLink(r.values[lst.key])) + ">)" : escapeText(r.values[f])) + " |"
                 }
               })
               content += "\n"
           })
       }
 
+      if (!fragment) {
       // Content
       if (isDef(lst.content)) {
-          content += "\n" + lst.content + "\n"
+          if (lst.hideContentOnSearch) {
+            content += '\n<div id="browse-listing-extra">' + ow.template.parseMD2HTML(lst.content, false) + '</div>\n'
+          } else content += "\n" + lst.content + "\n"
       }
  
       // Footer
@@ -1299,8 +1316,9 @@ jobs:
               try {
                 var url = new URL(window.location.href)
                 if (!followCache) url.search = new URLSearchParams(new FormData(searchForm)).toString()
+                url.searchParams.delete('searchAll')
                 url.hash = ''
-                var response = await fetch(url, { credentials:'same-origin', cache:'no-store', signal:controller.signal })
+                var response = await fetch(url, { credentials:'same-origin', cache:'no-store', headers:{'X-OpenAF-Browse-Fragment':'1'}, signal:controller.signal })
                 if (!response.ok) throw new Error('Search unavailable')
                 var parsed = new DOMParser().parseFromString(await response.text(), 'text/html')
                 if (revision != searchRevision) return
@@ -1311,16 +1329,22 @@ jobs:
                 var cacheAge = parsed.getElementById('browse-cache-age')
                 if (!table || !pager || !notice || !cacheAge) throw new Error('Search preview unavailable')
                 searchNotice.dataset.pending = notice.dataset.pending
-                if (searchNotice.textContent != notice.textContent) searchNotice.textContent = notice.textContent
+                if (searchNotice.innerHTML != notice.innerHTML) searchNotice.replaceChildren(...notice.childNodes)
                 cacheAgeNode.replaceChildren(...cacheAge.childNodes)
                 updateCacheAge()
                 var restoreFocus = document.activeElement == optionsButton
-                document.getElementById('browse-listing').replaceWith(table)
-                document.getElementById('browse-pagination').replaceWith(pager)
+                var currentTable = document.getElementById('browse-listing')
+                var currentPager = document.getElementById('browse-pagination')
+                // Ignore the transient expanded state when comparing a polled listing.
+                table.querySelector('#browse-options-toggle')?.setAttribute('aria-expanded', String(optionsPanel.matches(':popover-open')))
+                if (!followCache || !currentTable.isEqualNode(table)) currentTable.replaceWith(table)
+                if (!currentPager.isEqualNode(pager)) currentPager.replaceWith(pager)
                 optionsButton = document.getElementById('browse-options-toggle')
                 optionsButton.setAttribute('aria-expanded', String(optionsPanel.matches(':popover-open')))
                 updateShortcut()
                 if (restoreFocus) optionsButton.focus({ preventScroll:true })
+                var extra = document.getElementById('browse-listing-extra')
+                if (extra) extra.hidden = !!url.searchParams.get('q')
                 window.history.replaceState(null, '', url)
                 syncClearSearch()
                 if (!followCache || searchNotice.dataset.pending != 'true') showSearchMessage('Results updated')
@@ -1328,7 +1352,7 @@ jobs:
                 if (revision != searchRevision) return
                 if (followCache) {
                   searchNotice.dataset.pending = 'false'
-                  searchNotice.textContent = 'Could not check for newer results. Apply to search again.'
+                  searchNotice.querySelector('[role=status]').textContent = 'Could not check for newer results. Apply to search again.'
                   return
                 }
                 liveAvailable = false
@@ -1441,7 +1465,7 @@ jobs:
         </script>\n`
       }
 
-      if (options.sortTab && !lst.sortInfo && !(lst.queryInfo && lst.queryInfo.applied)) {
+      if (options.sortTab && !serverSort && !(lst.queryInfo && lst.queryInfo.applied)) {
           content += "<script src=\"" + prefixURL("/js/mdtablesort.js") + "\"></script>\n"
           if (options.sortTabAsc) {
               content += "<script>document.addEventListener('DOMContentLoaded', function() { var t = document.querySelector('table'); if (!t) return; var row = t.querySelector('thead tr') || t.querySelector('tr'); if (!row) return; var cell = row.querySelectorAll('th, td')[1]; if (!cell) return; if (typeof updateSortState === 'function') updateSortState(cell, 'asc', t); });</script>\n"
@@ -1453,8 +1477,10 @@ jobs:
           'box-sizing:border-box;width:2.5rem;min-width:2.5rem;max-width:2.5rem;padding-inline:0;text-align:center;white-space:nowrap}</style>\n'
       }
 
+      }
+
       // Add controls after Markdown has generated header IDs from plain field labels.
-      var html = ow.template.parseMD2HTML( content, true )
+      var html = ow.template.parseMD2HTML( content, !fragment )
       if (headerControls.length > 0) {
         html = String(html).replace(/(<thead>\s*<tr>)([\s\S]*?)(<\/tr>\s*<\/thead>)/, (match, start, row, end) => {
           var column = 0
@@ -1465,7 +1491,8 @@ jobs:
         })
       }
       // Keep listing targets stable while live search replaces only results and pagination.
-      html = String(html).replace(/<table(?=[\s>])/, '<table id="browse-listing"' + (options.fullWidth === true ? ' style="display:table;width:100%"' : ''))
+      html = String(html).replace(/<table(?=[\s>])/, '<table id="browse-listing"' + (serverSort ? ' data-browse-server-sort' : '') + (options.fullWidth === true ? ' style="display:table;width:100%"' : ''))
+      if (fragment) return { data: html, status: 200, mimetype: "text/html; charset=utf-8", header: { "Cache-Control": "private, no-store", Vary: "X-OpenAF-Browse-Fragment" } }
       return html
     })
     args.fns.renderObj = _$(args.fns.renderObj, "args.fns.renderObj").isFunction().default((obj, server, request, options) => {
@@ -1532,7 +1559,7 @@ jobs:
         var b = "[/](</>) [" + (options.showURI ? escapeText(options.parentURI.replace(/^\//, "")) : "") + "](<" + relDir(depth) + ">)"
         for (var i = 0; i < parts.length; i++) {
           if (i == parts.length - 1) {
-            b += (!options.showURI && i == 0 ? "" : " / ") + escapeText(parts[i]) + " "
+            b += (!options.showURI && i == 0 ? "" : " / ") + (obj.browseDetail ? "[" + escapeText(parts[i]) + "](<?>)" : escapeText(parts[i])) + " "
           } else {
             b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + escapeText(parts[i]) + "](<" + relDir(depth - i - 1) + ">)"
           }
@@ -1560,7 +1587,8 @@ jobs:
       const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
       var content
       if (obj.type == "raw") {
-        content = "## <span style=\"display: flex; justify-content: space-between\"><span>" + breadcrumb( puri ) + "</span><span style=\"display: inline-flex; justify-content: space-between; float: inline-end; align-items: start\"><span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:history.back()\">&larr;</a></span></span></span>\n\n"
+        if (obj.browseDetail) content = "## " + breadcrumb(puri) + "\n\n"
+        else content = "## <span style=\"display: flex; justify-content: space-between\"><span>" + breadcrumb( puri ) + "</span><span style=\"display: inline-flex; justify-content: space-between; float: inline-end; align-items: start\"><span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:history.back()\">&larr;</a></span></span></span>\n\n"
         content += String(obj.data)
         content += "\n\n"
 
@@ -1620,6 +1648,9 @@ jobs:
     if (_options.query && _options.query.enabled || _options.preview || _options.operations && _options.operations.enabled) require("ojob-browse-contract.js").check(_options, _options.capabilities)
 
     // Apply query processing once, before rendering or API serialization.
+    // Keep a few short-lived path inventories so edits to a search reuse the same walk.
+    var searchInventories = new Map(), inventoryLock = new java.lang.Object(), inventoryGeneration = 0
+    var inventoryLocks = Array.from({ length: 4 }, () => new java.lang.Object())
     if (defaultFilesystem && isUnDef(_options._fns.search)) _options._fns.search = (request, options) => {
       if (!options.query || !options.query.enabled) {
         var unsupported = new Error("Search not enabled")
@@ -1635,68 +1666,76 @@ jobs:
       var matches = require("ojob-browse-contract.js").searchMatcher(query, options.query.wildcards)
       var relative = global.__ojobHttpRelativePath(request.uri, options.parentURI)
       var start = global.__ojobHttpResolveFile(options.parentPath, relative)
-      var pending = [start],
-        seen = {},
-        rows = [],
-        scanned = 0,
-        began = now(),
-        timedOut = false
-      var maxScan = options.query.maxScanned || 10000,
-        maxResults = options.query.maxResults || 1000
-      while (pending.length && scanned < maxScan && rows.length < maxResults) {
-        if (now() - began >= (options.query.timeoutMs || 5000)) {
-          timedOut = true
-          break
-        }
-        var directory = pending.pop()
-        if (seen[directory]) continue
-        seen[directory] = true
-        if (!new java.io.File(directory).isDirectory()) continue
-        var directoryStream = java.nio.file.Files.newDirectoryStream(new java.io.File(directory).toPath())
-        try {
-          var children = directoryStream.iterator()
-          while (children.hasNext()) {
-            if (scanned >= maxScan || rows.length >= maxResults || now() - began >= (options.query.timeoutMs || 5000)) {
-              timedOut = now() - began >= (options.query.timeoutMs || 5000)
-              pending.push(directory)
-              break
-            }
-            scanned++
-            var child = children.next().toFile(),
-              path = String(new java.io.File(start).toPath().relativize(child.toPath())).replace(/\\/g, "/")
-            if (java.nio.file.Files.isSymbolicLink(child.toPath())) continue
-            try {
-              global.__ojobHttpResolveFile(options.parentPath, (relative ? relative.replace(/\/$/, "") + "/" : "") + path)
-            } catch (e) {
-              continue
-            }
-            if (child.isDirectory()) pending.push(String(child.getCanonicalPath()))
-            if (query && matches(path)) rows.push({
-              isDirectory: child.isDirectory(),
-              values: {
-                Filename: path
+      var key = String(relative).replace(/\/+$/, "")
+      var maxScan = options.query.maxScanned || 10000
+      var timeout = options.query.timeoutMs || 5000
+      var cacheKey = JSON.stringify([key, maxScan, timeout])
+      var stripe = new java.lang.String(key).hashCode() & 3
+      var inventory = syncFn(() => {
+        var generation = syncFn(() => inventoryGeneration, inventoryLock)
+        var hit = syncFn(() => searchInventories.get(cacheKey), inventoryLock)
+        if (hit && hit.start == start && now() < hit.expires) return hit
+
+        var startPath = new java.io.File(start).toPath()
+        var pending = [start], seen = new Set(), entries = []
+        var scanned = 0, began = now(), timedOut = false
+        while (pending.length && scanned < maxScan) {
+          if (now() - began >= timeout) { timedOut = true; break }
+          var directory = pending.pop()
+          if (seen.has(directory)) continue
+          seen.add(directory)
+          var dir = new java.io.File(directory)
+          if (!dir.isDirectory()) continue
+          var stream = java.nio.file.Files.newDirectoryStream(dir.toPath())
+          try {
+            var children = stream.iterator()
+            while (children.hasNext()) {
+              if (scanned >= maxScan || now() - began >= timeout) {
+                timedOut = now() - began >= timeout
+                pending.push(directory)
+                break
               }
-            })
-          }
-        } finally {
-          directoryStream.close()
+              scanned++
+              var child = children.next().toFile()
+              if (java.nio.file.Files.isSymbolicLink(child.toPath())) continue
+              var path = String(startPath.relativize(child.toPath())).replace(/\\/g, "/")
+              try { global.__ojobHttpResolveFile(options.parentPath, key ? key + "/" + path : path) } catch (e) { continue }
+              var directoryEntry = child.isDirectory()
+              if (directoryEntry) pending.push(String(child.getCanonicalPath()))
+              entries.push({ path: path, isDirectory: directoryEntry })
+            }
+          } finally { stream.close() }
         }
+
+        var result = { start: start, entries: entries, scanned: scanned, timedOut: timedOut,
+          complete: pending.length == 0 && !timedOut, expires: now() + 5000 }
+        syncFn(() => {
+          if (generation != inventoryGeneration) return
+          searchInventories.delete(cacheKey)
+          if (searchInventories.size >= 4) searchInventories.delete(searchInventories.keys().next().value)
+          searchInventories.set(cacheKey, result)
+        }, inventoryLock)
+        return result
+      }, inventoryLocks[stripe])
+
+      var rows = [], limited = false
+      var maxResults = options.query.maxResults || 1000
+      if (query) for (var entry of inventory.entries) {
+        if (!matches(entry.path)) continue
+        // Check cached matches again in case a path was replaced after the walk.
+        try {
+          var candidate = global.__ojobHttpResolveFile(options.parentPath, key ? key + "/" + entry.path : entry.path)
+          if (!new java.io.File(candidate).exists() ||
+              java.nio.file.Files.isSymbolicLink(new java.io.File(start, entry.path).toPath())) continue
+        } catch (e) { continue }
+        if (rows.length == maxResults) { limited = true; break }
+        rows.push({ isDirectory: entry.isDirectory, values: { Filename: entry.path } })
       }
-      var complete = pending.length == 0 && !timedOut
-      return {
-        isList: true,
-        fields: ["Filename"],
-        alignFields: ["left"],
-        key: "Filename",
-        list: rows,
-        searchInfo: {
-          complete: complete,
-          truncated: !complete,
-          timedOut: timedOut,
-          scanned: scanned,
-          totalExact: complete
-        }
-      }
+      var complete = inventory.complete && !limited
+      return { isList: true, fields: ["Filename"], alignFields: ["left"], key: "Filename", list: rows,
+        searchInfo: { complete: complete, truncated: !complete, timedOut: inventory.timedOut,
+          scanned: inventory.scanned, totalExact: complete } }
+
     }
 
     // Sort and paginate query results
@@ -1778,6 +1817,17 @@ jobs:
       })
     }
 
+    if (defaultFilesystem && !isFunction(_options._fns.refresh)) _options._fns.refresh = (request, options) => {
+      syncFn(() => {
+        searchInventories.clear()
+        inventoryGeneration++
+      }, inventoryLock)
+      var result = _options._fns.getList(request, options)
+      if (result.isFile) {
+        var object = _options._fns.getObj(request, options)
+        if (object.stream) object.stream.close()
+      }
+    }
     // Initialize provider operations
     _options._fns.init(_options)
     if (_options.operations && _options.operations.enabled) {

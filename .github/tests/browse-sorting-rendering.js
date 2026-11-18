@@ -43,12 +43,12 @@ try {
   equal(listing.queryInfo.applied, true)
   var req = request('', {q:'a&b',size:'1',page:'2',sort:'Filename',order:'desc'})
   var html = String(options._fns.renderList(listing, {}, req, options))
-  equal(html.indexOf('<table id="browse-listing" style="display:table;width:100%">'), -1)
+  equal(html.indexOf('<table id="browse-listing" data-browse-server-sort style="display:table;width:100%">'), -1)
   var iconColumnRule = '#browse-listing > thead > tr > th:first-child,#browse-listing > tbody > tr > td:first-child'
   equal(html.includes(iconColumnRule), false)
   options.fullWidth = true
   var fullWidthHTML = String(options._fns.renderList(listing, {}, req, options))
-  equal(fullWidthHTML.includes('<table id="browse-listing" style="display:table;width:100%">'), true)
+  equal(fullWidthHTML.includes('<table id="browse-listing" data-browse-server-sort style="display:table;width:100%">'), true)
   equal(fullWidthHTML.includes(iconColumnRule), true)
   equal(fullWidthHTML.includes('width:2.5rem;min-width:2.5rem;max-width:2.5rem'), true)
   delete options.fullWidth
@@ -102,7 +102,7 @@ try {
   equal(popover.indexOf('id="browse-clear-search"') >= 0, true)
   equal(popover.indexOf('aria-label="Clear search"') >= 0, true)
   equal(/id="browse-clear-search"[^>]*><svg/.test(popover), true)
-  var searchFormHTML = popover.match(/<form class="browse-controls"[\s\S]*?<\/form>/)[0]
+  var searchFormHTML = popover.match(/<form id="browse-search-form" class="browse-controls"[\s\S]*?<\/form>/)[0]
   equal((searchFormHTML.match(/type="submit"/g) || []).length, 1)
   equal(searchFormHTML.indexOf('class="browse-apply" type="submit"') >= 0, true)
   equal(searchFormHTML.indexOf('id="browse-clear-search" class="browse-icon" type="button"') >= 0, true)
@@ -114,10 +114,17 @@ try {
     var partial = Object.assign({}, listing, {searchInfo:{complete:false, coverage:'loaded package hierarchies'}})
     var rendered = String(options._fns.renderList(pending, {}, req, options))
     equal(rendered.includes('Cache updated <time datetime="' + new Date(updatedAt).toISOString() + '">2 minutes ago</time>'), true)
-    equal(rendered.includes('role="status" data-pending="true">Loading more cached data'), true)
+    equal(rendered.includes('data-pending="true"><span role="status">Loading more cached data'), true)
     rendered = String(options._fns.renderList(partial, {}, req, options))
-    equal(rendered.includes('role="status" data-pending="false">Searched loaded package trees.'), true)
-    equal(String(options._fns.renderList(pending, {}, request('', {}), options)).includes('role="status" data-pending="false"></div>'), true)
+    equal(rendered.includes('data-pending="false"><span role="status">Searched loaded package trees.'), true)
+    equal(String(options._fns.renderList(pending, {}, request('', {}), options)).includes('data-pending="false"><span role="status"></span></div>'), true)
+    var fragmentRequest = Object.assign({}, req, {method:"GET",header:{"x-openaf-browse-fragment":"1"}})
+    var fragment = options._fns.renderList(pending, {}, fragmentRequest, options)
+    equal(fragment.status, 200)
+    equal(fragment.data.includes('id="browse-listing" data-browse-server-sort'), true)
+    equal(fragment.data.includes('id="browse-search-form"'), false)
+    equal(fragment.data.includes('<html'), false)
+    equal(fragment.data.includes('id="browse-cache-age"'), true)
     options._fns.getFreshness = () => { throw new Error('Freshness unavailable') }
     rendered = String(options._fns.renderList(listing, {}, req, options))
     equal(rendered.includes('id="browse-cache-age" class="browse-cache-age"></div>'), true)
@@ -139,9 +146,10 @@ try {
   options.sortTab = true
   var legacy = String(options._fns.renderList({fields:listing.fields,alignFields:listing.alignFields,key:listing.key,list:listing.list}, {}, request('',{}), options))
   equal(legacy.indexOf('/js/mdtablesort.js') >= 0, true)
+  equal(legacy.includes('data-browse-server-sort'), false)
   equal(legacy.indexOf('class="sorter-container"') < 0, true)
   equal(legacy.indexOf('id="browse-options-toggle"') >= 0, true)
-  equal(legacy.indexOf('<form class="browse-controls"'), -1)
+  equal(legacy.indexOf('<form id="browse-search-form" class="browse-controls"'), -1)
   var sortedLegacy = String(options._fns.renderList({
     fields: ['Version'], alignFields: ['left'], key: 'Version',
     sortInfo: {field:'Version',order:'desc'},

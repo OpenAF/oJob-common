@@ -35,6 +35,10 @@ try {
   equal(limited.searchInfo.scanned,1)
   equal(limited.searchInfo.complete,false)
   delete options.query.maxScanned
+  io.writeFileString(root + '/new.txt', 'new')
+  equal(options._fns.search(request('', {q:'new.txt'}), options).list.length, 0)
+  options._fns.refresh(Object.assign(request('', {}), {method:'POST'}), options)
+  equal(options._fns.search(request('', {q:'new.txt'}), options).list.length, 1)
   var preview = options._fns.getObj(request('a.xml'), options)
   equal(preview.truncated, true)
   equal(preview.type, 'text')
@@ -72,7 +76,13 @@ try {
   var browser={port:port,uri:'/builtin',type:'files',options:{path:root}}
   run('oJobBrowse.yaml','HTTP Browser',browser)
   var rejected=false
-  try{run('oJobBrowse.yaml','HTTP Browser',{port:port,uri:'/unsupported',type:'files',options:{path:root,query:{enabled:true}}})}catch(e){rejected=true}
+  // Simulate a browser type with the legacy contract on every installed runtime.
+  var originalFiles = ow.server.httpd.browse.files
+  ow.server.httpd.browse.files = () => ({capabilities:{contract:1}})
+  try {
+    run('oJobBrowse.yaml','HTTP Browser',{port:port,uri:'/unsupported',type:'files',options:{path:root,query:{enabled:true}}})
+  } catch(e) { rejected=true }
+  finally { ow.server.httpd.browse.files = originalFiles }
   equal(rejected,true)
   var apiDefinition=definition('oJobBrowse.yaml','HTTP Browse API')
   run('oJobBrowse.yaml','HTTP Browse API',{port:port,uri:'/api',browseUri:'/ops',operationsBrowseUris:['/ops']})
