@@ -61,9 +61,12 @@ code:
     // Compare browse values using SemVer precedence before the existing value fallback.
     exports.compareValues = (function() {
       // Parse complete SemVer 2 values; retain the existing optional v display prefix.
-      function parseSemVer(value) {
+      function parseSemVer(value, allowShort) {
         if (value === null || value === undefined) return null
-        var match = String(value).trim().match(/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/)
+        var text = String(value).trim()
+        // In version or name columns, a bare major.minor label denotes patch zero.
+        if (allowShort && /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(text)) text += ".0"
+        var match = text.match(/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/)
         if (!match) return null
         var prerelease = match[4] ? match[4].split('.') : []
         if (prerelease.some(id => /^\d+$/.test(id) && id.length > 1 && id[0] === '0')) return null
@@ -102,11 +105,12 @@ code:
         }
         return 0
       }
-      return function(a, b) {
-        if (isNumber(a) && isNumber(b)) return a - b
-        var av = parseSemVer(a), bv = parseSemVer(b)
+      return function(a, b, allowShort) {
+        if (!allowShort && isNumber(a) && isNumber(b)) return a - b
+        var av = parseSemVer(a, allowShort), bv = parseSemVer(b, allowShort)
         if (!!av != !!bv) return av ? -1 : 1
         if (av && bv) return compareSemVer(av, bv)
+        if (allowShort && isNumber(a) && isNumber(b)) return a - b
         return String(a).localeCompare(String(b))
       }
     })()
@@ -168,6 +172,7 @@ code:
       if (result.fields.indexOf(field) < 0 || ["asc", "desc"].indexOf(order) < 0) exports.error(400, "Invalid sort")
 
       // Sort directories and field values
+      var allowShort = /^(object|filename|version|tag)$/i.test(field)
       var rows = result.list.slice()
       rows.sort(function(a, b) {
         if (!!a.isDirectory != !!b.isDirectory) return a.isDirectory ? -1 : 1
@@ -177,7 +182,7 @@ code:
           av = a.values["Size in bytes"]
           bv = b.values["Size in bytes"]
         }
-        var n = exports.compareValues(av, bv)
+        var n = exports.compareValues(av, bv, allowShort)
         return n ? n * (order == "desc" ? -1 : 1) : (field == key ? 0 : String(a.values[key]).localeCompare(String(b.values[key])))
       })
 
@@ -220,14 +225,163 @@ code:
       return type
     }
 
+    exports.previewLimit = function(limit) {
+      if (isUnDef(limit)) return 4 * 1024 * 1024
+      if (!isNumber(limit) || !isFinite(limit) || limit < 1 || limit > 16777216 || Math.floor(limit) != limit) exports.error(400, "Invalid preview byte limit")
+      return limit
+    }
+
+    // Render untrusted Markdown as a static HTML block
+    exports.safeMarkdown = function(markdown) {
+      var path = getOPackPath("Jsoup")
+      if (!isString(path) || !path.length) exports.error(501, "Safe Markdown previews require the Jsoup oPack")
+      loadExternalJars(path)
+      var allow = new Packages.org.jsoup.safety.Safelist()
+      ;["h1", "h2", "h3", "h4", "h5", "h6", "p", "br", "hr", "ul", "ol", "li", "table",
+        "thead", "tbody", "tr", "th", "td", "pre", "code", "blockquote", "strong", "em", "del", "a"].forEach(tag => allow.addTags(tag))
+      allow.addAttributes("a", "href", "title")
+      allow.addProtocols("a", "href", "http", "https", "mailto")
+      allow.addEnforcedAttribute("a", "rel", "noreferrer noopener")
+      var settings = new Packages.org.jsoup.nodes.Document.OutputSettings().prettyPrint(false)
+      var html = String(Packages.org.jsoup.Jsoup.clean(String(ow.template.parseMD2HTML(markdown, false)), "", allow, settings))
+      return "<div>" + html.replace(/\r?\n/g, "&#10;") + "</div>"
+    }
+
+    // Load JSON in the browser while keeping the server on the streaming path.
+    exports.previewBackArrow = '<button type="button" onclick="history.back()" aria-label="Back" title="Back" ' +
+      'style="float:right;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 1em">&larr;</button>'
+
+    exports.jsonViewURL = function(request, view) {
+      var params = request.params || {}
+      var keys = params.action == "preview" ? ["action", "browseUri", "uri", "path", "asset"] : ["asset"]
+      var query = keys.filter(key => isString(params[key])).map(key => key + "=" + encodeURIComponent(params[key]))
+      query.push("view=" + view)
+      return "?" + query.join("&amp;")
+    }
+
+    // Stream untrusted HTML as its own document with an opaque origin.
+    exports.htmlPreview = stream => ({
+      stream: stream,
+      streamType: "text/html",
+      streamHeaders: {
+        "Content-Security-Policy": "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'; style-src 'unsafe-inline'",
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, no-store"
+      }
+    })
+
+    exports.jsonPreview = function(request, options, open, allowDownload) {
+      var params = request.params || {}
+      if (params.view == "json-data") return {
+        stream: open(),
+        streamType: "application/json; charset=utf-8",
+        streamHeaders: {
+          "Content-Disposition": "attachment",
+          "X-Content-Type-Options": "nosniff",
+          "Cache-Control": "private, no-store"
+        }
+      }
+
+      var prefix = ow.server.httpd.getPrefix(options.serverOrPort || options.port)
+      var path = String(request.uri).replace(/^\/+/, "").split("/").map(encodeURIComponent).join("/")
+      var url = ow.format.escapeHTML(prefix + "/" + path)
+      return { type: "raw", browseDetail: true, jsonViewer: true, data:
+        '<link rel="stylesheet" href="' + prefix + '/css/nJSMap.css"><script src="' + prefix + '/js/openafsigil.js"></script>' +
+        '<script src="' + prefix + '/js/njsmap.js"></script>' + "\n\n" +
+        '<div id="browse-json-preview" data-path="' + url + '"><p role="status">Loading JSON…</p>' +
+        '<p><a data-json-render href="' + exports.jsonViewURL(request, "json") + '">Render</a>' +
+        ' · <a data-json-source href="' + exports.jsonViewURL(request, "source") + '">View source</a>' +
+        (allowDownload === false ? '' : ' · <a href="?raw=true" download>Download raw</a>') +
+        '</p><div class="browse-json-map" style="overflow:auto"></div></div>' + "\n\n" +
+        `<script>(async function() {
+          var viewer = document.getElementById("browse-json-preview")
+          var current = new URL(location.href)
+          var endpoint = current.searchParams.get("action") == "preview" ? new URL(current) :
+            new URL(viewer.dataset.path + current.search, current)
+          var source = new URL(endpoint)
+          source.searchParams.set("view", "source")
+          viewer.querySelector("[data-json-source]").href = source.href
+          var renderURL = new URL(source)
+          renderURL.searchParams.set("view", "json")
+          viewer.querySelector("[data-json-render]").href = renderURL.href
+          var download = viewer.querySelector("a[download]")
+          if (download) {
+            var raw = new URL(source)
+            raw.searchParams.delete("view")
+            raw.searchParams.set("raw", "true")
+            download.href = raw.href
+          }
+          endpoint.searchParams.set("view", "json-data")
+          var status = viewer.querySelector("[role=status]")
+          var map = viewer.querySelector(".browse-json-map")
+          var started = performance.now()
+          var slowAfterMs = 8000
+          var showSlowDownload = function(message) {
+            status.textContent = message + " "
+            status.appendChild(download.cloneNode(true))
+          }
+          var slowTimer = download && setTimeout(function() {
+            showSlowDownload("Still loading the JSON preview.")
+          }, slowAfterMs)
+          var limit = 16 * 1024 * 1024
+          var tooLarge = new Error("This JSON exceeds the 16 MiB interactive preview limit. Use View source.")
+          try {
+            var response = await fetch(endpoint, { credentials: "same-origin" })
+            if (!response.ok || !response.body || !/^application\\/json\\b/i.test(response.headers.get("Content-Type") || ""))
+              throw new Error("Could not load JSON.")
+            var reader = response.body.getReader()
+            var decoder = new TextDecoder("utf-8", { fatal: true })
+            var chunks = [], size = 0
+            try {
+              while (true) {
+                var chunk = await reader.read()
+                if (chunk.done) break
+                size += chunk.value.byteLength
+                if (size > limit) throw tooLarge
+                chunks.push(decoder.decode(chunk.value, { stream: true }))
+              }
+              chunks.push(decoder.decode())
+            } finally {
+              await reader.cancel().catch(function() {})
+              reader.releaseLock()
+            }
+            var json = JSON.parse(chunks.join(""))
+            chunks = null
+
+            if (typeof nJSMap == "undefined" || typeof nJSMap.mount != "function") {
+              status.textContent = "The interactive view requires a newer OpenAF. Use View source."
+              return
+            }
+            var theme = function() {
+              map.classList.toggle("njsmap_dark", document.body.classList.contains("markdown-body-dark"))
+            }
+            theme()
+            nJSMap.mount(map, json, { collapseAll: size >= 1024 * 1024 })
+            new MutationObserver(theme).observe(document.body, { attributeFilter: ["class"] })
+            if (download && performance.now() - started >= slowAfterMs) {
+              showSlowDownload("The JSON preview was slow to load.")
+            } else {
+              status.hidden = true
+            }
+          } catch (error) {
+            status.textContent = error === tooLarge || error.message === "Could not load JSON." ?
+              error.message : "Could not display this JSON. Use View source."
+          } finally {
+            if (slowTimer) clearTimeout(slowTimer)
+          }
+        })()</script>`
+      }
+    }
+
     // Read and decode bounded previews
     exports.readPreview = function(stream, type, limit) {
       var output = new java.io.ByteArrayOutputStream(),
         count = 0,
         n
       try {
-        if (isDef(limit) && (!isNumber(limit) || !isFinite(limit) || limit < 1 || limit > 16777216 || Math.floor(limit) != limit)) exports.error(400, "Invalid preview byte limit")
-        var max = isDef(limit) ? limit + 1 : 2147483647
+        limit = exports.previewLimit(limit)
+        var max = limit + 1
         var buffer = java.lang.reflect.Array.newInstance(java.lang.Byte.TYPE, 8192)
         while (count < max && (n = stream.read(buffer, 0, Math.min(buffer.length, max - count))) != -1) {
           if (n > 0) {
@@ -239,7 +393,7 @@ code:
         stream.close()
       }
       var bytes = output.toByteArray(),
-        truncated = isDef(limit) && bytes.length > limit
+        truncated = bytes.length > limit
       if (truncated) bytes = java.util.Arrays.copyOf(bytes, limit)
       var decoder = java.nio.charset.StandardCharsets.UTF_8.newDecoder().onMalformedInput(java.nio.charset.CodingErrorAction.IGNORE)
       var data = String(decoder.decode(java.nio.ByteBuffer.wrap(bytes)))
@@ -277,6 +431,23 @@ code:
       json: "json",
       adoc: "asciidoc"
     }
+    // Only recognized image formats may set an inline image MIME type.
+    var imageTypes = {
+      png: "image/png", apng: "image/apng", jpeg: "image/jpeg", gif: "image/gif",
+      webp: "image/webp", avif: "image/avif", bmp: "image/bmp", ico: "image/x-icon", svg: "image/svg+xml"
+    }
+    exports.imageType = type => Object.prototype.hasOwnProperty.call(imageTypes, type) ? imageTypes[type] : __
+    exports.imagePreview = (stream, mime) => ({
+      stream: stream, streamType: mime, streamHeaders: {
+        "Content-Disposition": "inline",
+        "Content-Security-Policy": "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer"
+      }
+    })
+    Object.keys(imageTypes).forEach(type => { exports.defaults[type] = type })
+    exports.defaults.jpg = exports.defaults.jpe = "jpeg"
+
 
     // Match cached provider locations
     exports.matchesUnit = function(path, key, base) {
@@ -597,8 +768,15 @@ code:
       }
 
       // Dispatch browser operations
-      options._operation = function(action, request, server, api) {
-        if (!api && action == "refresh" && (request.params || {}).csrf !== csrf) exports.error(403, "Invalid refresh token")
+      options._operation = function(action, request, server, api, tokenHash) {
+        if (action == "refresh") {
+          if (request.method != "POST") exports.error(405, "Refresh requires POST")
+          var token = api ? (request.header || {})["x-openaf-browse-token"] : (request.params || {}).csrf
+          var expected = api ? tokenHash : sha256(csrf)
+          var bytes = value => new java.lang.String(value).getBytes("UTF-8")
+          if (!isString(token) || !isString(expected) ||
+              !java.security.MessageDigest.isEqual(bytes(sha256(token)), bytes(expected))) exports.error(403, "Invalid refresh token")
+        }
         if (action == "status") return ow.server.httpd.reply(hooks.getStatus(request, options))
         if (action == "freshness") return ow.server.httpd.reply(hooks.getFreshness(request, options))
         if (action == "refresh") return ow.server.httpd.reply(hooks.refresh(request, options))
@@ -842,73 +1020,25 @@ jobs:
       var file = global.__ojobHttpResolveFile(options.parentPath, puri)
 
       // Preview settings affect HTML only; API object reads remain complete.
-      var preview = options.preview || {}
-      if (!options._api && request.params.raw != "true" && (isMap(preview.formats) || isDef(preview.maxBytes))) {
-        var name = String(new java.io.File(file).getName())
-        var ext = name.indexOf(".") < 0 ? "" : name.substring(name.lastIndexOf(".") + 1).toLowerCase()
-        var defaults = {
-          md: "markdown",
-          yml: "yaml",
-          yaml: "yaml",
-          css: "css",
-          sh: "sh",
-          js: "js",
-          java: "java",
-          py: "python",
-          toml: "toml",
-          hbs: "handlebars",
-          json: "json",
-          adoc: "asciidoc"
+      if (!options._api && (request.params || {}).raw != "true") {
+        var support = require("ojob-browse-contract.js")
+        var preview = options.preview || {}
+        var format = support.format(String(new java.io.File(file).getName()), preview, support.defaults)
+        var params = request.params || {}
+        var imageType = support.imageType(format)
+        if (imageType) return support.imagePreview(io.readFileStream(file), imageType)
+        if (format == "html") return { stream: io.readFileStream(file), streamType: "text/html", streamHeaders: {} }
+        if (format == "json" && (params.view == "json" || params.view == "json-data" ||
+            (params.parse != "false" && params.view != "source"))) {
+          return support.jsonPreview(request, options, () => io.readFileStream(file))
         }
-        var formats = isMap(preview.formats) ? preview.formats : defaults
-        var own = key => Object.prototype.hasOwnProperty.call(formats, key)
-        var format = own("name:" + name) ? formats["name:" + name] : (own(ext) ? formats[ext] : __)
-        if (!isString(format)) return {
-          file: file
+        if (format == "json") {
+          var source = support.readPreview(io.readFileStream(file), "text", preview.maxBytes)
+          source.sourceOnly = true
+          if (!source.truncated) source.type = "json"
+          return source
         }
-        if (!/^[a-z][a-z0-9-]*$/.test(format)) throw new Error("Invalid preview format")
-        var limit = isDef(preview.maxBytes) ? Number(preview.maxBytes) : __
-        if (isDef(limit) && (!isFinite(limit) || limit < 1 || Math.floor(limit) != limit || limit > 16777216)) throw new Error("preview.maxBytes must be an integer from 1 to 16777216")
-        var stream = io.readFileStream(file),
-          bytes, truncated = false
-        try {
-          if (isDef(limit)) {
-            var output = new java.io.ByteArrayOutputStream(),
-              count = 0,
-              n
-            var buffer = java.lang.reflect.Array.newInstance(java.lang.Byte.TYPE, Math.min(8192, limit + 1))
-            while (count <= limit && (n = stream.read(buffer, 0, Math.min(buffer.length, limit + 1 - count))) != -1) {
-              if (n == 0) continue
-              output.write(buffer, 0, n)
-              count += n
-            }
-            bytes = output.toByteArray()
-            truncated = bytes.length > limit
-            if (truncated) bytes = java.util.Arrays.copyOf(bytes, limit)
-          } else bytes = stream.readAllBytes()
-        } finally {
-          stream.close()
-        }
-        var decoder = java.nio.charset.StandardCharsets.UTF_8.newDecoder()
-        decoder.onMalformedInput(java.nio.charset.CodingErrorAction.IGNORE)
-        var data = String(decoder.decode(java.nio.ByteBuffer.wrap(bytes)))
-        if (truncated) return {
-          data: data + "\n\n[Preview truncated; use the raw download for the complete file.]",
-          type: "text",
-          truncated: true
-        }
-        if (format == "json") return {
-          data: jsonParse(data),
-          type: "json"
-        }
-        if (format == "asciidoc") return {
-          stream: new java.io.ByteArrayInputStream(bytes),
-          type: "asciidoc"
-        }
-        return {
-          data: data,
-          type: format == "markdown" ? "md" : format
-        }
+        return isDef(format) ? support.readPreview(io.readFileStream(file), format, preview.maxBytes) : { file: file }
       }
 
       if (request.params.raw == "true") {
@@ -934,7 +1064,8 @@ jobs:
       }
     })
     args.fns.renderList = _$(args.fns.renderList, "args.fns.renderList").isFunction().default((lst, server, request, options) => {
-      if (isDef(options.browse) && !options.browse) return ""
+      if (isDef(options.browse) && !options.browse &&
+          !(lst.defaultPresent && options.web && options.web.enabled === true)) return ""
       const uri = request.uri
       const uriPrefix = _$(global.__ojobHttpUriPrefix[String(options.port)], "__ojobHttpUriPrefix1").default(_$(global.__ojobHttpUriPrefix[options.port], "__ojobHttpUriPrefix2").default(""))
       const prefixURL = aURL => {
@@ -1510,6 +1641,8 @@ jobs:
       var puri = global.__ojobHttpRelativePath(uri, options.parentURI).replace(/\/$/, "")
       const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
 
+      const support = require("ojob-browse-contract.js")
+      const previewServer = global.__ojobHttpPreviewDocument(server, support.previewBackArrow)
       if (isDef(obj.stream) && obj.streamHeaders) {
         return server.replyStream(obj.stream, obj.streamType || "application/octet-stream", 200, obj.streamHeaders)
       }
@@ -1530,7 +1663,7 @@ jobs:
       if (obj.type == "asciidoc" && isDef(getOPackPath("Asciidoc")) && (isDef(obj.stream) || isDef(obj.file))) {
         loadLib("asciidoc.js")
         const stream = new java.io.BufferedInputStream(isDef(obj.file) ? io.readFileStream(obj.file) : obj.stream)
-        try { return ow.server.httpd.replyAsciidoc(server, stream) }
+        try { return ow.server.httpd.replyAsciidoc(previewServer, stream) }
         finally { stream.close() }
       }
 
@@ -1543,11 +1676,11 @@ jobs:
       }
 
       if (obj.type == "md") {
-        return server.replyOKHTML(ow.template.parseMD2HTML(obj.data, true))
+        return previewServer.replyOKHTML(ow.template.parseMD2HTML(obj.data, true))
       }
 
-      if (obj.type == "json" && (isUnDef(request.params.parse) || request.params.parse != "false")) {
-        return ow.server.httpd.replyJSMap(server, obj.data)
+      if (obj.type == "json" && !obj.sourceOnly && (isUnDef(request.params.parse) || request.params.parse != "false")) {
+        return ow.server.httpd.replyJSMap(previewServer, obj.data)
       }
 
       const breadcrumb = p => {
@@ -1586,9 +1719,9 @@ jobs:
 
       const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
       var content
+      const heading = "## " + support.previewBackArrow
       if (obj.type == "raw") {
-        if (obj.browseDetail) content = "## " + breadcrumb(puri) + "\n\n"
-        else content = "## <span style=\"display: flex; justify-content: space-between\"><span>" + breadcrumb( puri ) + "</span><span style=\"display: inline-flex; justify-content: space-between; float: inline-end; align-items: start\"><span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:history.back()\">&larr;</a></span></span></span>\n\n"
+        content = heading + breadcrumb(puri) + "\n\n"
         content += String(obj.data)
         content += "\n\n"
 
@@ -1596,8 +1729,11 @@ jobs:
           content += "\n" + options.footer + "\n"
         }
       } else {
-        content = "## <span style=\"display: flex; justify-content: space-between\"><span>" + breadcrumb( puri ) + "</span><span style=\"display: inline-flex; justify-content: space-between; float: inline-end; align-items: start\"><span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText(decodeURIComponent('" + fileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:downloadText(decodeURIComponent('" + fileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\">&darr;</a></span></span></span>\n\n"
+        const filename = fileLink(puri.substring(puri.lastIndexOf("/") + 1))
+        const download = `<button type="button" onclick="downloadText(decodeURIComponent('${filename}'))" aria-label="Download" title="Download" style="float:right;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 1em">&darr;</button>`
+        content = heading + download + breadcrumb(puri) + "\n\n"
         // Protect already escaped source from Showdown's standalone pre/code pass.
+        if (obj.sourceOnly) content += '<p><a href="' + support.jsonViewURL(request, "json") + '">Render</a></p>' + "\n\n"
         content += "<div><pre><code class=\"language-" + escapeText(obj.type) + "\">" + ow.format.escapeHTML(isMap(obj.data) ? stringify(obj.data) : String(obj.data)) + "</code></pre></div>\n\n"
 
         if (isDef(options.footer)) {
@@ -1763,6 +1899,7 @@ jobs:
 
       // Sort directories and field values
       var compareValues = require("ojob-browse-contract.js").compareValues
+      var allowShort = /^(object|filename|version|tag)$/i.test(field)
       var rows = result.list.slice()
       rows.sort((a, b) => {
         if (!!a.isDirectory != !!b.isDirectory) return a.isDirectory ? -1 : 1
@@ -1772,7 +1909,7 @@ jobs:
           av = a.values["Size in bytes"]
           bv = b.values["Size in bytes"]
         }
-        var n = compareValues(av, bv)
+        var n = compareValues(av, bv, allowShort)
         return n ? n * (order == "desc" ? -1 : 1) : (field == result.key ? 0 : String(a.values[result.key]).localeCompare(String(b.values[result.key])))
       })
 
@@ -1865,6 +2002,7 @@ jobs:
         uri       : uri
         browseUri : browseUri
         operationsBrowseUris: operationsBrowseUris
+        operationsToken: operationsToken
   help :
    text   : Provides a HTTP API to access getList/getObj for any HTTP Browse generic implementation.
    expects:
@@ -1924,7 +2062,7 @@ jobs:
           if (!_options._operation) return ow.server.httpd.reply({
             error: "Operations not supported"
           }, 501, "application/json", {})
-          return _options._operation(action, _req, server, true)
+          return _options._operation(action, _req, server, true, _cfg.operationsTokenHash)
         }
         if (action == "preview") {
           if (!_options.capabilities || !_options.capabilities.previewFormats) return ow.server.httpd.reply({
@@ -1977,4 +2115,10 @@ jobs:
       }
   exec : | #js
     if (isUnDef(global.__GBHTTPDAPI)) global.__GBHTTPDAPI = {}
-    global.__GBHTTPDAPI[String(args.port) + args.uri] = { browseUri: args.browseUri, operationsBrowseUris: args.operationsBrowseUris || [], requiredOptions: args.options }
+    var token = _$(args.operationsToken).isString().default("")
+    global.__GBHTTPDAPI[String(args.port) + args.uri] = {
+      browseUri: args.browseUri,
+      operationsBrowseUris: args.operationsBrowseUris || [],
+      operationsTokenHash: token.length ? sha256(token) : __,
+      requiredOptions: args.options
+    }

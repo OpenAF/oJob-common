@@ -1219,9 +1219,18 @@ return `queryInfo: { applied: true }`; the renderer preserves this ordering.
 Omitting `preview.formats` keeps existing formats. Supplying the map replaces
 the defaults; an empty map disables formatted previews. Extension keys omit the
 dot, exact filename keys start with `name:`, and values select `markdown`, `json`,
-`asciidoc`, `text`, or a code language. `maxBytes` accepts 1 through 16777216 bytes.
+`asciidoc`, `text`, or a code language. `maxBytes` defaults to 4 MiB and accepts
+an explicit limit from 1 through 16777216 bytes.
 Truncated content is escaped text. These controls apply to the built-in generic
 filesystem HTML previews; API object responses and raw streams remain complete.
+JSON previews open a small viewer and stream the original bytes in a separate
+request. The browser renders up to 16 MiB with nJSMap. **{…}** and **[…]** mark
+expandable entries. Use **+ / −** for a single branch or the double chevron for all expandable
+entries on the current page. The chevron sits beside the marker for an open
+branch and in the outermost table’s corner. Use **« / »** to page through branches
+with more than 200 entries. Large JSON starts collapsed and the expandable
+view requires updated OpenAF browser assets. For files above 16 MiB or invalid
+JSON, use **View source** for a bounded preview or **Download raw** for the entire file.
 Custom provider callbacks remain responsible for their own preview handling.
 The coordinated S3/ECR/CodeArtifact jobs use the same contract. Enhanced options
 require the updated oJob-common definitions; legacy provider configuration still
@@ -1241,7 +1250,10 @@ the provider's existing cache TTL (5 seconds by default).
 The API additionally supports `action=preview`, `status`, `freshness`, `metrics`,
 and POST `refresh`. API operations are disabled until the API registration lists
 allowed targets in `operationsBrowseUris`; request `browseUri` overrides must
-also belong to this list. The API route has its own HTTP authentication policy;
+also belong to this list. API refresh additionally requires a server-side
+`operationsToken` and a matching `X-OpenAF-Browse-Token` request header. Supply
+the token from a secret store or environment variable and send it over HTTPS.
+The API route has its own HTTP authentication policy;
 target browser authentication is not automatically invoked. Existing `obj`
 responses remain complete and legacy callback-based `search` remains supported.
 Strict metrics output uses the existing OpenAF OpenMetrics formatter; an older
@@ -1271,6 +1283,7 @@ HTTP API to access `getList`/`getObj` for any `HTTP Browse generic` instance.
 | uri | String | No | The URI where the HTTP Browser API will be available (defaults to "/api/browse") |
 | browseUri | String | No | The HTTP Browse generic URI to target (can be overridden by request param `browseUri`) |
 | operationsBrowseUris | Array | No | Explicit target URI allowlist for status, freshness, metrics and refresh; defaults to none |
+| operationsToken | String | No | Secret for API refresh. When unset, API refresh is disabled. |
 
 Query parameters:
 - `action`: `list` (default), `obj`, callback `search`, or an explicitly enabled preview/operation described above.

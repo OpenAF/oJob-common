@@ -26,6 +26,18 @@ try {
   var sized=ow.server.httpd.browse.support.query({isList:true,key:'Filename',fields:['Filename','Size'],list:[{values:{Filename:'large',Size:'1 KB','Size in bytes':1024}},{values:{Filename:'small',Size:'900 B','Size in bytes':900}}]}, {params:{sort:'Size'}},{query:{enabled:true}})
   equal(sized.list[0].values.Filename,'small')
   var legacy=ow.server.httpd.browse.files('/legacy',{path:root+'/public'})
-  equal(legacy._fns.getObj({uri:'/legacy/b.json',params:{}},legacy).data.ok,true)
+  equal(legacy._fns.getObj({uri:'/legacy/b.json',params:{}},legacy).jsonViewer,true)
+  var json = legacy._fns.getObj({uri:'/legacy/b.json',params:{view:'json-data'}},legacy)
+  try { equal(String(af.fromInputStream2String(json.stream)), '{"ok":true}') } finally { json.stream.close() }
+  var bytes = 4 * 1024 * 1024 + 1
+  io.writeFileString(root+'/public/large.md','x'.repeat(bytes))
+  var largeRequest = {uri:'/legacy/large.md',params:{}}
+  equal(legacy._fns.getObj(largeRequest,legacy).truncated,true)
+  equal(legacy._fns.getObj(largeRequest,Object.assign({},legacy,{_api:true})).data.length,bytes)
+  var refresh = {uri:'/test.dir/',params:{csrf:options._refreshToken},method:'POST',header:{}}
+  var rejected = false
+  try { options._operation('refresh',refresh,{},true) } catch (e) { rejected = e.httpStatus == 403 }
+  equal(rejected,true)
+  equal(options._operation('refresh',refresh,{},false).status,200)
   print('PASS '+checks+' core browse assertions')
 } finally {io.rm(root)}

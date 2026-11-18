@@ -53,10 +53,16 @@ try {
   var defaults = {port:port,uri:'/legacy',path:root,templates:{},options:{},fns:{}}
   run('oJobBrowse.yaml', 'HTTP Browse generic', defaults)
   var legacy = global.__GBHTTPD[String(port) + '/legacy']
-  equal(legacy._fns.getObj({uri:'/legacy/b.json',params:{}}, legacy).data.complete, true)
+  var jsonView = legacy._fns.getObj({uri:'/legacy/b.json',params:{}}, legacy)
+  equal(jsonView.jsonViewer,true)
+  equal(jsonView.data.includes('{"complete":true}'),false)
+  var jsonData = legacy._fns.getObj({uri:'/legacy/b.json',params:{view:'json-data'}}, legacy)
+  equal(jsonData.streamType,'application/json; charset=utf-8')
+  equal(jsonData.streamHeaders['X-Content-Type-Options'],'nosniff')
+  try { equal(String(af.fromInputStream2String(jsonData.stream)), '{"complete":true}') } finally { jsonData.stream.close() }
   var operated={port:port,uri:'/ops',path:root,templates:{},options:{operations:{enabled:true}},fns:{}}
   run('oJobBrowse.yaml','HTTP Browse generic',operated)
-  var ops=global.__GBHTTPD[String(port)+'/ops'], req={uri:'/ops/',params:{},method:'GET'}
+  var ops=global.__GBHTTPD[String(port)+'/ops'], req={uri:'/ops/',params:{},method:'POST'}
   ops._fns.getList(req,ops)
   equal(ops._fns.getFreshness(req,ops).loadedAt > 0,true)
   var denied=false
@@ -90,6 +96,22 @@ try {
   equal(dispatch({uri:'/api',params:{action:'status',browseUri:'/browse'},method:'GET'}, {},port,'/api').status,403)
   equal(dispatch({uri:'/api',params:{action:'status'},method:'GET'}, {},port,'/api').status,200)
   equal(dispatch({uri:'/api',params:{action:'refresh'},method:'GET'}, {},port,'/api').status,405)
+  var apiRefresh = {uri:'/api',params:{action:'refresh',csrf:ops._refreshToken},method:'POST',header:{}}
+  equal(dispatch(apiRefresh, {},port,'/api').status,403)
+  run('oJobBrowse.yaml','HTTP Browse API',{port:port,uri:'/api',browseUri:'/ops',operationsBrowseUris:['/ops'],operationsToken:'fixture-token'})
+  apiRefresh.header['x-openaf-browse-token'] = 'wrong'
+  equal(dispatch(apiRefresh, {},port,'/api').status,403)
+  apiRefresh.header['x-openaf-browse-token'] = 'fixture-token'
+  equal(dispatch(apiRefresh, {},port,'/api').status,200)
+  var limit = 4 * 1024 * 1024
+  io.writeFileString(root + '/large.json', 'x'.repeat(limit + 1))
+  var large = legacy._fns.getObj({uri:'/legacy/large.json',params:{view:'source'}}, legacy)
+  equal(large.truncated,true)
+  equal(large.type,'text')
+  var largeJSON = legacy._fns.getObj({uri:'/legacy/large.json',params:{view:'json-data'}}, legacy)
+  try {
+    equal(Number(largeJSON.stream.transferTo(java.io.OutputStream.nullOutputStream())),limit + 1)
+  } finally { largeJSON.stream.close() }
   var oldCalls=0
   global.__GBHTTPD[String(port)+'/old']={_fns:{search:function(){oldCalls++;return {list:[]}}}}
   equal(dispatch({uri:'/api',params:{action:'search',browseUri:'/old'},method:'GET'}, {},port,'/api').status,200)

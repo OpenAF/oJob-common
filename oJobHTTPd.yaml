@@ -66,6 +66,13 @@ jobs:
       }
       global.__ojobHttpEscapeText = value => String(value).replace(/[&<>"'`\\\[\]()*_{}|#!]/g, c => "&#" + c.charCodeAt(0) + ";")
       global.__ojobHttpFileLink = value => encodeURIComponent(String(value)).replace(/[!'()*]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase())
+      global.__ojobHttpPreviewBackArrow = '<button type="button" onclick="history.back()" aria-label="Back" title="Back" ' +
+        'style="float:right;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 1em">&larr;</button>'
+      global.__ojobHttpPreviewDocument = (server, arrow) => ({
+        getPort: () => server.getPort(),
+        reply: (data, type, status, headers) => server.reply(data, type, status, headers),
+        replyOKHTML: html => server.replyOKHTML(String(html).replace(/<body\b[^>]*>/i, body => body + arrow))
+      })
 
       var ks
       if (isUnDef(global.__ojobHttp)) global.__ojobHttp = {}
@@ -684,11 +691,13 @@ jobs:
                 URL.revokeObjectURL(url)
               }
             </script></span>`
-            var fn = () => replyMD(furi)
+            const backArrow = global.__ojobHttpPreviewBackArrow
+            const previewServer = global.__ojobHttpPreviewDocument(server, backArrow)
+            var fn = () => previewServer.replyOKHTML(ow.template.parseMD2HTML(io.readFileString(furi), true, __, __, __, uriPrefix))
             var fnLang = lang => {
                ow.loadTemplate()
                var _displayURI = puri
-               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs path route incURI false}}}", { path: _displayURI, route: uri, incURI: incURI }) + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\">&darr;</a></span>\n\n<div><pre><code class=\"language-" + lang + "\">" + ow.format.escapeHTML(io.readFileString(furi)) + "</code></pre></div>\n\n" + _downloadcode, true, true), "text/html", 200)
+               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs path route incURI false}}}", { path: _displayURI, route: uri, incURI: incURI }) + backArrow + "<span onclick=\"downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\">&darr;</a></span>\n\n<div><pre><code class=\"language-" + lang + "\">" + ow.format.escapeHTML(io.readFileString(furi)) + "</code></pre></div>\n\n" + _downloadcode, true, true), "text/html", 200)
             }
             switch(ext) {
             case "md"  : return fn()
@@ -708,7 +717,7 @@ jobs:
               } else {
                 var _d = io.readFileJSON(furi)
                 if (isMap(_d) || isArray(_d))
-                  return ow.server.httpd.replyJSMap(server, _d)
+                  return ow.server.httpd.replyJSMap(previewServer, _d)
                 else
                   return fn()           
               }        
@@ -716,7 +725,7 @@ jobs:
               if (isDef(getOPackPath("Asciidoc"))) {
                 loadLib("asciidoc.js")
                 const stream = new java.io.BufferedInputStream(io.readFileStream(furi))
-                try { return ow.server.httpd.replyAsciidoc(server, stream) }
+                try { return ow.server.httpd.replyAsciidoc(previewServer, stream) }
                 finally { stream.close() }
               }              
             default: 

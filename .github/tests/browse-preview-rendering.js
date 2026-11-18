@@ -15,6 +15,9 @@ const port = 19867
 const server = {
   getPort: () => port,
   replyOKHTML: data => ({ data: String(data), status: 200 }),
+  replyStream: (stream, type, status, headers) => type && type.startsWith("image/") ?
+    { base64: String(java.util.Base64.getEncoder().encodeToString(stream.readAllBytes())), type, headers } :
+    { data: String(af.fromInputStream2String(stream)), type, status: 200 },
   reply: (data, mime, status) => ({ data: String(data), status: status })
 }
 var checks = 0
@@ -29,6 +32,10 @@ function checkSource(response, language, expected, label) {
   const html = response.data
   const block = html.match(new RegExp('<pre><code class="language-' + language + '">([\\s\\S]*?)</code></pre>'))
   check(block && !block[1].includes("<") && ow.format.unescapeHTML4(block[1]) === expected, label)
+}
+function checkBack(response, label) {
+  const buttons = String(response.data).match(/<button[^>]*onclick="history\.back\(\)"[^>]*aria-label="Back"[^>]*style="float:right[^>]*>/g)
+  check(buttons && buttons.length === 1, label + " has one top-right Back button")
 }
 
 try {
@@ -55,21 +62,59 @@ try {
   io.writeFileString(root + "/sample.adoc", "= Preview heading\n\nParagraph with 'quoted text'.\n")
 
   for (let name of Object.keys(serve)) {
-    for (let ext of Object.keys(formats)) checkSource(serve[name]("sample."+ext), formats[ext], source, name+" "+ext+" literal source")
+    for (let ext of Object.keys(formats)) {
+      var response = serve[name]("sample."+ext)
+      checkSource(response, formats[ext], source, name+" "+ext+" literal source")
+      checkBack(response, name+" "+ext)
+    }
+    checkBack(serve[name]("sample.json", {parse:"false"}), name+" JSON source")
+    checkBack(serve[name]("sample.json"), name+" rendered JSON")
+    checkBack(serve[name]("sample.md"), name+" rendered Markdown")
     const json = serve[name]("sample.json", {parse:"false"}).data.match(/<pre><code class="language-json">([\s\S]*?)<\/code><\/pre>/)
     check(json && JSON.parse(ow.format.unescapeHTML4(json[1])).entity === "&#x27;" &&
       JSON.parse(ow.format.unescapeHTML4(json[1])).title === "O'Reilly", name+" JSON source")
     check(serve[name]("sample.json").data.includes("nJSMap"), name+" JSON map still renders")
+    if (name != "legacy") {
+      check(serve[name]("sample.json", {parse:"false"}).data.includes('href="?view=json">Render</a>'),
+        name+" JSON source links to the browser renderer")
+      const viewer = serve[name]("sample.json", {parse:"false", view:"json"}).data
+      check(viewer.includes("data-json-render") && viewer.includes("slowAfterMs = 8000"),
+        name+" explicit JSON mode overrides the legacy source option and waits eight seconds")
+      check(/<h2[^>]*>\s*<button[^>]*aria-label="Back"[^>]*style="float:right[^>]*>/.test(viewer),
+        name+" JSON preview has a top-right Back button in its header")
+    }
     check(serve[name]("sample.md").data.includes("Preview heading") && serve[name]("sample.md").data.includes("'quoted text'"), name+" Markdown still renders")
     if (isDef(getOPackPath("Asciidoc"))) {
       const adoc = serve[name]("sample.adoc")
       check(adoc.status === 200 && adoc.data.includes("Preview heading"), name+" AsciiDoc still renders")
+      checkBack(adoc, name+" rendered AsciiDoc")
     }
+  }
+
+  for (let name of Object.keys(serve)) {
+    var defaultHTML = serve[name]("sample.html")
+    check(defaultHTML.type.split(";")[0] == "text/html" && defaultHTML.data === source,
+      name+" streams HTML verbatim with default options")
+  }
+
+  const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a6QAAAABJRU5ErkJggg=="
+  java.nio.file.Files.write(java.nio.file.Paths.get(root + "/pixel.PNG"), java.util.Base64.getDecoder().decode(png))
+  for (let options of [genericOptions, core]) options.preview = { maxBytes: 1 }
+  for (let name of ["generic", "core"]) {
+    const image = serve[name]("pixel.PNG")
+    check(image.base64 == png && image.type == "image/png" && image.headers["Content-Disposition"] == "inline",
+      name+" streams original binary image despite text preview limit")
   }
 
   for (let options of [genericOptions, core]) options.preview = { formats:{xml:"xml",html:"html",yaml:"yaml"}, maxBytes:4096 }
   for (let name of ["generic", "core"]) {
-    for (let ext of ["xml","html","yaml"]) checkSource(serve[name]("sample."+ext), ext, source, name+" configured "+ext+" preview")
+    for (let ext of ["xml","yaml"]) {
+      var configured = serve[name]("sample."+ext)
+      checkSource(configured, ext, source, name+" configured "+ext+" preview")
+      checkBack(configured, name+" configured "+ext)
+    }
+    var html = serve[name]("sample.html")
+    check(html.type == "text/html" && html.data === source, name+" streams configured HTML verbatim")
   }
   print("PASS " + checks + " Browse preview rendering assertions")
 } finally { io.rm(root) }

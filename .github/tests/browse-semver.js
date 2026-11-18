@@ -26,6 +26,8 @@ try {
   var chain = ['1.0.0-alpha','1.0.0-alpha.1','1.0.0-alpha.beta','1.0.0-beta','1.0.0-beta.2','1.0.0-beta.11','1.0.0-rc.1','1.0.0','1.2.0','1.10.0','2.0.0']
   sorters.forEach(function(sort) {
     function values(result) {return result.list.map(row => row.values.Version)}
+    var folders = ['2.4','2.4.2','1.2','2.4.1','docs','2.10','2.8']
+    equal(values(sort(folders, {order:'desc'})), ['docs','2.10','2.8','2.4.2','2.4.1','2.4','1.2'])
     equal(values(sort(chain.slice().reverse(), {})), chain)
     equal(values(sort(chain, {order:'desc'})), chain.slice().reverse())
     equal(values(sort(chain.slice().reverse(), {size:3,page:2})), chain.slice(3,6))
