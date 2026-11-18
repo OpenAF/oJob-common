@@ -29,6 +29,13 @@ try {
     equal(initialized.capabilities.query, 1)
   }
   function request(path, params) { return {uri:'/browse/' + path, params:params || {}} }
+  io.writeFileString(root + '/c.txt', 'created after startup')
+  var wildcardRequest = request('', {q:'?.XML'})
+  equal(options._fns.search(wildcardRequest, options).list.length, 0)
+  options.query.wildcards = true
+  equal(options._fns.search(wildcardRequest, options).list[0].values.Filename, 'a.xml')
+  equal(options._fns.search(request('', {q:'*.json'}), options).list[0].values.Filename, 'b.json')
+  delete options.query.wildcards
   var listing = options._fns.getList(request('', {sort:'Filename',order:'desc'}), options)
   equal(listing.list.length, 1)
   equal(listing.list[0].values.Filename, 'b.json')
@@ -36,6 +43,19 @@ try {
   equal(listing.queryInfo.applied, true)
   var req = request('', {q:'a&b',size:'1',page:'2',sort:'Filename',order:'desc'})
   var html = String(options._fns.renderList(listing, {}, req, options))
+  equal(html.indexOf('<table id="browse-listing" style="display:table;width:100%">'), -1)
+  var iconColumnRule = '#browse-listing > thead > tr > th:first-child,#browse-listing > tbody > tr > td:first-child'
+  equal(html.includes(iconColumnRule), false)
+  options.fullWidth = true
+  var fullWidthHTML = String(options._fns.renderList(listing, {}, req, options))
+  equal(fullWidthHTML.includes('<table id="browse-listing" style="display:table;width:100%">'), true)
+  equal(fullWidthHTML.includes(iconColumnRule), true)
+  equal(fullWidthHTML.includes('width:2.5rem;min-width:2.5rem;max-width:2.5rem'), true)
+  delete options.fullWidth
+  var refresh = request('', {})
+  refresh.method = 'POST'
+  options._fns.refresh(refresh, options)
+  equal(options._fns.getList(request('', {}), options).pageInfo.total, 3)
   equal(html.indexOf('sort-button active') >= 0, true)
   equal(html.indexOf('&#9660;') >= 0 || html.indexOf('▼') >= 0, true)
   equal(html.indexOf('q=a%26b&amp;size=1&amp;sort=Filename&amp;order=asc&amp;page=1') >= 0, true)
@@ -86,6 +106,22 @@ try {
   equal((searchFormHTML.match(/type="submit"/g) || []).length, 1)
   equal(searchFormHTML.indexOf('class="browse-apply" type="submit"') >= 0, true)
   equal(searchFormHTML.indexOf('id="browse-clear-search" class="browse-icon" type="button"') >= 0, true)
+  var originalFreshness = options._fns.getFreshness
+  try {
+    var updatedAt = now() - 125000
+    options._fns.getFreshness = () => ({loadedAt:updatedAt - 120000, lastUpdatedAt:updatedAt})
+    var pending = Object.assign({}, listing, {searchInfo:{complete:false, refreshing:true}})
+    var partial = Object.assign({}, listing, {searchInfo:{complete:false, coverage:'loaded package hierarchies'}})
+    var rendered = String(options._fns.renderList(pending, {}, req, options))
+    equal(rendered.includes('Cache updated <time datetime="' + new Date(updatedAt).toISOString() + '">2 minutes ago</time>'), true)
+    equal(rendered.includes('role="status" data-pending="true">Loading more cached data'), true)
+    rendered = String(options._fns.renderList(partial, {}, req, options))
+    equal(rendered.includes('role="status" data-pending="false">Searched loaded package trees.'), true)
+    equal(String(options._fns.renderList(pending, {}, request('', {}), options)).includes('role="status" data-pending="false"></div>'), true)
+    options._fns.getFreshness = () => { throw new Error('Freshness unavailable') }
+    rendered = String(options._fns.renderList(listing, {}, req, options))
+    equal(rendered.includes('id="browse-cache-age" class="browse-cache-age"></div>'), true)
+  } finally { options._fns.getFreshness = originalFreshness }
   var previousTheme = __flags.MD_DARKMODE
   try {
     ;['false', 'true'].forEach(theme => {
@@ -106,5 +142,14 @@ try {
   equal(legacy.indexOf('class="sorter-container"') < 0, true)
   equal(legacy.indexOf('id="browse-options-toggle"') >= 0, true)
   equal(legacy.indexOf('<form class="browse-controls"'), -1)
+  var sortedLegacy = String(options._fns.renderList({
+    fields: ['Version'], alignFields: ['left'], key: 'Version',
+    sortInfo: {field:'Version',order:'desc'},
+    list: [{values:{Version:'2.0.0'}}, {values:{Version:'1.10.0'}}]
+  }, {}, request('',{sort:'Version', order:'desc'}), options))
+  var legacyRows = sortedLegacy.match(/<tbody>[\s\S]*?<\/tbody>/)[0]
+  equal(legacyRows.indexOf('2.0.0') < legacyRows.indexOf('1.10.0'), true)
+  equal(sortedLegacy.includes('href="?sort=Version&amp;order=desc&amp;page=1"'), true)
+  equal(sortedLegacy.includes('/js/mdtablesort.js'), false)
   print('PASS ' + checks + ' browse sorting assertions')
 } finally {io.rm(root)}

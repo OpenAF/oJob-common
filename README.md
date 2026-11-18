@@ -1173,6 +1173,15 @@ Sorting:
 - `sortTab` (Boolean, defaults to false) includes a client-side table sorting script, adding sort controls to each column header.
 - `sortTabAsc` (Boolean, defaults to false) requires `sortTab` to also be true, and pre-selects an ascending sort on the first file/folder field column when the page loads.
 
+Set `options.fullWidth: true` to stretch the listing table across the available
+page width while keeping the first icon column at a fixed width. By default,
+the table sizes to its contents.
+
+The built-in filesystem browser preloads the root directory at startup and
+reuses that listing for up to five seconds. ECR, S3, and CodeArtifact also warm
+their root metadata at startup. S3 defaults to a five-second listing cache when
+`cache` is omitted. Set `cache: 0` to bypass the S3 listing cache.
+
 Generic filesystem browsing also supports optional server queries and preview controls:
 
 ```yaml
@@ -1194,6 +1203,13 @@ options:
 
 With query processing enabled, `page`, `size` (or `pageSize`), `sort` (a displayed
 field name), and `order=asc|desc` sort before pagination. Folders stay first.
+Set `options.query.wildcards: true` to enable `*` (zero or more characters)
+and `?` (one character) in search. A wildcard pattern matches the whole name
+or path examined by the provider. For example, `*.zip` matches ZIP files,
+and `*release-?.zip` matches names ending in `release-1.zip` or
+`release-a.zip`. Plain text still matches a substring. Wildcards apply within
+the existing search coverage and scan limits.
+
 The default filesystem callbacks support case-insensitive literal `q` search
 below the current directory. Search metadata reports whether scan/result/time
 limits prevented complete results. Symlinks are skipped during recursive search.

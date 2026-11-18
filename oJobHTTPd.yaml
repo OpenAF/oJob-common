@@ -688,7 +688,7 @@ jobs:
             var fnLang = lang => {
                ow.loadTemplate()
                var _displayURI = puri
-               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs path route incURI false}}}", { path: _displayURI, route: uri, incURI: incURI }) + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\">&darr;</a></span>\n\n<pre><code class=\"language-" + lang + "\">" + ow.format.escapeHTML(io.readFileString(furi)) + "</code></pre>\n" + _downloadcode, true, true), "text/html", 200)
+               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs path route incURI false}}}", { path: _displayURI, route: uri, incURI: incURI }) + "<span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\">&darr;</a></span>\n\n<div><pre><code class=\"language-" + lang + "\">" + ow.format.escapeHTML(io.readFileString(furi)) + "</code></pre></div>\n\n" + _downloadcode, true, true), "text/html", 200)
             }
             switch(ext) {
             case "md"  : return fn()
@@ -715,7 +715,9 @@ jobs:
             case "adoc":
               if (isDef(getOPackPath("Asciidoc"))) {
                 loadLib("asciidoc.js")
-                return ow.server.httpd.replyAsciidoc(server, io.readFileStream(furi))
+                const stream = new java.io.BufferedInputStream(io.readFileStream(furi))
+                try { return ow.server.httpd.replyAsciidoc(server, stream) }
+                finally { stream.close() }
               }              
             default: 
               return replyFile(furi)
