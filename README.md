@@ -1162,16 +1162,116 @@ Generic HTTP browse service with customizable templates and functions.
 | uri | String | No | The URI where the HTTP Browse will be available (defaults to "/") |
 | path | String | No | The base path for browsing (defaults to "") |
 | templates | Map | No | Map with templates to be used |
-| fns | Map | No | Map with functions for template rendering (getList, getObj, renderList, renderObj, renderEmpty, init) |
-| options | Map | No | Map with options to be passed (browse, default, logo, showURI, sortTab, sortTabAsc, footer) |
+| fns | Map | No | Callbacks: getList, getObj, renderList, renderObj, renderEmpty, init; optional search, validate, getStatus, getFreshness, refresh |
+| options | Map | No | Browse/render options plus optional query, preview, and operations maps described below |
 
 Pagination:
 - `renderList` will render pager controls when the list metadata includes `pageInfo` with `page`, `pageSize`, and `total`.
-- If `pageInfo` is not present, it falls back to query parameters `page` and `pageSize`.
+- Built-in filesystem pagination requires `options.query.enabled`; custom providers can return their own `pageInfo`. Merely supplying a page parameter does not paginate an unpaged legacy callback.
 
 Sorting:
 - `sortTab` (Boolean, defaults to false) includes a client-side table sorting script, adding sort controls to each column header.
 - `sortTabAsc` (Boolean, defaults to false) requires `sortTab` to also be true, and pre-selects an ascending sort on the first file/folder field column when the page loads.
+
+Set `options.fullWidth: true` to stretch the listing table across the available
+page width while keeping the first icon column at a fixed width. By default,
+the table sizes to its contents.
+
+The built-in filesystem browser preloads the root directory at startup and
+reuses that listing for up to five seconds. ECR, S3, and CodeArtifact also warm
+their root metadata at startup. S3 defaults to a five-second listing cache when
+`cache` is omitted. Set `cache: 0` to bypass the S3 listing cache.
+
+Generic filesystem browsing also supports optional server queries and preview controls:
+
+```yaml
+options:
+  query:
+    enabled: true
+    pageSize: 100
+    maxPageSize: 500
+    maxScanned: 10000
+    maxResults: 1000
+    timeoutMs: 5000
+  preview:
+    maxBytes: 1048576
+    formats:
+      xml: xml
+      json: json
+      'name:Dockerfile': dockerfile
+```
+
+With query processing enabled, `page`, `size` (or `pageSize`), `sort` (a displayed
+field name), and `order=asc|desc` sort before pagination. Folders stay first.
+Set `options.query.wildcards: true` to enable `*` (zero or more characters)
+and `?` (one character) in search. A wildcard pattern matches the whole name
+or path examined by the provider. For example, `*.zip` matches ZIP files,
+and `*release-?.zip` matches names ending in `release-1.zip` or
+`release-a.zip`. Plain text still matches a substring. Wildcards apply within
+the existing search coverage and scan limits.
+
+The default filesystem callbacks support case-insensitive literal `q` search
+below the current directory. Search metadata reports whether scan/result/time
+limits prevented complete results. Symlinks are skipped during recursive search.
+Providers that already paginate must apply their queries before pagination and
+return `queryInfo: { applied: true }`; the renderer preserves this ordering.
+
+Omitting `preview.formats` keeps existing formats. Supplying the map replaces
+the defaults; an empty map disables formatted previews. Extension keys omit the
+dot, exact filename keys start with `name:`, and values select `markdown`, `json`,
+`asciidoc`, `text`, or a code language. `maxBytes` defaults to 4 MiB and accepts
+an explicit limit from 1 through 16777216 bytes.
+Truncated content is escaped text. These controls apply to the built-in generic
+filesystem HTML previews; API object responses and raw streams remain complete.
+JSON previews open a small viewer and stream the original bytes in a separate
+request. The browser renders up to 16 MiB with nJSMap. **{…}** and **[…]** mark
+expandable entries. Use **+ / −** for a single branch or the double chevron for all expandable
+entries on the current page. The chevron sits beside the marker for an open
+branch and in the outermost table’s corner. Use **« / »** to page through branches
+with more than 200 entries. Large JSON starts collapsed and the expandable
+view requires updated OpenAF browser assets. For files above 16 MiB or invalid
+JSON, use **View source** for a bounded preview or **Download raw** for the entire file.
+Custom provider callbacks remain responsible for their own preview handling.
+The coordinated S3/ECR/CodeArtifact jobs use the same contract. Enhanced options
+require the updated oJob-common definitions; legacy provider configuration still
+works with the previous definitions. The `HTTP Browser` job checks the effective
+OpenAF browser capabilities: enhanced built-in filesystem browsing requires the
+updated OpenAF core, while `HTTP Browse generic` works on OpenAF 20261115.
+
+Enable `options.operations.enabled: true` to reserve `@@/status`,
+`@@/freshness`, `@@/metrics`, and POST `@@/refresh` below the browse URI.
+The listing supplies a token-protected refresh form. Status exposes counters and
+cache summaries; freshness distinguishes load/expiry times from source changes.
+Refresh coalesces concurrent work, has a ten-second cooldown per location, and
+keeps at most 1,000 location records with 30-minute idle expiry. Provider loads
+also coalesce and keep at most 1,000 cached units per instance. Units expire using
+the provider's existing cache TTL (5 seconds by default).
+
+The API additionally supports `action=preview`, `status`, `freshness`, `metrics`,
+and POST `refresh`. API operations are disabled until the API registration lists
+allowed targets in `operationsBrowseUris`; request `browseUri` overrides must
+also belong to this list. API refresh additionally requires a server-side
+`operationsToken` and a matching `X-OpenAF-Browse-Token` request header. Supply
+the token from a secret store or environment variable and send it over HTTPS.
+The API route has its own HTTP authentication policy;
+target browser authentication is not automatically invoked. Existing `obj`
+responses remain complete and legacy callback-based `search` remains supported.
+Strict metrics output uses the existing OpenAF OpenMetrics formatter; an older
+runtime without that formatter returns 501 for metrics.
+
+S3 searches cache bounded recursive listing snapshots, including their completeness
+metadata. SDK prefetch may retrieve a remote page beyond the entry budget.
+ECR repository queries support repository-name sorting and fetch image summaries
+only for the displayed rows. CodeArtifact searches cover loaded package trees;
+results explicitly report incomplete coverage rather than fetching every version.
+
+Focused offline validation from this checkout:
+
+```sh
+oaf -f .github/tests/browse-regressions.js
+oaf -f .github/tests/browse-providers.js
+CORE_BROWSE_MODULE=jar java -jar ../openaf/openaf.jar -f .github/tests/browse-core-regressions.js
+```
 
 ### HTTP Browser API
 
@@ -1182,9 +1282,11 @@ HTTP API to access `getList`/`getObj` for any `HTTP Browse generic` instance.
 | port | Number | No | The port where the server was made available (defaults to 8091) |
 | uri | String | No | The URI where the HTTP Browser API will be available (defaults to "/api/browse") |
 | browseUri | String | No | The HTTP Browse generic URI to target (can be overridden by request param `browseUri`) |
+| operationsBrowseUris | Array | No | Explicit target URI allowlist for status, freshness, metrics and refresh; defaults to none |
+| operationsToken | String | No | Secret for API refresh. When unset, API refresh is disabled. |
 
 Query parameters:
-- `action`: `list` (default) or `obj`.
+- `action`: `list` (default), `obj`, callback `search`, or an explicitly enabled preview/operation described above.
 - `path`: Optional relative path appended to the target browse URI.
 - `raw`: When `true`, streams the object response if possible.
 
@@ -1583,3 +1685,18 @@ ojob:
   opacks:
     oJob-common
 ```
+
+
+## Modern standalone test suites
+
+With the modern OpenAF `ow.test` API, `oJob Test Suite` runs JavaScript modules
+exporting `register(t)` or `test*` functions. Supply `args.files` and optional
+`args.options` (tags, names, retries, timeout, workers). The job returns
+`args.results` and throws on a failing run unless `args.failOnError` is false.
+
+`oJob Test Workflow` accepts `args.file` and `args.options` for process-isolated
+workflow verification. The options must explicitly set `trusted: true`; child
+JVMs are not an untrusted-code sandbox. Expectations and selective job mocks use
+`ow.test.ojob` semantics. Existing `oJob Test`, assertions and report jobs remain
+available. `oJob Test sh` executes its command through `testExternally`, and
+`oJob Test Results` reports public numeric profile snapshots.

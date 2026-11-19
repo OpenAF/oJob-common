@@ -63,10 +63,10 @@ jobs:
     var count = _$(args.count, "count").toNumber().isNumber().default(1)
     var jname = _$(args.name, "name").isString().default(job.name)
 
+    args.asserts = _$(args.asserts, "asserts").isArray().default([])
     if (isDef(args.func)) {
       if (!(isFunction(args.func))) args.func = new Function(args.func)
       ow.loadTest()
-      args.asserts = _$(args.asserts, "asserts").isArray().default([])
       for(var c = 0; c < count; c++) {
         ow.test.test(jname, () => {
           var _r = args.func()
@@ -126,7 +126,7 @@ jobs:
     var jname = _$(args.name, "name").isString().default(job.name)
 
     if (isUnDef(args.cmd)) throw "Please define args.cmd."
-    ow.loadTest().test(jname, args.cmd)
+    ow.loadTest().testExternally(jname, args.cmd, args.timeout)
 
 # Test results jobs
 #
@@ -154,7 +154,7 @@ jobs:
       quiet    : toBoolean.isBoolean.default(false)
       noprofile: toBoolean.isBoolean.default(false)
   exec : |
-    var prof = ow.loadTest().__profile
+    var prof = ow.loadTest().getProfile()
     args.results = {
       count: ow.loadTest().getCountTest(),
       pass: ow.loadTest().getCountPass(),
@@ -167,7 +167,7 @@ jobs:
         last: prof[r].last,
         max : prof[r].max,
         min : prof[r].min,
-        avg : prof[r].sum / prof[r].hits
+        avg : prof[r].hits ? prof[r].sum / prof[r].hits : __
       }))
     }
     if (args.noprofile) delete args.results.profile
@@ -269,7 +269,7 @@ jobs:
       includeLogs: isBoolean.default(false)
       noProfile: isBoolean.default(false)
   exec : |
-    var prof = ow.loadTest().__profile
+    var prof = ow.loadTest().getProfile()
     args.results = {
       count: ow.loadTest().getCountTest(),
       pass: ow.loadTest().getCountPass(),
@@ -282,7 +282,7 @@ jobs:
         last: prof[r].last,
         max : prof[r].max,
         min : prof[r].min,
-        avg : prof[r].sum / prof[r].hits
+        avg : prof[r].hits ? prof[r].sum / prof[r].hits : __
       }))
     }
     if (args.noprofile) delete args.results.profile
@@ -358,4 +358,33 @@ jobs:
     if (isUnDef(args.suitesId)) args.suitesId = "test";
     if (isUnDef(args.suitesName)) args.suitesName = "test";
     if (isUnDef(args.resultsFile)) args.resultsFile = "testResults.xml";
-    io.writeFileString(args.resultsFile, ow.loadTest().toJUnitXML(args.suitesId, args.suitesName)); 
+    io.writeFileString(args.resultsFile, ow.loadTest().toJUnitXML(args.suitesId, args.suitesName));
+# Standalone test modules may define many cases without one YAML job per case.
+- name: oJob Test Suite
+  help:
+    text: Runs exported test modules in an independent ow.test session. Requires the modern createSession API. Returns args.results; throws when the run fails unless args.failOnError is false.
+    expects:
+    - name: files
+      desc: Array of JavaScript modules exporting register(t) or test functions.
+    - name: options
+      desc: Session/run options, including tags, names, workers, timeout and retries.
+  exec: |
+    ow.loadTest();
+    if (typeof ow.test.createSession !== 'function') throw new Error('Modern ow.test is required');
+    _$(args.files, 'files').isArray().$_();
+    var session = ow.test.createSession(args.options || {});
+    args.results = session.runFiles(args.files, args.options || {});
+    if (args.failOnError !== false && args.results.exitCode !== 0) throw new Error('Test suite failed: ' + args.results.status);
+
+- name: oJob Test Workflow
+  help:
+    text: Runs an existing workflow in a fresh JVM with explicit expectations and selective job mocks. Returns args.results. args.options.trusted must be explicitly true; this job is not an untrusted-code sandbox.
+    expects:
+    - name: file
+      desc: Workflow file to verify.
+    - name: options
+      desc: ow.test.ojob options (trusted, job, args, mocks, expect, timeout).
+  exec: |
+    ow.loadTest();
+    if (typeof ow.test.createSession !== 'function') throw new Error('Modern ow.test is required');
+    args.results = ow.test.createSession({output:false}).ojob(_$(args.file, 'file').isString().$_(), args.options || {});
