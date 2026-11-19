@@ -4,6 +4,392 @@ include:
 - oJobHTTPd.yaml
 
 code:
+  ojob-browse-legacy.js: |
+    // Keep the browse behavior from before PR #77 available per mount.
+    exports.options = function(options) {
+      var legacy = Object.assign({}, options)
+      delete legacy.query
+      delete legacy.preview
+      delete legacy.operations
+      delete legacy.prefetch
+      delete legacy.web
+      delete legacy.fullWidth
+      return legacy
+    }
+
+    exports.reply = function(server, request, options) {
+      try {
+        var fns = options._fns
+        var listing = fns.getList(request, options)
+        if (listing.isList) {
+          var content = fns.renderList(listing, server, request, options)
+          return isMap(content) ? content : server.replyOKHTML(String(content))
+        }
+        if (listing.isFile) return fns.renderObj(fns.getObj(request, options), server, request, options)
+        return server.replyOKHTML(String(fns.renderEmpty(request, options)))
+      } catch (e) {
+        if (e.httpStatus == 403) return { data: "Forbidden", mimetype: "text/plain", status: 403, header: {} }
+        logErr(`Error: ${e.message} | ` + $err(e,__,true))
+        return { data: "Internal error", mimetype: "text/plain", status: 500, header: {} }
+      }
+    }
+
+    exports.setup = function(args) {
+      ow.loadTemplate()
+      ow.loadFormat()
+      ow.loadServer()
+
+      const escapeText = global.__ojobHttpEscapeText
+      const fileLink = global.__ojobHttpFileLink
+      const coreFiles = args.coreFiles === true
+
+      var fns = Object.assign({}, args.fns)
+
+      // Check the functions provided
+      fns.getList = _$(fns.getList, "args.fns.getList").isFunction().default((request, options) => {
+        const uri = request.uri
+        var puri = global.__ojobHttpRelativePath(uri, options.parentURI)
+
+        var file = global.__ojobHttpResolveFile(options.parentPath, puri)
+        if (!io.fileExists(file)) return { isFile: false }
+        if (io.fileInfo(file).isFile) return { isFile: true }
+
+        var lst = io.listFiles(file).files.filter(r => {
+          try { global.__ojobHttpResolveFile(options.parentPath, (puri == "" ? "" : puri + "/") + r.filename); return true }
+          catch(e) { return false }
+        })
+        return {
+            isList     : true,
+            fields     : [ "Filename", "Last modified", "Size", "Size in bytes" ],
+            alignFields: [ "left", "center", "right", "right" ],
+            key        : "Filename",
+            list       : lst.map(r => ({
+                isDirectory: r.isDirectory,
+                values     : {
+                    Filename        : r.filename,
+                    "Last modified" : ow.format.fromDate(new Date(r.lastModified), "yyyy-MM-dd HH:mm:ss"),
+                    Size            : (!r.isDirectory ? ow.format.toBytesAbbreviation(r.size) : ""),
+                    "Size in bytes" : (!r.isDirectory ? r.size : "")
+                }
+            }))
+        }
+      })
+      fns.getObj = _$(fns.getObj, "args.fns.getObj").isFunction().default((request, options) => {
+        const uri = request.uri
+        var puri = global.__ojobHttpRelativePath(uri, options.parentURI)
+        var file = global.__ojobHttpResolveFile(options.parentPath, puri)
+
+        if (request.params.raw == "true") {
+          return { stream: io.readFileStream(file) }
+        }
+
+        var ext = String(puri).replace(/^.*\./, "")
+        switch(ext) {
+        case "md"  : return { data: io.readFileString(file), type: coreFiles && options.useMDRaw ? "raw" : "md" }
+        case "yml" :
+        case "yaml": return { data: io.readFileString(file), type: "yaml" }
+        case "css" : return { data: io.readFileString(file), type: "css" }
+        case "sh"  : return { data: io.readFileString(file), type: "sh" }
+        case "js"  : return { data: io.readFileString(file), type: "js" }
+        case "java": return { data: io.readFileString(file), type: "java" }
+        case "py"  : return { data: io.readFileString(file), type: "python" }
+        case "toml": return { data: io.readFileString(file), type: "toml" }
+        case "hbs" : return { data: io.readFileString(file), type: "handlebars" }
+        case "json": return { data: io.readFileJSON(file), type: "json" }
+        case "adoc": return { file: file, type: "asciidoc" }
+        default:
+          return { file: file }
+        }
+      })
+      fns.renderList = _$(fns.renderList, "args.fns.renderList").isFunction().default((lst, server, request, options) => {
+        if (isDef(options.browse) && !options.browse) return ""
+        const uri = request.uri
+        const uriPrefix = _$(global.__ojobHttpUriPrefix[String(options.port)], "__ojobHttpUriPrefix1").default(_$(global.__ojobHttpUriPrefix[options.port], "__ojobHttpUriPrefix2").default(""))
+        const prefixURL = aURL => {
+          aURL = _$(aURL).default("")
+          if (aURL == "") return aURL
+          aURL = String(aURL)
+          if ((/^[a-z]+:/i).test(aURL) || aURL.startsWith("//")) return aURL
+          if (!aURL.startsWith("/")) return aURL
+          return (uriPrefix + "/" + aURL.replace(/^\/+/, "")).replace(/\/+/g, "/")
+        }
+
+        var puri = global.__ojobHttpRelativePath(uri, options.parentURI).replace(/\/$/, "")
+        const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
+        if (!uri.endsWith("/")) {
+          var _qs = isMap(request.params) ? request.params["NanoHttpd.QUERY_STRING"] : __
+          var q = (isString(_qs) && _qs.length > 0) ? "?" + _qs : ""
+          return ow.server.httpd.replyRedirect(server, uri + "/" + q, {})
+        }
+        var _page = 1
+        if (isDef(lst.pageInfo)) {
+          if (isDef(lst.pageInfo.page)) _page = Number(lst.pageInfo.page)
+          if (isDef(lst.pageInfo.pageSize)) _pageSize = Number(lst.pageInfo.pageSize)
+        } else {
+          if (isDef(request.params.page)) _page = Number(request.params.page)
+        }
+        if (!isNumber(_page) || _page <= 0) _page = 1
+
+        if (isDef(options.default) && lst.list.filter(r => r.values[lst.key] == options.default).length == 1) {
+          request.uri = request.uri.replace(/\/+$/, "") + "/" + options.default
+          return options._fns.renderObj(options._fns.getObj(request, options), server, request, options)
+        }
+
+        const breadcrumb = p => {
+          // relative links resolve against the current URL's directory: the directory itself
+          // when the URL ends with "/", otherwise the file's parent — so a file URL is one level up
+          var parts = (p == "" ? [] : p.split("/"))
+          var depth = uri.endsWith("/") ? parts.length : parts.length - 1
+          if (depth < 0) depth = 0
+          var b = "[/](</>) [" + (options.showURI ? escapeText(options.parentURI.replace(/^\//, "")) : "") + "](<" + relDir(depth) + ">)"
+          for (var i = 0; i < parts.length; i++) {
+            if (i == parts.length - 1) {
+              b += (!options.showURI && i == 0 ? "" : " / ") + escapeText(parts[i]) + " "
+            } else {
+              b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + escapeText(parts[i]) + "](<" + relDir(depth - i - 1) + ">)"
+            }
+          }
+          return b
+        }
+
+        const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
+        var content = "## " + breadcrumb( puri ) + "<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + logo + "\">\n\n"
+
+        // Pagination controls (if metadata is provided)
+        if (isDef(lst.pageInfo) && isDef(lst.pageInfo.pageSize) && lst.pageInfo.pageSize > 0) {
+          var _totalPages = Math.max(1, Math.ceil(lst.pageInfo.total / lst.pageInfo.pageSize))
+          if (_totalPages > 1 || _page > 1) {
+            var _prev = _page > 1 ? ("?page=" + (_page - 1)) : __
+            var _next = (_page < _totalPages) ? ("?page=" + (_page + 1)) : __
+            var _pager = "<div style=\"margin: 0.25em 0 0.75em 0; padding-left: 0.5em; font-family: -apple-system, Calibri, DejaVu Sans;\">"
+            if (isDef(_prev) && String(_prev).length > 0) {
+              _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _prev + "\">&#8592;</a>"
+            } else {
+              _pager += "<span style=\"color: #a0a0a0;\">&#8592;</span>"
+            }
+            _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
+            _pager += "<span style=\"color: #a0a0a0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 0.95em;\">" + _page + " / " + _totalPages + "</span>"
+            _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
+            if (isDef(_next) && String(_next).length > 0) {
+              _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _next + "\">&#8594;</a>"
+            } else {
+              _pager += "<span style=\"color: #a0a0a0;\">&#8594;</span>"
+            }
+            _pager += "</div>\n"
+            content += _pager
+          }
+        }
+
+        content += "|  |" + lst.fields.join(" | ") + " |\n"
+        if (lst.alignFields) {
+            content += "|---"
+            lst.alignFields.forEach((a, i) => {
+                if (a == "left") {
+                    content += "|:--"
+                } else if (a == "right") {
+                    content += "|--:"
+                } else {
+                    content += "|--"
+                }
+            })
+            content += "|\n"
+
+            if (puri != "/" && puri != "") {
+              content += "| <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8598;</span> | __[..](<../>)__ | | |\n"
+            }
+
+            $from(lst.list).sort("-isDirectory", "values." + lst.key).select(r => {
+                content += "|"
+                if (r.isDirectory) {
+                    content += " <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8600;</span> |"
+                } else {
+                    content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + fileLink(r.values[lst.key]) + "?raw=true\" download=\"" + escapeText(r.values[lst.key]) + "\">&darr;</a></span> |"
+                }
+                lst.fields.forEach((f, i) => {
+                  if (r.isDirectory) {
+                      content += " " + (i == 0 ? "__[" + escapeText(r.values[f]) + "](<" + fileLink(r.values[lst.key]) + "/>)__" : escapeText(r.values[f])) + " |"
+                  } else {
+                      content += " " + (i == 0 ? "[" + escapeText(r.values[f]) + "](<" + fileLink(r.values[lst.key]) + ">)" : escapeText(r.values[f])) + " |"
+                  }
+                })
+                content += "\n"
+            })
+        }
+
+        // Content
+        if (isDef(lst.content)) {
+            content += "\n" + lst.content + "\n"
+        }
+
+        // Footer
+        if (isDef(options.footer)) {
+            content += "\n" + options.footer + "\n"
+        }
+
+        if (options.sortTab) {
+            content += "<script src=\"" + prefixURL("/js/mdtablesort.js") + "\"></script>\n"
+            if (options.sortTabAsc) {
+                content += "<script>document.addEventListener('DOMContentLoaded', function() { var t = document.querySelector('table'); if (!t) return; var row = t.querySelector('thead tr') || t.querySelector('tr'); if (!row) return; var cell = row.querySelectorAll('th, td')[1]; if (!cell) return; if (typeof updateSortState === 'function') updateSortState(cell, 'asc', t); });</script>\n"
+            }
+        }
+
+        return ow.template.parseMD2HTML( content, true )
+      })
+      fns.renderObj = _$(fns.renderObj, "args.fns.renderObj").isFunction().default((obj, server, request, options) => {
+        const uri = request.uri
+        const uriPrefix = _$(global.__ojobHttpUriPrefix[String(options.port)], "__ojobHttpUriPrefix1").default(_$(global.__ojobHttpUriPrefix[options.port], "__ojobHttpUriPrefix2").default(""))
+        const prefixURL = aURL => {
+          aURL = _$(aURL).default("")
+          if (aURL == "") return aURL
+          aURL = String(aURL)
+          if ((/^[a-z]+:/i).test(aURL) || aURL.startsWith("//")) return aURL
+          if (!aURL.startsWith("/")) return aURL
+          return (uriPrefix + "/" + aURL.replace(/^\/+/, "")).replace(/\/+/g, "/")
+        }
+
+        var puri = global.__ojobHttpRelativePath(uri, options.parentURI).replace(/\/$/, "")
+        const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
+
+        if (isDef(obj.stream) && obj.streamHeaders) {
+          return server.replyStream(obj.stream, obj.streamType || "application/octet-stream", 200, obj.streamHeaders)
+        }
+
+        if (request.params.raw == "true") {
+          log("Downloading raw file: " + puri)
+          if (isDef(obj.stream)) {
+            return server.replyStream(obj.stream, ow.server.httpd.getMimeType(puri))
+          }
+          if (isDef(obj.file)) {
+            return server.replyStream(io.readFileStream(obj.file), ow.server.httpd.getMimeType(puri))
+          }
+          if (isDef(obj.data)) {
+            return server.replyOKJSON(obj.data, ow.server.httpd.getMimeType(puri))
+          }
+        }
+
+        if (obj.type == "asciidoc" && isDef(getOPackPath("Asciidoc")) && (isDef(obj.stream) || isDef(obj.file))) {
+          loadLib("asciidoc.js")
+          const stream = new java.io.BufferedInputStream(isDef(obj.file) ? io.readFileStream(obj.file) : obj.stream)
+          try { return ow.server.httpd.replyAsciidoc(server, stream) }
+          finally { stream.close() }
+        }
+
+        if (isDef(obj.stream)) {
+          return server.replyStream(obj.stream, ow.server.httpd.getMimeType(puri))
+        }
+
+        if (isDef(obj.file)) {
+          return server.replyStream(io.readFileStream(obj.file), ow.server.httpd.getMimeType(puri))
+        }
+
+        if (obj.type == "md") {
+          if (coreFiles) {
+            var markdown = options.useMDTemplate ? $t(String(obj.data), { request: request }) : String(obj.data)
+            return server.replyOKHTML(ow.template.parseMD2HTML(markdown, true, __, __, __, ow.server.httpd.getPrefix(options.serverOrPort || server)))
+          }
+          return server.replyOKHTML(ow.template.parseMD2HTML(obj.data, true))
+        }
+
+        if (obj.type == "json" && (isUnDef(request.params.parse) || request.params.parse != "false")) {
+          return ow.server.httpd.replyJSMap(server, obj.data)
+        }
+
+        const breadcrumb = p => {
+          // relative links resolve against the current URL's directory: the directory itself
+          // when the URL ends with "/", otherwise the file's parent — so a file URL is one level up
+          var parts = (p == "" ? [] : p.split("/"))
+          var depth = uri.endsWith("/") ? parts.length : parts.length - 1
+          if (depth < 0) depth = 0
+          var b = "[/](</>) [" + (options.showURI ? escapeText(options.parentURI.replace(/^\//, "")) : "") + "](<" + relDir(depth) + ">)"
+          for (var i = 0; i < parts.length; i++) {
+            if (i == parts.length - 1) {
+              b += (!options.showURI && i == 0 ? "" : " / ") + escapeText(parts[i]) + " "
+            } else {
+              b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + escapeText(parts[i]) + "](<" + relDir(depth - i - 1) + ">)"
+            }
+          }
+          return b
+        }
+
+        const _downloadcode = `<span><script>
+          function downloadText(aFile) {
+            var selectedText = document.querySelectorAll("pre")[0].innerText
+            const blob = new Blob([selectedText], { type: "text/plain" })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = aFile
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+          }
+        </script></span>`
+
+        if (obj.type == "rawjson") obj.type = "json"
+
+        const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
+        var content
+        if (obj.type == "raw") {
+          content = "## <span style=\"display: flex; justify-content: space-between\"><span>" + breadcrumb( puri ) + "</span><span style=\"display: inline-flex; justify-content: space-between; float: inline-end; align-items: start\"><span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:history.back()\">&larr;</a></span></span></span>\n\n"
+          content += coreFiles && options.useMDTemplate ? $t(String(obj.data), { request: request }) : String(obj.data)
+          content += "\n\n"
+
+          if (isDef(options.footer)) {
+            content += "\n" + options.footer + "\n"
+          }
+        } else {
+          content = "## <span style=\"display: flex; justify-content: space-between\"><span>" + breadcrumb( puri ) + "</span><span style=\"display: inline-flex; justify-content: space-between; float: inline-end; align-items: start\"><span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText(decodeURIComponent('" + fileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:downloadText(decodeURIComponent('" + fileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\">&darr;</a></span></span></span>\n\n"
+          content += "<pre><code class=\"language-" + escapeText(obj.type) + "\">" + ow.format.escapeHTML(isMap(obj.data) ? stringify(obj.data) : String(obj.data)) + "</code></pre>\n\n"
+
+          if (isDef(options.footer)) {
+            content += "\n" + options.footer + "\n"
+          }
+          content += _downloadcode
+        }
+
+
+        return server.replyOKHTML( ow.template.parseMD2HTML( content, true ) )
+      })
+      fns.renderEmpty = _$(fns.renderEmpty, "args.fns.renderEmpty").isFunction().default((request, options) => {
+        const uri = request.uri
+
+        var puri = global.__ojobHttpRelativePath(uri, options.parentURI)
+
+        var content = "# " + (options.showURI ? escapeText(options.parentURI) + "/" : "") + escapeText(puri) + "\n\n"
+        content += "*No content found.*\n"
+
+        return ow.template.parseMD2HTML( content, true )
+      })
+
+      fns.init = _$(fns.init, "args.fns.init").isFunction().default(() => {})
+
+      // Add basic helpers
+      ow.template.addHelper("encodeURI", encodeURI)
+      ow.template.addHelper("escapeMDTable", str => str.replace(/\|/g, "\\|"))
+
+      var _options = exports.options(args.options)
+      _options._fns = fns
+
+      _options.parentURI  = args.uri
+      _options.parentPath = args.path
+      _options.port       = args.port
+      if (isFunction(fns.validate)) {
+        var validate = fns.validate
+        var callbacks = ["getList", "getObj", "search"]
+        callbacks.forEach(name => {
+          if (!isFunction(fns[name])) return
+          var callback = fns[name]
+          fns[name] = (request, options) => {
+            validate(request, options)
+            return callback(request, options)
+          }
+        })
+      }
+      _options._fns.init(_options)
+      return _options
+    }
+
   ojob-browse-contract.js: |
 
     // Declare supported browse capabilities
@@ -840,7 +1226,7 @@ jobs:
    - name: type
      desc: (String) The type of the HTTP Browser services to be used (based on ow.server.httpd.browse.*)
    - name: options
-     desc: (Map) A map with options to be passed
+     desc: (Map) A map with options to be passed. Set old=true for legacy browsing.
   check:
     in:
       port     : toNumber.default(8091)
@@ -851,6 +1237,7 @@ jobs:
     execURI: | #js
       try {
         var _options = global.__GBHTTPD[String(port) + uri]
+        if (_options.old === true) return require("ojob-browse-legacy.js").reply(server, request, _options)
         return ow.server.httpd.replyBrowse(server, request, _options)
       } catch(e) {
         $err(e)
@@ -860,12 +1247,25 @@ jobs:
     global.__GBHTTPD = global.__GBHTTPD || {}
 
     if (isUnDef(ow.server.httpd.browse[args.type])) throw new Error("Invalid type provided: " + args.type)
-    args.options = Object.assign({}, args.options || {}, {
-      port: args.port
-    })
-    var definition = ow.server.httpd.browse[args.type](args.uri, args.options)
-    require("ojob-browse-contract.js").check(args.options, definition.capabilities)
-    global.__GBHTTPD[String(args.port) + args.uri] = definition
+    var key = String(args.port) + args.uri
+    if (args.options && args.options.old === true) {
+      var legacy = require("ojob-browse-legacy.js")
+      global.__GBHTTPD[key] = args.type == "files" ? legacy.setup({
+        uri: args.uri,
+        port: args.port,
+        path: _$(args.options.path).isString().default("."),
+        fns: args.options._fns,
+        options: args.options,
+        coreFiles: true
+      }) : Object.assign({}, ow.server.httpd.browse[args.type](args.uri, legacy.options(args.options)), { old: true })
+    } else {
+      args.options = Object.assign({}, args.options || {}, {
+        port: args.port
+      })
+      var definition = ow.server.httpd.browse[args.type](args.uri, args.options)
+      require("ojob-browse-contract.js").check(args.options, definition.capabilities)
+      global.__GBHTTPD[key] = definition
+    }
 
 # --------------------------
 - name : HTTP Browse generic
@@ -895,7 +1295,7 @@ jobs:
    - name: fns
      desc: (Map) A map with functions to be used in the template.
    - name: options
-     desc: (Map) A map with options to be passed
+     desc: (Map) A map with options to be passed. Set old=true for legacy browsing.
   check:
     in:
       port     : toNumber.isNumber.default(8091)
@@ -908,6 +1308,7 @@ jobs:
     execURI: | #js
       try {
         var _options = global.__GBHTTPD[String(port) + uri]
+        if (_options.old === true) return require("ojob-browse-legacy.js").reply(server, request, _options)
         var _out = ""
         var relative = global.__ojobHttpRelativePath(request.uri, _options.parentURI)
         if (_options._operation && relative.startsWith("@@/")) {
@@ -952,385 +1353,393 @@ jobs:
         return { data: "Internal error", mimetype: "text/plain", status: 500, header: {} }
       }
   exec : | #js
-    ow.loadTemplate(); ow.loadFormat(); ow.loadServer()
+    if (args.options && args.options.old === true) {
+      global.__GBHTTPD = global.__GBHTTPD || {}
+      global.__GBHTTPD[String(args.port) + args.uri] = require("ojob-browse-legacy.js").setup(args)
+    } else {
+      ow.loadTemplate(); ow.loadFormat(); ow.loadServer()
 
-    const escapeText = global.__ojobHttpEscapeText
-    const fileLink = global.__ojobHttpFileLink
-    var defaultFilesystem = !isFunction(args.fns.getList) && !isFunction(args.fns.getObj)
+      const escapeText = global.__ojobHttpEscapeText
+      const fileLink = global.__ojobHttpFileLink
+      var defaultFilesystem = !isFunction(args.fns.getList) && !isFunction(args.fns.getObj)
 
-    // Keep one short-lived root snapshot per browser.
-    var rootListing, rootLock = new java.lang.Object()
-    var listRoot = (file, refresh) => syncFn(() => {
-      if (!rootListing || rootListing.path != file || refresh || now() >= rootListing.expiresAt) {
-        var rows = io.listFiles(file).files, loadedAt = now()
-        rootListing = { path: file, rows: rows, loadedAt: loadedAt, expiresAt: loadedAt + 5000 }
-      }
-      return rootListing.rows
-    }, rootLock)
-
-    if (defaultFilesystem && !isFunction(args.fns.getFreshness)) args.fns.getFreshness = (request, options) => {
-      var relative = global.__ojobHttpRelativePath(request.uri, options.parentURI)
-      return syncFn(() => /^\/*$/.test(relative) && rootListing ? {
-        loadedAt: rootListing.loadedAt,
-        expiresAt: rootListing.expiresAt,
-        stale: now() >= rootListing.expiresAt,
-        refreshing: false
-      } : { loadedAt: null, expiresAt: null, stale: true, refreshing: false }, rootLock)
-    }
-
-    // Check the functions provided
-    args.fns.getList = _$(args.fns.getList, "args.fns.getList").isFunction().default((request, options) => {
-      const uri = request.uri
-      var puri = global.__ojobHttpRelativePath(uri, options.parentURI)
-
-      var file = global.__ojobHttpResolveFile(options.parentPath, puri)
-      if (io.fileExists(file)) {
-          if (io.fileInfo(file).isFile) {
-              return { isFile: true }
-          } 
-      } else {
-          return { isFile: false }
-      }
-
-      var rows = defaultFilesystem && /^\/*$/.test(puri) ? listRoot(file, request.method == "POST") : io.listFiles(file).files
-      var lst = rows.filter(r => {
-        try { global.__ojobHttpResolveFile(options.parentPath, (puri == "" ? "" : puri + "/") + r.filename); return true }
-        catch(e) { return false }
-      })
-      return {
-          isList     : true,
-          fields     : [ "Filename", "Last modified", "Size", "Size in bytes" ],
-          alignFields: [ "left", "center", "right", "right" ],
-          key        : "Filename",
-          list       : lst.map(r => ({
-              isDirectory: r.isDirectory,
-              sortValues : { Size:r.size, "Last modified":r.lastModified },
-              values     : {
-                  Filename        : r.filename,
-                  "Last modified" : ow.format.fromDate(new Date(r.lastModified), "yyyy-MM-dd HH:mm:ss"),
-                  Size            : (!r.isDirectory ? ow.format.toBytesAbbreviation(r.size) : ""),
-                  "Size in bytes" : (!r.isDirectory ? r.size : "")
-              }
-          }))
-      }
-    })
-    args.fns.getObj = _$(args.fns.getObj, "args.fns.getObj").isFunction().default((request, options) => {
-      const uri = request.uri
-      var puri = global.__ojobHttpRelativePath(uri, options.parentURI)
-      var file = global.__ojobHttpResolveFile(options.parentPath, puri)
-
-      // Preview settings affect HTML only; API object reads remain complete.
-      if (!options._api && (request.params || {}).raw != "true") {
-        var support = require("ojob-browse-contract.js")
-        var preview = options.preview || {}
-        var format = support.format(String(new java.io.File(file).getName()), preview, support.defaults)
-        var params = request.params || {}
-        var imageType = support.imageType(format)
-        if (imageType) return support.imagePreview(io.readFileStream(file), imageType)
-        if (format == "html") return { stream: io.readFileStream(file), streamType: "text/html", streamHeaders: {} }
-        if (format == "json" && (params.view == "json" || params.view == "json-data" ||
-            (params.parse != "false" && params.view != "source"))) {
-          return support.jsonPreview(request, options, () => io.readFileStream(file))
+      // Keep one short-lived root snapshot per browser.
+      var rootListing, rootLock = new java.lang.Object()
+      var listRoot = (file, refresh) => syncFn(() => {
+        if (!rootListing || rootListing.path != file || refresh || now() >= rootListing.expiresAt) {
+          var rows = io.listFiles(file).files, loadedAt = now()
+          rootListing = { path: file, rows: rows, loadedAt: loadedAt, expiresAt: loadedAt + 5000 }
         }
-        if (format == "json") {
-          var source = support.readPreview(io.readFileStream(file), "text", preview.maxBytes)
-          source.sourceOnly = true
-          if (!source.truncated) source.type = "json"
-          return source
-        }
-        return isDef(format) ? support.readPreview(io.readFileStream(file), format, preview.maxBytes) : { file: file }
+        return rootListing.rows
+      }, rootLock)
+
+      if (defaultFilesystem && !isFunction(args.fns.getFreshness)) args.fns.getFreshness = (request, options) => {
+        var relative = global.__ojobHttpRelativePath(request.uri, options.parentURI)
+        return syncFn(() => /^\/*$/.test(relative) && rootListing ? {
+          loadedAt: rootListing.loadedAt,
+          expiresAt: rootListing.expiresAt,
+          stale: now() >= rootListing.expiresAt,
+          refreshing: false
+        } : { loadedAt: null, expiresAt: null, stale: true, refreshing: false }, rootLock)
       }
 
-      if (request.params.raw == "true") {
-        return { stream: io.readFileStream(file) }
-      }
+      // Check the functions provided
+      args.fns.getList = _$(args.fns.getList, "args.fns.getList").isFunction().default((request, options) => {
+        const uri = request.uri
+        var puri = global.__ojobHttpRelativePath(uri, options.parentURI)
 
-      var ext = String(puri).replace(/^.*\./, "")
-      switch(ext) {
-      case "md"  : return { data: io.readFileString(file), type: "md" }
-      case "yml" :
-      case "yaml": return { data: io.readFileString(file), type: "yaml" }
-      case "css" : return { data: io.readFileString(file), type: "css" }
-      case "sh"  : return { data: io.readFileString(file), type: "sh" }
-      case "js"  : return { data: io.readFileString(file), type: "js" }
-      case "java": return { data: io.readFileString(file), type: "java" }
-      case "py"  : return { data: io.readFileString(file), type: "python" }
-      case "toml": return { data: io.readFileString(file), type: "toml" }
-      case "hbs" : return { data: io.readFileString(file), type: "handlebars" }
-      case "json": return { data: io.readFileJSON(file), type: "json" }
-      case "adoc": return { file: file, type: "asciidoc" }
-      default:
-        return { file: file }
-      }
-    })
-    args.fns.renderList = _$(args.fns.renderList, "args.fns.renderList").isFunction().default((lst, server, request, options) => {
-      if (isDef(options.browse) && !options.browse &&
-          !(lst.defaultPresent && options.web && options.web.enabled === true)) return ""
-      const uri = request.uri
-      const uriPrefix = _$(global.__ojobHttpUriPrefix[String(options.port)], "__ojobHttpUriPrefix1").default(_$(global.__ojobHttpUriPrefix[options.port], "__ojobHttpUriPrefix2").default(""))
-      const prefixURL = aURL => {
-        aURL = _$(aURL).default("")
-        if (aURL == "") return aURL
-        aURL = String(aURL)
-        if ((/^[a-z]+:/i).test(aURL) || aURL.startsWith("//")) return aURL
-        if (!aURL.startsWith("/")) return aURL
-        return (uriPrefix + "/" + aURL.replace(/^\/+/, "")).replace(/\/+/g, "/")
-      }
-
-      var puri = global.__ojobHttpRelativePath(uri, options.parentURI).replace(/\/$/, "")
-      const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
-      const fileLink = value => lst.searchInfo ? String(value).split("/").map(global.__ojobHttpFileLink).join("/") : global.__ojobHttpFileLink(value)
-      if (!uri.endsWith("/")) {
-        var _qs = isMap(request.params) ? request.params["NanoHttpd.QUERY_STRING"] : __
-        var q = (isString(_qs) && _qs.length > 0) ? "?" + _qs : ""
-        return ow.server.httpd.replyRedirect(server, uri + "/" + q, {})
-      }
-      var _page = 1
-      var _pageSize = 0
-      if (isDef(lst.pageInfo)) {
-        if (isDef(lst.pageInfo.page)) _page = Number(lst.pageInfo.page)
-        if (isDef(lst.pageInfo.pageSize)) _pageSize = Number(lst.pageInfo.pageSize)
-      } else {
-        if (isDef(request.params.page)) _page = Number(request.params.page)
-        //if (isDef(request.params.pageSize)) _pageSize = Number(request.params.pageSize)
-      }
-      if (!isNumber(_page) || _page <= 0) _page = 1
-      if (!isNumber(_pageSize) || _pageSize < 0) _pageSize = 0
-
-      if (isDef(options.default) && (lst.defaultPresent || !(request.params || {}).q && lst.list.filter(r => r.values[lst.key] == options.default).length == 1)) {
-        request.uri = request.uri.replace(/\/+$/, "") + "/" + options.default
-        return options._fns.renderObj(options._fns.getObj(request, options), server, request, options)
-      }
-
-      const breadcrumb = p => {
-        // relative links resolve against the current URL's directory: the directory itself
-        // when the URL ends with "/", otherwise the file's parent — so a file URL is one level up
-        var parts = (p == "" ? [] : p.split("/"))
-        var depth = uri.endsWith("/") ? parts.length : parts.length - 1
-        if (depth < 0) depth = 0
-        var b = "[/](</>) [" + (options.showURI ? escapeText(options.parentURI.replace(/^\//, "")) : "") + "](<" + relDir(depth) + ">)"
-        for (var i = 0; i < parts.length; i++) {
-          if (i == parts.length - 1) {
-            b += (!options.showURI && i == 0 ? "" : " / ") + escapeText(parts[i]) + " "
-          } else {
-            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + escapeText(parts[i]) + "](<" + relDir(depth - i - 1) + ">)"
-          }
-        }
-        return b
-      }
-
-      const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
-      var content = "## " + breadcrumb( puri ) + "<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + logo + "\">\n\n"
-      // Keep small controls consistent with the listing in either theme.
-      var icon = name => {
-        var paths = {
-          refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 11-2l3 3M4 16l3 3a7 7 0 0 0 11-2"/>',
-          status: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
-          clear: '<circle cx="12" cy="12" r="8"/><path d="m9 9 6 6M9 15l6-6"/>',
-          close: '<path d="m6 6 12 12M6 18 18 6"/>'
-        }
-        return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + paths[name] + '</svg>'
-      }
-      var hasQuery = options.query && options.query.enabled
-      var hasSearch = hasQuery && !!(request.params || {}).q
-      var freshness, cacheTime, cacheAge
-      if ((hasQuery || options._operation) && options._fns && isFunction(options._fns.getFreshness)) {
-        try { freshness = options._fns.getFreshness(request, options) } catch (e) {}
-        if (freshness) {
-          var updated = freshness.lastUpdatedAt || freshness.loadedAt
-          if (isNumber(updated) && isFinite(updated) && updated > 0) {
-            cacheTime = new Date(updated).toISOString()
-            var age = Math.max(0, now() - updated)
-            cacheAge = age < 1000 ? 'just now' : ow.format.elapsedTime4ms(age).split(', ', 1)[0] + ' ago'
-          }
-        }
-      }
-      var fragment = hasQuery && request.method == "GET" && (request.header || {})["x-openaf-browse-fragment"] === "1"
-      var searchInfo = hasSearch && lst.searchInfo
-      var searchPending = searchInfo && searchInfo.refreshing === true
-      var searchNotice = searchInfo && (searchInfo.message || (searchPending ? 'Loading more cached data…' :
-        searchInfo.truncated ? 'Search results are limited.' :
-        searchInfo.complete === false && searchInfo.coverage == 'loaded package hierarchies' ? 'Searched loaded package trees.' :
-        searchInfo.complete === false ? 'Search results are partial.' : !lst.list.length ? 'No matches.' : ''))
-      var cacheMarkup = cacheTime ? 'Cache updated <time datetime="' + cacheTime + '">' + escapeText(cacheAge) + '</time>' : ''
-      var pageSize = _pageSize || (options.query || {}).pageSize || 100
-      if (!fragment && (hasQuery || options._operation)) {
-        content += '<style>' + [
-          '.markdown-body{--browse-fg:#747d86;--browse-hover:#414951;--browse-border:#c6cbd1;--browse-bg:#fff;--browse-soft:#f6f8fa;--browse-dark:0}',
-          '.markdown-body-dark{--browse-fg:#919ba6;--browse-hover:#d0d7de;--browse-border:#444c56;--browse-bg:#0d1117;--browse-soft:#161b22;--browse-dark:1;color-scheme:dark}',
-          '.browse-actions{display:flex;align-items:center;gap:0.5em;margin:0.75em 0 0;padding:0.6em 0 0;border-top:1px solid var(--browse-border);color:var(--browse-fg)}.browse-actions form{display:inline-flex;margin:0}.browse-actions .browse-icon{width:auto;gap:0.4em;padding:4px 6px;font-size:0.9em}',
-          '.browse-options{position:fixed;inset:auto;margin:0;box-sizing:border-box;width:19em;min-width:min(19em,calc(100vw - 16px));max-width:calc(100vw - 16px);resize:horizontal;overflow:auto;padding:0.85em;border:1px solid var(--browse-border);border-radius:6px;background:var(--browse-bg);color:var(--browse-fg);box-shadow:0 4px 16px #0002;font-size:0.9em}',
-          '.browse-controls{display:grid;gap:0.75em;margin:0;font-family:-apple-system,Calibri,"DejaVu Sans",sans-serif}.browse-controls label{display:flex;align-items:center;gap:0.5em;min-width:0}',
-          '.browse-cache-age,.browse-search-notice{font-size:0.85em;color:var(--browse-hover)}.browse-cache-age{margin-top:0.65em}.browse-cache-age:empty,.browse-search-notice:has(>span:only-child:empty){display:none}.browse-search-notice{margin:0 0 0.5em}.browse-search-notice[data-pending=true]::before{content:"";display:inline-block;width:0.7em;height:0.7em;margin-right:0.45em;border:1px solid currentColor;border-right-color:transparent;border-radius:50%;animation:browse-spin 0.8s linear infinite}@keyframes browse-spin{to{transform:rotate(1turn)}}@media(prefers-reduced-motion:reduce){.browse-search-notice[data-pending=true]::before{animation:none}}',
-          '.browse-live-status{font-size:0.85em}.browse-live-status:empty{display:none}.browse-controls .browse-search{display:grid;gap:0.35em}.browse-options-row{display:flex;align-items:center;justify-content:space-between;gap:1em}',
-          '.browse-controls input{box-sizing:border-box;min-width:0;max-width:100%;padding:0.2em 0.25em;border:0;border-bottom:1px solid var(--browse-border);border-radius:0;background:transparent;color:var(--browse-hover);font:inherit}',
-          '.browse-controls input[name=q]{width:100%}.browse-controls input[name=size]{width:4.5em}.browse-search-row{display:flex;align-items:center;gap:0.6em}.browse-search-row input{flex:1}.browse-search-row button{flex:none}.browse-search-row input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}',
-          '.browse-apply{padding:0.25em 0.4em;border:0;border-radius:4px;background:transparent;color:var(--browse-hover);font:inherit;cursor:pointer}.browse-apply:hover{background:var(--browse-soft)}',
-          '.browse-icon{position:relative;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:26px;height:26px;padding:4px;border:0;border-radius:4px;background:transparent;color:var(--browse-fg,#747d86);font:inherit;vertical-align:middle;cursor:pointer;text-decoration:none}',
-          '.browse-icon svg{display:block;flex:none}.browse-icon:hover,.browse-icon[aria-expanded=true]{color:var(--browse-hover);background:var(--browse-soft)}.browse-icon:disabled{opacity:0.45;cursor:wait}',
-          '#browse-clear-search:disabled{cursor:default;opacity:0.3}',
-          '#browse-options-toggle{width:24px;height:24px;font-size:18px;line-height:1}.browse-filtered::after{content:"";position:absolute;right:3px;top:3px;width:4px;height:4px;border-radius:50%;background:currentColor}',
-          '.browse-icon:focus-visible,.browse-controls input:focus-visible,.browse-apply:focus-visible,.browse-status:focus-visible{outline:2px solid var(--browse-fg);outline-offset:2px}',
-          '.browse-status{box-sizing:border-box;width:max-content;min-width:18em;max-width:min(48em,calc(100vw - 2em));max-height:80vh;padding:1em;border:1px solid var(--browse-border);border-radius:6px;background:var(--browse-bg);color:var(--browse-hover);box-shadow:0 8px 30px #0003}',
-          '.browse-status::backdrop{background:#0005}.browse-status-heading{display:flex;align-items:center;justify-content:space-between;gap:1em;margin-bottom:0.75em;font-weight:600}.browse-status-content{overflow:auto;max-height:65vh;font-size:0.9em}',
-          '.browse-search-help,.browse-shortcut-setting{font-size:0.8em}.browse-shortcut-setting{display:flex;align-items:center;gap:0.4em;margin-top:0.75em}.browse-shortcut-setting input{margin:0}.browse-search-help{line-height:1.5}',
-          '.browse-status-content table{margin:0}.browse-status-content td{white-space:normal;overflow-wrap:anywhere}'
-        ].join('') + '</style>\n\n'
-      }
-      if (!fragment && (hasQuery || options._operation)) {
-        content += '<div id="browse-options" class="browse-options" popover="auto" role="dialog" aria-label="Table options">'
-        if (hasQuery) {
-          var sortInputs = '<input type="hidden" name="sort" value="' + escapeText(lst.sortInfo ? lst.sortInfo.field : String(lst.key)) + '"><input type="hidden" name="order" value="' + (lst.sortInfo && lst.sortInfo.order == 'desc' ? 'desc' : 'asc') + '">'
-          content += '<form id="browse-search-form" class="browse-controls" method="get"><div class="browse-search"><label for="browse-search-input">Search</label><div class="browse-search-row"><input id="browse-search-input" type="search" name="q" aria-describedby="browse-search-help" autofocus value="' + escapeText((request.params||{}).q || '') + '"><button id="browse-clear-search" class="browse-icon" type="button" title="Clear search" aria-label="Clear search"' + (hasSearch ? '' : ' disabled') + '>' + icon('clear') + '</button></div></div>' + sortInputs
-          content += '<div class="browse-options-row"><label>Per page <input type="number" name="size" min="1" max="' + (options.query.maxPageSize || 500) + '" value="' + pageSize + '"></label><button class="browse-apply" type="submit">Apply</button></div><span class="browse-live-status" role="status"></span><span id="browse-search-help" class="browse-search-help">Enter: apply &middot; Shift+Enter: clear</span></form>'
-          content += '<label class="browse-shortcut-setting"><input id="browse-shortcut-enabled" type="checkbox" checked> Enable / shortcut to search</label>'
-        }
-        content += '<div id="browse-cache-age" class="browse-cache-age">' + cacheMarkup + '</div>'
-        if (options._operation) {
-          var operationsURL = prefixURL(options.parentURI.replace(/\/$/, "") + '/@@/')
-          content += '<div class="browse-actions"><form id="browse-refresh" method="post" action="' + operationsURL + 'refresh"><input type="hidden" name="path" value="' + escapeText(puri) + '"><input type="hidden" name="csrf" value="' + options._refreshToken + '"><button class="browse-icon" type="submit" title="Refresh now" aria-label="Refresh now">' + icon('refresh') + '<span>Refresh</span></button></form>'
-          content += '<button id="browse-status-toggle" class="browse-icon" type="button" title="Status" aria-label="Status" aria-haspopup="dialog" data-url="' + operationsURL + 'status?path=' + encodeURIComponent(puri) + '">' + icon('status') + '<span>Status</span></button></div>'
-        }
-        content += '</div>\n\n'
-      }
-
-      if (fragment) content = '<div id="browse-cache-age">' + cacheMarkup + '</div>\n\n'
-      if (hasQuery) {
-        content += '<div id="browse-search-notice" class="browse-search-notice" data-pending="' + !!searchPending + '"><span role="status">' + escapeText(searchNotice || '') + '</span>'
-        if (searchInfo && searchInfo.canExpand) {
-          content += ' <button type="submit" form="browse-search-form" name="searchAll" value="1">Search remaining repositories</button>'
-        }
-        content += '</div>\n\n'
-      }
-      // Pagination controls (if metadata is provided)
-      content += '<div id="browse-pagination">\n'
-      if (isDef(lst.pageInfo) && isDef(lst.pageInfo.pageSize) && lst.pageInfo.pageSize > 0) {
-        var _totalPages = Math.max(1, Math.ceil(lst.pageInfo.total / lst.pageInfo.pageSize))
-        if (_totalPages == 1 && _page <= 1) {
-          // Don't render pagination for a single page.
+        var file = global.__ojobHttpResolveFile(options.parentPath, puri)
+        if (io.fileExists(file)) {
+            if (io.fileInfo(file).isFile) {
+                return { isFile: true }
+            }
         } else {
-        var pageURL = page => {
-          var params = request.params || {}
-          var keys = Object.keys(params).filter(k => ["page", "searchAll", "NanoHttpd.QUERY_STRING"].indexOf(k) < 0 && !k.startsWith("NanoHttpd."))
-          return "?" + keys.map(k => encodeURIComponent(k) + "=" + encodeURIComponent(params[k])).concat(["page=" + page]).join("&amp;")
+            return { isFile: false }
         }
-        var _prev = _page > 1 ? pageURL(_page - 1) : __
-        var _next = (_page < _totalPages) ? pageURL(_page + 1) : __
-        var _pager = "<div style=\"margin: 0.25em 0 0.75em 0; padding-left: 0.5em; font-family: -apple-system, Calibri, DejaVu Sans;\">"
-        if (isDef(_prev) && String(_prev).length > 0) {
-          _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _prev + "\">&#8592;</a>"
-        } else {
-          _pager += "<span style=\"color: #a0a0a0;\">&#8592;</span>"
-        }
-        _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
-        _pager += "<span style=\"color: #a0a0a0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 0.95em;\">" + _page + " / " + _totalPages + "</span>"
-        _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
-        if (isDef(_next) && String(_next).length > 0) {
-          _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _next + "\">&#8594;</a>"
-        } else {
-          _pager += "<span style=\"color: #a0a0a0;\">&#8594;</span>"
-        }
-        _pager += "</div>\n"
-        content += _pager
-        }
-      }
 
-      content += '</div>\n\n'
-
-      // Match sortTab's header controls while sorting the full result on the server.
-      var headers = lst.fields
-      var headerControls = []
-      if (hasQuery || options._operation) {
-        var optionsTitle = 'Table options' + (hasSearch ? ' (search: ' + (request.params || {}).q + ')' : '')
-        headerControls[0] = '<button id="browse-options-toggle" class="browse-icon' + (hasSearch ? ' browse-filtered' : '') + '" type="button" title="' + escapeText(optionsTitle) + '" aria-label="' + escapeText(optionsTitle) + '" aria-haspopup="dialog" aria-controls="browse-options" aria-expanded="false" popovertarget="browse-options"><span aria-hidden="true">&#8943;</span></button>'
-      }
-      var serverSort = hasQuery || options.sortTab && lst.sortInfo
-      if (serverSort) {
-        if (!fragment) content += '<style>' + [
-          '.sorter-container{float:right;font-size:10px;margin-left:4px}',
-          '.sorter-container .sort-button{display:none;padding:0;margin:0 2px;border:none;background:transparent;cursor:pointer;text-decoration:none;transition:color 0.2s ease}',
-          'th:hover .sorter-container .sort-button,th:focus-within .sorter-container .sort-button,.sorter-container .sort-button:focus,.sorter-container .sort-button.active{display:inline-block}',
-          '.sorter-container:focus-within .sort-button{display:inline-block}',
-          '.sorter-container .sort-button{color:var(--browse-fg,#747d86);opacity:0.7}',
-          'th:hover .sorter-container .sort-button,th:focus-within .sorter-container .sort-button,.sorter-container .sort-button.active{color:var(--browse-hover,#414951);opacity:1}'
-        ].join('') + '</style>\n'
-        var sortURL = (field, order) => {
-          var params = request.params || {}
-          var keys = Object.keys(params).filter(k => ["page", "sort", "order", "searchAll"].indexOf(k) < 0 && !k.startsWith("NanoHttpd."))
-          var query = keys.map(k => encodeURIComponent(k) + "=" + encodeURIComponent(params[k]))
-          if (order != "none") query = query.concat(["sort=" + encodeURIComponent(field), "order=" + order])
-          return "?" + query.concat(["page=1"]).join("&amp;")
-        }
-        headers = lst.fields.map((field, index) => {
-          var label = escapeText(field)
-          if ((lst.sortFields || lst.fields).indexOf(field) < 0) return label
-          var active = lst.sortInfo && lst.sortInfo.field == field
-          var controls = '<span class="sorter-container" tabindex="0" aria-label="' + escapeText('Sort: ' + field) + '">'
-          ;[ ["asc", "&#9650;", "Ascending"], ["desc", "&#9660;", "Descending"], ["none", "x", "Reset sorting"] ].forEach(control => {
-            var selected = active && lst.sortInfo.order == control[0]
-            controls += '<a class="sort-button' + (selected ? ' active' : '') + '" href="' + sortURL(field, control[0]) + '" title="' + control[2] + '" aria-label="' + escapeText(control[2] + ': ' + field) + '"' + (selected ? ' aria-current="true"' : '') + '>' + control[1] + '</a>'
-          })
-          headerControls[index + 1] = controls + '</span>'
-          return label
+        var rows = defaultFilesystem && /^\/*$/.test(puri) ? listRoot(file, request.method == "POST") : io.listFiles(file).files
+        var lst = rows.filter(r => {
+          try { global.__ojobHttpResolveFile(options.parentPath, (puri == "" ? "" : puri + "/") + r.filename); return true }
+          catch(e) { return false }
         })
-      }
-      content += "|  |" + headers.join(" | ") + " |\n"
-      if (lst.alignFields) {
-          content += "|:--:"
-          lst.alignFields.forEach((a, i) => {
-              if (a == "left") {
-                  content += "|:--"
-              } else if (a == "right") {
-                  content += "|--:"
-              } else {
-                  content += "|--"
-              }
-          })
-          content += "|\n"
+        return {
+            isList     : true,
+            fields     : [ "Filename", "Last modified", "Size", "Size in bytes" ],
+            alignFields: [ "left", "center", "right", "right" ],
+            key        : "Filename",
+            list       : lst.map(r => ({
+                isDirectory: r.isDirectory,
+                sortValues : { Size:r.size, "Last modified":r.lastModified },
+                values     : {
+                    Filename        : r.filename,
+                    "Last modified" : ow.format.fromDate(new Date(r.lastModified), "yyyy-MM-dd HH:mm:ss"),
+                    Size            : (!r.isDirectory ? ow.format.toBytesAbbreviation(r.size) : ""),
+                    "Size in bytes" : (!r.isDirectory ? r.size : "")
+                }
+            }))
+        }
+      })
+      args.fns.getObj = _$(args.fns.getObj, "args.fns.getObj").isFunction().default((request, options) => {
+        const uri = request.uri
+        var puri = global.__ojobHttpRelativePath(uri, options.parentURI)
+        var file = global.__ojobHttpResolveFile(options.parentPath, puri)
 
-          if (puri != "/" && puri != "") {
-            content += "| <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8598;</span> | __[..](<../>)__ | | |\n"
+        // Preview settings affect HTML only; API object reads remain complete.
+        if (!options._api && (request.params || {}).raw != "true") {
+          if (options.browse === true && !request._browsePreview && /\.md$/i.test(file)) {
+            return { data: io.readFileString(file), type: "md" }
           }
 
-          var rows = lst.sortInfo || lst.queryInfo && lst.queryInfo.applied ? lst.list : $from(lst.list).sort("-isDirectory", "values." + lst.key).select()
-          rows.forEach(r => {
-              content += "|"
-              if (r.imageDigest && /^sha256:[a-f0-9]{64}$/.test(r.imageDigest)) {
-                  content += " |"
-              } else if (r.isDirectory) {
-                  content += " <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8600;</span> |"
-              } else {
-                  content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + fileLink(r.values[lst.key]) + "?raw=true\" download=\"" + escapeText(r.values[lst.key]) + "\">&darr;</a></span> |"
-              }
-              lst.fields.forEach((f, i) => {
-                if (r.isDirectory) {
-                    content += " " + (i == 0 ? "__[" + escapeText(r.values[f]) + "](<" + fileLink(r.values[lst.key]) + "/>)__" : escapeText(r.values[f])) + " |"
-                } else {
-                    content += " " + (i == 0 ? "[" + escapeText(r.values[f]) + "](<" + (/^sha256:[a-f0-9]{64}$/.test(r.imageDigest || "") ? "?image=" + encodeURIComponent(r.imageDigest) : fileLink(r.values[lst.key])) + ">)" : escapeText(r.values[f])) + " |"
-                }
-              })
-              content += "\n"
-          })
-      }
+          var support = require("ojob-browse-contract.js")
+          var preview = options.preview || {}
+          var format = support.format(String(new java.io.File(file).getName()), preview, support.defaults)
+          var params = request.params || {}
+          var imageType = support.imageType(format)
+          if (imageType) return support.imagePreview(io.readFileStream(file), imageType)
+          if (format == "html") return { stream: io.readFileStream(file), streamType: "text/html", streamHeaders: {} }
+          if (format == "json" && (params.view == "json" || params.view == "json-data" ||
+              (params.parse != "false" && params.view != "source"))) {
+            return support.jsonPreview(request, options, () => io.readFileStream(file))
+          }
+          if (format == "json") {
+            var source = support.readPreview(io.readFileStream(file), "text", preview.maxBytes)
+            source.sourceOnly = true
+            if (!source.truncated) source.type = "json"
+            return source
+          }
+          return isDef(format) ? support.readPreview(io.readFileStream(file), format, preview.maxBytes) : { file: file }
+        }
 
-      if (!fragment) {
-      // Content
-      if (isDef(lst.content)) {
-          if (lst.hideContentOnSearch) {
-            content += '\n<div id="browse-listing-extra">' + ow.template.parseMD2HTML(lst.content, false) + '</div>\n'
-          } else content += "\n" + lst.content + "\n"
-      }
- 
-      // Footer
-      if (isDef(options.footer)) {
-          content += "\n" + options.footer + "\n"
-      }
-      if (options._operation) {
-        content += '\n<dialog id="browse-status" class="browse-status" aria-labelledby="browse-status-title"><div class="browse-status-heading"><span id="browse-status-title">Status</span><button id="browse-status-close" class="browse-icon" type="button" title="Close status" aria-label="Close status">' + icon('close') + '</button></div><div id="browse-status-content" class="browse-status-content" aria-live="polite"></div></dialog>\n\n'
-        content += '<script src="' + prefixURL('/js/openafsigil.js') + '"></script><script src="' + prefixURL('/js/njsmap.js') + '"></script><link rel="stylesheet" href="' + prefixURL('/css/nJSMap.css') + '">\n'
-      }
-      if (hasQuery || options._operation) {
-        content += `<script>
+        if (request.params.raw == "true") {
+          return { stream: io.readFileStream(file) }
+        }
+
+        var ext = String(puri).replace(/^.*\./, "")
+        switch(ext) {
+        case "md"  : return { data: io.readFileString(file), type: "md" }
+        case "yml" :
+        case "yaml": return { data: io.readFileString(file), type: "yaml" }
+        case "css" : return { data: io.readFileString(file), type: "css" }
+        case "sh"  : return { data: io.readFileString(file), type: "sh" }
+        case "js"  : return { data: io.readFileString(file), type: "js" }
+        case "java": return { data: io.readFileString(file), type: "java" }
+        case "py"  : return { data: io.readFileString(file), type: "python" }
+        case "toml": return { data: io.readFileString(file), type: "toml" }
+        case "hbs" : return { data: io.readFileString(file), type: "handlebars" }
+        case "json": return { data: io.readFileJSON(file), type: "json" }
+        case "adoc": return { file: file, type: "asciidoc" }
+        default:
+          return { file: file }
+        }
+      })
+      args.fns.renderList = _$(args.fns.renderList, "args.fns.renderList").isFunction().default((lst, server, request, options) => {
+        if (isDef(options.browse) && !options.browse &&
+            !(lst.defaultPresent && options.web && options.web.enabled === true)) return ""
+        const uri = request.uri
+        const uriPrefix = _$(global.__ojobHttpUriPrefix[String(options.port)], "__ojobHttpUriPrefix1").default(_$(global.__ojobHttpUriPrefix[options.port], "__ojobHttpUriPrefix2").default(""))
+        const prefixURL = aURL => {
+          aURL = _$(aURL).default("")
+          if (aURL == "") return aURL
+          aURL = String(aURL)
+          if ((/^[a-z]+:/i).test(aURL) || aURL.startsWith("//")) return aURL
+          if (!aURL.startsWith("/")) return aURL
+          return (uriPrefix + "/" + aURL.replace(/^\/+/, "")).replace(/\/+/g, "/")
+        }
+
+        var puri = global.__ojobHttpRelativePath(uri, options.parentURI).replace(/\/$/, "")
+        const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
+        const fileLink = value => lst.searchInfo ? String(value).split("/").map(global.__ojobHttpFileLink).join("/") : global.__ojobHttpFileLink(value)
+        if (!uri.endsWith("/")) {
+          var _qs = isMap(request.params) ? request.params["NanoHttpd.QUERY_STRING"] : __
+          var q = (isString(_qs) && _qs.length > 0) ? "?" + _qs : ""
+          return ow.server.httpd.replyRedirect(server, uri + "/" + q, {})
+        }
+        var _page = 1
+        var _pageSize = 0
+        if (isDef(lst.pageInfo)) {
+          if (isDef(lst.pageInfo.page)) _page = Number(lst.pageInfo.page)
+          if (isDef(lst.pageInfo.pageSize)) _pageSize = Number(lst.pageInfo.pageSize)
+        } else {
+          if (isDef(request.params.page)) _page = Number(request.params.page)
+          //if (isDef(request.params.pageSize)) _pageSize = Number(request.params.pageSize)
+        }
+        if (!isNumber(_page) || _page <= 0) _page = 1
+        if (!isNumber(_pageSize) || _pageSize < 0) _pageSize = 0
+
+        if (isDef(options.default) && (lst.defaultPresent || !(request.params || {}).q && lst.list.filter(r => r.values[lst.key] == options.default).length == 1)) {
+          request.uri = request.uri.replace(/\/+$/, "") + "/" + options.default
+          return options._fns.renderObj(options._fns.getObj(request, options), server, request, options)
+        }
+
+        const breadcrumb = p => {
+          // relative links resolve against the current URL's directory: the directory itself
+          // when the URL ends with "/", otherwise the file's parent — so a file URL is one level up
+          var parts = (p == "" ? [] : p.split("/"))
+          var depth = uri.endsWith("/") ? parts.length : parts.length - 1
+          if (depth < 0) depth = 0
+          var b = "[/](</>) [" + (options.showURI ? escapeText(options.parentURI.replace(/^\//, "")) : "") + "](<" + relDir(depth) + ">)"
+          for (var i = 0; i < parts.length; i++) {
+            if (i == parts.length - 1) {
+              b += (!options.showURI && i == 0 ? "" : " / ") + escapeText(parts[i]) + " "
+            } else {
+              b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + escapeText(parts[i]) + "](<" + relDir(depth - i - 1) + ">)"
+            }
+          }
+          return b
+        }
+
+        const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
+        var content = "## " + breadcrumb( puri ) + "<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + logo + "\">\n\n"
+        // Keep small controls consistent with the listing in either theme.
+        var icon = name => {
+          var paths = {
+            refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 11-2l3 3M4 16l3 3a7 7 0 0 0 11-2"/>',
+            status: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
+            clear: '<circle cx="12" cy="12" r="8"/><path d="m9 9 6 6M9 15l6-6"/>',
+            close: '<path d="m6 6 12 12M6 18 18 6"/>'
+          }
+          return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + paths[name] + '</svg>'
+        }
+        var hasQuery = options.query && options.query.enabled
+        var hasSearch = hasQuery && !!(request.params || {}).q
+        var freshness, cacheTime, cacheAge
+        if ((hasQuery || options._operation) && options._fns && isFunction(options._fns.getFreshness)) {
+          try { freshness = options._fns.getFreshness(request, options) } catch (e) {}
+          if (freshness) {
+            var updated = freshness.lastUpdatedAt || freshness.loadedAt
+            if (isNumber(updated) && isFinite(updated) && updated > 0) {
+              cacheTime = new Date(updated).toISOString()
+              var age = Math.max(0, now() - updated)
+              cacheAge = age < 1000 ? 'just now' : ow.format.elapsedTime4ms(age).split(', ', 1)[0] + ' ago'
+            }
+          }
+        }
+        var fragment = hasQuery && request.method == "GET" && (request.header || {})["x-openaf-browse-fragment"] === "1"
+        var searchInfo = hasSearch && lst.searchInfo
+        var searchPending = searchInfo && searchInfo.refreshing === true
+        var searchNotice = searchInfo && (searchInfo.message || (searchPending ? 'Loading more cached data…' :
+          searchInfo.truncated ? 'Search results are limited.' :
+          searchInfo.complete === false && searchInfo.coverage == 'loaded package hierarchies' ? 'Searched loaded package trees.' :
+          searchInfo.complete === false ? 'Search results are partial.' : !lst.list.length ? 'No matches.' : ''))
+        var cacheMarkup = cacheTime ? 'Cache updated <time datetime="' + cacheTime + '">' + escapeText(cacheAge) + '</time>' : ''
+        var pageSize = _pageSize || (options.query || {}).pageSize || 100
+        if (!fragment && (hasQuery || options._operation)) {
+          content += '<style>' + [
+            '.markdown-body{--browse-fg:#747d86;--browse-hover:#414951;--browse-border:#c6cbd1;--browse-bg:#fff;--browse-soft:#f6f8fa;--browse-dark:0}',
+            '.markdown-body-dark{--browse-fg:#919ba6;--browse-hover:#d0d7de;--browse-border:#444c56;--browse-bg:#0d1117;--browse-soft:#161b22;--browse-dark:1;color-scheme:dark}',
+            '.browse-actions{display:flex;align-items:center;gap:0.5em;margin:0.75em 0 0;padding:0.6em 0 0;border-top:1px solid var(--browse-border);color:var(--browse-fg)}.browse-actions form{display:inline-flex;margin:0}.browse-actions .browse-icon{width:auto;gap:0.4em;padding:4px 6px;font-size:0.9em}',
+            '.browse-options{position:fixed;inset:auto;margin:0;box-sizing:border-box;width:19em;min-width:min(19em,calc(100vw - 16px));max-width:calc(100vw - 16px);resize:horizontal;overflow:auto;padding:0.85em;border:1px solid var(--browse-border);border-radius:6px;background:var(--browse-bg);color:var(--browse-fg);box-shadow:0 4px 16px #0002;font-size:0.9em}',
+            '.browse-controls{display:grid;gap:0.75em;margin:0;font-family:-apple-system,Calibri,"DejaVu Sans",sans-serif}.browse-controls label{display:flex;align-items:center;gap:0.5em;min-width:0}',
+            '.browse-cache-age,.browse-search-notice{font-size:0.85em;color:var(--browse-hover)}.browse-cache-age{margin-top:0.65em}.browse-cache-age:empty,.browse-search-notice:has(>span:only-child:empty){display:none}.browse-search-notice{margin:0 0 0.5em}.browse-search-notice[data-pending=true]::before{content:"";display:inline-block;width:0.7em;height:0.7em;margin-right:0.45em;border:1px solid currentColor;border-right-color:transparent;border-radius:50%;animation:browse-spin 0.8s linear infinite}@keyframes browse-spin{to{transform:rotate(1turn)}}@media(prefers-reduced-motion:reduce){.browse-search-notice[data-pending=true]::before{animation:none}}',
+            '.browse-live-status{font-size:0.85em}.browse-live-status:empty{display:none}.browse-controls .browse-search{display:grid;gap:0.35em}.browse-options-row{display:flex;align-items:center;justify-content:space-between;gap:1em}',
+            '.browse-controls input{box-sizing:border-box;min-width:0;max-width:100%;padding:0.2em 0.25em;border:0;border-bottom:1px solid var(--browse-border);border-radius:0;background:transparent;color:var(--browse-hover);font:inherit}',
+            '.browse-controls input[name=q]{width:100%}.browse-controls input[name=size]{width:4.5em}.browse-search-row{display:flex;align-items:center;gap:0.6em}.browse-search-row input{flex:1}.browse-search-row button{flex:none}.browse-search-row input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}',
+            '.browse-apply{padding:0.25em 0.4em;border:0;border-radius:4px;background:transparent;color:var(--browse-hover);font:inherit;cursor:pointer}.browse-apply:hover{background:var(--browse-soft)}',
+            '.browse-icon{position:relative;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:26px;height:26px;padding:4px;border:0;border-radius:4px;background:transparent;color:var(--browse-fg,#747d86);font:inherit;vertical-align:middle;cursor:pointer;text-decoration:none}',
+            '.browse-icon svg{display:block;flex:none}.browse-icon:hover,.browse-icon[aria-expanded=true]{color:var(--browse-hover);background:var(--browse-soft)}.browse-icon:disabled{opacity:0.45;cursor:wait}',
+            '#browse-clear-search:disabled{cursor:default;opacity:0.3}',
+            '#browse-options-toggle{width:24px;height:24px;font-size:18px;line-height:1}.browse-filtered::after{content:"";position:absolute;right:3px;top:3px;width:4px;height:4px;border-radius:50%;background:currentColor}',
+            '.browse-icon:focus-visible,.browse-controls input:focus-visible,.browse-apply:focus-visible,.browse-status:focus-visible{outline:2px solid var(--browse-fg);outline-offset:2px}',
+            '.browse-status{box-sizing:border-box;width:max-content;min-width:18em;max-width:min(48em,calc(100vw - 2em));max-height:80vh;padding:1em;border:1px solid var(--browse-border);border-radius:6px;background:var(--browse-bg);color:var(--browse-hover);box-shadow:0 8px 30px #0003}',
+            '.browse-status::backdrop{background:#0005}.browse-status-heading{display:flex;align-items:center;justify-content:space-between;gap:1em;margin-bottom:0.75em;font-weight:600}.browse-status-content{overflow:auto;max-height:65vh;font-size:0.9em}',
+            '.browse-search-help,.browse-shortcut-setting{font-size:0.8em}.browse-shortcut-setting{display:flex;align-items:center;gap:0.4em;margin-top:0.75em}.browse-shortcut-setting input{margin:0}.browse-search-help{line-height:1.5}',
+            '.browse-status-content table{margin:0}.browse-status-content td{white-space:normal;overflow-wrap:anywhere}'
+          ].join('') + '</style>\n\n'
+        }
+        if (!fragment && (hasQuery || options._operation)) {
+          content += '<div id="browse-options" class="browse-options" popover="auto" role="dialog" aria-label="Table options">'
+          if (hasQuery) {
+            var sortInputs = '<input type="hidden" name="sort" value="' + escapeText(lst.sortInfo ? lst.sortInfo.field : String(lst.key)) + '"><input type="hidden" name="order" value="' + (lst.sortInfo && lst.sortInfo.order == 'desc' ? 'desc' : 'asc') + '">'
+            content += '<form id="browse-search-form" class="browse-controls" method="get"><div class="browse-search"><label for="browse-search-input">Search</label><div class="browse-search-row"><input id="browse-search-input" type="search" name="q" aria-describedby="browse-search-help" autofocus value="' + escapeText((request.params||{}).q || '') + '"><button id="browse-clear-search" class="browse-icon" type="button" title="Clear search" aria-label="Clear search"' + (hasSearch ? '' : ' disabled') + '>' + icon('clear') + '</button></div></div>' + sortInputs
+            content += '<div class="browse-options-row"><label>Per page <input type="number" name="size" min="1" max="' + (options.query.maxPageSize || 500) + '" value="' + pageSize + '"></label><button class="browse-apply" type="submit">Apply</button></div><span class="browse-live-status" role="status"></span><span id="browse-search-help" class="browse-search-help">Enter: apply &middot; Shift+Enter: clear</span></form>'
+            content += '<label class="browse-shortcut-setting"><input id="browse-shortcut-enabled" type="checkbox" checked> Enable / shortcut to search</label>'
+          }
+          content += '<div id="browse-cache-age" class="browse-cache-age">' + cacheMarkup + '</div>'
+          if (options._operation) {
+            var operationsURL = prefixURL(options.parentURI.replace(/\/$/, "") + '/@@/')
+            content += '<div class="browse-actions"><form id="browse-refresh" method="post" action="' + operationsURL + 'refresh"><input type="hidden" name="path" value="' + escapeText(puri) + '"><input type="hidden" name="csrf" value="' + options._refreshToken + '"><button class="browse-icon" type="submit" title="Refresh now" aria-label="Refresh now">' + icon('refresh') + '<span>Refresh</span></button></form>'
+            content += '<button id="browse-status-toggle" class="browse-icon" type="button" title="Status" aria-label="Status" aria-haspopup="dialog" data-url="' + operationsURL + 'status?path=' + encodeURIComponent(puri) + '">' + icon('status') + '<span>Status</span></button></div>'
+          }
+          content += '</div>\n\n'
+        }
+
+        if (fragment) content = '<div id="browse-cache-age">' + cacheMarkup + '</div>\n\n'
+        if (hasQuery) {
+          content += '<div id="browse-search-notice" class="browse-search-notice" data-pending="' + !!searchPending + '"><span role="status">' + escapeText(searchNotice || '') + '</span>'
+          if (searchInfo && searchInfo.canExpand) {
+            content += ' <button type="submit" form="browse-search-form" name="searchAll" value="1">Search remaining repositories</button>'
+          }
+          content += '</div>\n\n'
+        }
+        // Pagination controls (if metadata is provided)
+        content += '<div id="browse-pagination">\n'
+        if (isDef(lst.pageInfo) && isDef(lst.pageInfo.pageSize) && lst.pageInfo.pageSize > 0) {
+          var _totalPages = Math.max(1, Math.ceil(lst.pageInfo.total / lst.pageInfo.pageSize))
+          if (_totalPages == 1 && _page <= 1) {
+            // Don't render pagination for a single page.
+          } else {
+          var pageURL = page => {
+            var params = request.params || {}
+            var keys = Object.keys(params).filter(k => ["page", "searchAll", "NanoHttpd.QUERY_STRING"].indexOf(k) < 0 && !k.startsWith("NanoHttpd."))
+            return "?" + keys.map(k => encodeURIComponent(k) + "=" + encodeURIComponent(params[k])).concat(["page=" + page]).join("&amp;")
+          }
+          var _prev = _page > 1 ? pageURL(_page - 1) : __
+          var _next = (_page < _totalPages) ? pageURL(_page + 1) : __
+          var _pager = "<div style=\"margin: 0.25em 0 0.75em 0; padding-left: 0.5em; font-family: -apple-system, Calibri, DejaVu Sans;\">"
+          if (isDef(_prev) && String(_prev).length > 0) {
+            _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _prev + "\">&#8592;</a>"
+          } else {
+            _pager += "<span style=\"color: #a0a0a0;\">&#8592;</span>"
+          }
+          _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
+          _pager += "<span style=\"color: #a0a0a0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 0.95em;\">" + _page + " / " + _totalPages + "</span>"
+          _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
+          if (isDef(_next) && String(_next).length > 0) {
+            _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _next + "\">&#8594;</a>"
+          } else {
+            _pager += "<span style=\"color: #a0a0a0;\">&#8594;</span>"
+          }
+          _pager += "</div>\n"
+          content += _pager
+          }
+        }
+
+        content += '</div>\n\n'
+
+        // Match sortTab's header controls while sorting the full result on the server.
+        var headers = lst.fields
+        var headerControls = []
+        if (hasQuery || options._operation) {
+          var optionsTitle = 'Table options' + (hasSearch ? ' (search: ' + (request.params || {}).q + ')' : '')
+          headerControls[0] = '<button id="browse-options-toggle" class="browse-icon' + (hasSearch ? ' browse-filtered' : '') + '" type="button" title="' + escapeText(optionsTitle) + '" aria-label="' + escapeText(optionsTitle) + '" aria-haspopup="dialog" aria-controls="browse-options" aria-expanded="false" popovertarget="browse-options"><span aria-hidden="true">&#8943;</span></button>'
+        }
+        var serverSort = hasQuery || options.sortTab && lst.sortInfo
+        if (serverSort) {
+          if (!fragment) content += '<style>' + [
+            '.sorter-container{float:right;font-size:10px;margin-left:4px}',
+            '.sorter-container .sort-button{display:none;padding:0;margin:0 2px;border:none;background:transparent;cursor:pointer;text-decoration:none;transition:color 0.2s ease}',
+            'th:hover .sorter-container .sort-button,th:focus-within .sorter-container .sort-button,.sorter-container .sort-button:focus,.sorter-container .sort-button.active{display:inline-block}',
+            '.sorter-container:focus-within .sort-button{display:inline-block}',
+            '.sorter-container .sort-button{color:var(--browse-fg,#747d86);opacity:0.7}',
+            'th:hover .sorter-container .sort-button,th:focus-within .sorter-container .sort-button,.sorter-container .sort-button.active{color:var(--browse-hover,#414951);opacity:1}'
+          ].join('') + '</style>\n'
+          var sortURL = (field, order) => {
+            var params = request.params || {}
+            var keys = Object.keys(params).filter(k => ["page", "sort", "order", "searchAll"].indexOf(k) < 0 && !k.startsWith("NanoHttpd."))
+            var query = keys.map(k => encodeURIComponent(k) + "=" + encodeURIComponent(params[k]))
+            if (order != "none") query = query.concat(["sort=" + encodeURIComponent(field), "order=" + order])
+            return "?" + query.concat(["page=1"]).join("&amp;")
+          }
+          headers = lst.fields.map((field, index) => {
+            var label = escapeText(field)
+            if ((lst.sortFields || lst.fields).indexOf(field) < 0) return label
+            var active = lst.sortInfo && lst.sortInfo.field == field
+            var controls = '<span class="sorter-container" tabindex="0" aria-label="' + escapeText('Sort: ' + field) + '">'
+            ;[ ["asc", "&#9650;", "Ascending"], ["desc", "&#9660;", "Descending"], ["none", "x", "Reset sorting"] ].forEach(control => {
+              var selected = active && lst.sortInfo.order == control[0]
+              controls += '<a class="sort-button' + (selected ? ' active' : '') + '" href="' + sortURL(field, control[0]) + '" title="' + control[2] + '" aria-label="' + escapeText(control[2] + ': ' + field) + '"' + (selected ? ' aria-current="true"' : '') + '>' + control[1] + '</a>'
+            })
+            headerControls[index + 1] = controls + '</span>'
+            return label
+          })
+        }
+        content += "|  |" + headers.join(" | ") + " |\n"
+        if (lst.alignFields) {
+            content += "|:--:"
+            lst.alignFields.forEach((a, i) => {
+                if (a == "left") {
+                    content += "|:--"
+                } else if (a == "right") {
+                    content += "|--:"
+                } else {
+                    content += "|--"
+                }
+            })
+            content += "|\n"
+
+            if (puri != "/" && puri != "") {
+              content += "| <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8598;</span> | __[..](<../>)__ | | |\n"
+            }
+
+            var rows = lst.sortInfo || lst.queryInfo && lst.queryInfo.applied ? lst.list : $from(lst.list).sort("-isDirectory", "values." + lst.key).select()
+            rows.forEach(r => {
+                content += "|"
+                if (r.imageDigest && /^sha256:[a-f0-9]{64}$/.test(r.imageDigest)) {
+                    content += " |"
+                } else if (r.isDirectory) {
+                    content += " <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8600;</span> |"
+                } else {
+                    content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + fileLink(r.values[lst.key]) + "?raw=true\" download=\"" + escapeText(r.values[lst.key]) + "\">&darr;</a></span> |"
+                }
+                lst.fields.forEach((f, i) => {
+                  if (r.isDirectory) {
+                      content += " " + (i == 0 ? "__[" + escapeText(r.values[f]) + "](<" + fileLink(r.values[lst.key]) + "/>)__" : escapeText(r.values[f])) + " |"
+                  } else {
+                      content += " " + (i == 0 ? "[" + escapeText(r.values[f]) + "](<" + (/^sha256:[a-f0-9]{64}$/.test(r.imageDigest || "") ? "?image=" + encodeURIComponent(r.imageDigest) : fileLink(r.values[lst.key])) + ">)" : escapeText(r.values[f])) + " |"
+                  }
+                })
+                content += "\n"
+            })
+        }
+
+        if (!fragment) {
+        // Content
+        if (isDef(lst.content)) {
+            if (lst.hideContentOnSearch) {
+              content += '\n<div id="browse-listing-extra">' + ow.template.parseMD2HTML(lst.content, false) + '</div>\n'
+            } else content += "\n" + lst.content + "\n"
+        }
+
+        // Footer
+        if (isDef(options.footer)) {
+            content += "\n" + options.footer + "\n"
+        }
+        if (options._operation) {
+          content += '\n<dialog id="browse-status" class="browse-status" aria-labelledby="browse-status-title"><div class="browse-status-heading"><span id="browse-status-title">Status</span><button id="browse-status-close" class="browse-icon" type="button" title="Close status" aria-label="Close status">' + icon('close') + '</button></div><div id="browse-status-content" class="browse-status-content" aria-live="polite"></div></dialog>\n\n'
+          content += '<script src="' + prefixURL('/js/openafsigil.js') + '"></script><script src="' + prefixURL('/js/njsmap.js') + '"></script><link rel="stylesheet" href="' + prefixURL('/css/nJSMap.css') + '">\n'
+        }
+        if (hasQuery || options._operation) {
+          content += `<script>
         document.addEventListener('DOMContentLoaded', function() {
           // Anchor the shared options popover without shifting the table.
           var optionsButton = document.getElementById('browse-options-toggle')
@@ -1594,113 +2003,114 @@ jobs:
           })
         })
         </script>\n`
-      }
+        }
 
-      if (options.sortTab && !serverSort && !(lst.queryInfo && lst.queryInfo.applied)) {
-          content += "<script src=\"" + prefixURL("/js/mdtablesort.js") + "\"></script>\n"
-          if (options.sortTabAsc) {
-              content += "<script>document.addEventListener('DOMContentLoaded', function() { var t = document.querySelector('table'); if (!t) return; var row = t.querySelector('thead tr') || t.querySelector('tr'); if (!row) return; var cell = row.querySelectorAll('th, td')[1]; if (!cell) return; if (typeof updateSortState === 'function') updateSortState(cell, 'asc', t); });</script>\n"
+        if (options.sortTab && !serverSort && !(lst.queryInfo && lst.queryInfo.applied)) {
+            content += "<script src=\"" + prefixURL("/js/mdtablesort.js") + "\"></script>\n"
+            if (options.sortTabAsc) {
+                content += "<script>document.addEventListener('DOMContentLoaded', function() { var t = document.querySelector('table'); if (!t) return; var row = t.querySelector('thead tr') || t.querySelector('tr'); if (!row) return; var cell = row.querySelectorAll('th, td')[1]; if (!cell) return; if (typeof updateSortState === 'function') updateSortState(cell, 'asc', t); });</script>\n"
+            }
+        }
+
+        if (options.fullWidth === true) {
+          content += '<style>#browse-listing > thead > tr > th:first-child,#browse-listing > tbody > tr > td:first-child{' +
+            'box-sizing:border-box;width:2.5rem;min-width:2.5rem;max-width:2.5rem;padding-inline:0;text-align:center;white-space:nowrap}</style>\n'
+        }
+
+        }
+
+        // Add controls after Markdown has generated header IDs from plain field labels.
+        var html = ow.template.parseMD2HTML( content, !fragment )
+        if (headerControls.length > 0) {
+          html = String(html).replace(/(<thead>\s*<tr>)([\s\S]*?)(<\/tr>\s*<\/thead>)/, (match, start, row, end) => {
+            var column = 0
+            return start + row.replace(/<th\b[^>]*>[\s\S]*?<\/th>/g, cell => {
+              var controls = headerControls[column++] || ""
+              return cell.replace(/<\/th>$/, () => controls + "</th>")
+            }) + end
+          })
+        }
+        // Keep listing targets stable while live search replaces only results and pagination.
+        html = String(html).replace(/<table(?=[\s>])/, '<table id="browse-listing"' + (serverSort ? ' data-browse-server-sort' : '') + (options.fullWidth === true ? ' style="display:table;width:100%"' : ''))
+        if (fragment) return { data: html, status: 200, mimetype: "text/html; charset=utf-8", header: { "Cache-Control": "private, no-store", Vary: "X-OpenAF-Browse-Fragment" } }
+        return html
+      })
+      args.fns.renderObj = _$(args.fns.renderObj, "args.fns.renderObj").isFunction().default((obj, server, request, options) => {
+        const uri = request.uri
+        const uriPrefix = _$(global.__ojobHttpUriPrefix[String(options.port)], "__ojobHttpUriPrefix1").default(_$(global.__ojobHttpUriPrefix[options.port], "__ojobHttpUriPrefix2").default(""))
+        const prefixURL = aURL => {
+          aURL = _$(aURL).default("")
+          if (aURL == "") return aURL
+          aURL = String(aURL)
+          if ((/^[a-z]+:/i).test(aURL) || aURL.startsWith("//")) return aURL
+          if (!aURL.startsWith("/")) return aURL
+          return (uriPrefix + "/" + aURL.replace(/^\/+/, "")).replace(/\/+/g, "/")
+        }
+
+        var puri = global.__ojobHttpRelativePath(uri, options.parentURI).replace(/\/$/, "")
+        const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
+
+        const support = require("ojob-browse-contract.js")
+        const previewServer = global.__ojobHttpPreviewDocument(server, support.previewBackArrow)
+        if (isDef(obj.stream) && obj.streamHeaders) {
+          return server.replyStream(obj.stream, obj.streamType || "application/octet-stream", 200, obj.streamHeaders)
+        }
+
+        if (request.params.raw == "true") {
+          log("Downloading raw file: " + puri)
+          if (isDef(obj.stream)) {
+            return server.replyStream(obj.stream, ow.server.httpd.getMimeType(puri))
           }
-      }
+          if (isDef(obj.file)) {
+            return server.replyStream(io.readFileStream(obj.file), ow.server.httpd.getMimeType(puri))
+          }
+          if (isDef(obj.data)) {
+            return server.replyOKJSON(obj.data, ow.server.httpd.getMimeType(puri))
+          }
+        }
 
-      if (options.fullWidth === true) {
-        content += '<style>#browse-listing > thead > tr > th:first-child,#browse-listing > tbody > tr > td:first-child{' +
-          'box-sizing:border-box;width:2.5rem;min-width:2.5rem;max-width:2.5rem;padding-inline:0;text-align:center;white-space:nowrap}</style>\n'
-      }
+        if (obj.type == "asciidoc" && isDef(getOPackPath("Asciidoc")) && (isDef(obj.stream) || isDef(obj.file))) {
+          loadLib("asciidoc.js")
+          const stream = new java.io.BufferedInputStream(isDef(obj.file) ? io.readFileStream(obj.file) : obj.stream)
+          try { return ow.server.httpd.replyAsciidoc(previewServer, stream) }
+          finally { stream.close() }
+        }
 
-      }
-
-      // Add controls after Markdown has generated header IDs from plain field labels.
-      var html = ow.template.parseMD2HTML( content, !fragment )
-      if (headerControls.length > 0) {
-        html = String(html).replace(/(<thead>\s*<tr>)([\s\S]*?)(<\/tr>\s*<\/thead>)/, (match, start, row, end) => {
-          var column = 0
-          return start + row.replace(/<th\b[^>]*>[\s\S]*?<\/th>/g, cell => {
-            var controls = headerControls[column++] || ""
-            return cell.replace(/<\/th>$/, () => controls + "</th>")
-          }) + end
-        })
-      }
-      // Keep listing targets stable while live search replaces only results and pagination.
-      html = String(html).replace(/<table(?=[\s>])/, '<table id="browse-listing"' + (serverSort ? ' data-browse-server-sort' : '') + (options.fullWidth === true ? ' style="display:table;width:100%"' : ''))
-      if (fragment) return { data: html, status: 200, mimetype: "text/html; charset=utf-8", header: { "Cache-Control": "private, no-store", Vary: "X-OpenAF-Browse-Fragment" } }
-      return html
-    })
-    args.fns.renderObj = _$(args.fns.renderObj, "args.fns.renderObj").isFunction().default((obj, server, request, options) => {
-      const uri = request.uri
-      const uriPrefix = _$(global.__ojobHttpUriPrefix[String(options.port)], "__ojobHttpUriPrefix1").default(_$(global.__ojobHttpUriPrefix[options.port], "__ojobHttpUriPrefix2").default(""))
-      const prefixURL = aURL => {
-        aURL = _$(aURL).default("")
-        if (aURL == "") return aURL
-        aURL = String(aURL)
-        if ((/^[a-z]+:/i).test(aURL) || aURL.startsWith("//")) return aURL
-        if (!aURL.startsWith("/")) return aURL
-        return (uriPrefix + "/" + aURL.replace(/^\/+/, "")).replace(/\/+/g, "/")
-      }
-
-      var puri = global.__ojobHttpRelativePath(uri, options.parentURI).replace(/\/$/, "")
-      const relDir = aDepth => (aDepth <= 0 ? "./" : "../".repeat(aDepth))
-
-      const support = require("ojob-browse-contract.js")
-      const previewServer = global.__ojobHttpPreviewDocument(server, support.previewBackArrow)
-      if (isDef(obj.stream) && obj.streamHeaders) {
-        return server.replyStream(obj.stream, obj.streamType || "application/octet-stream", 200, obj.streamHeaders)
-      }
-
-      if (request.params.raw == "true") {
-        log("Downloading raw file: " + puri)  
         if (isDef(obj.stream)) {
           return server.replyStream(obj.stream, ow.server.httpd.getMimeType(puri))
         }
+
         if (isDef(obj.file)) {
           return server.replyStream(io.readFileStream(obj.file), ow.server.httpd.getMimeType(puri))
         }
-        if (isDef(obj.data)) {
-          return server.replyOKJSON(obj.data, ow.server.httpd.getMimeType(puri))
+
+        if (obj.type == "md") {
+          const markdownServer = options.browse === true && !request._browsePreview ? server : previewServer
+          return markdownServer.replyOKHTML(ow.template.parseMD2HTML(obj.data, true))
         }
-      }
 
-      if (obj.type == "asciidoc" && isDef(getOPackPath("Asciidoc")) && (isDef(obj.stream) || isDef(obj.file))) {
-        loadLib("asciidoc.js")
-        const stream = new java.io.BufferedInputStream(isDef(obj.file) ? io.readFileStream(obj.file) : obj.stream)
-        try { return ow.server.httpd.replyAsciidoc(previewServer, stream) }
-        finally { stream.close() }
-      }
+        if (obj.type == "json" && !obj.sourceOnly && (isUnDef(request.params.parse) || request.params.parse != "false")) {
+          return ow.server.httpd.replyJSMap(previewServer, obj.data)
+        }
 
-      if (isDef(obj.stream)) {
-        return server.replyStream(obj.stream, ow.server.httpd.getMimeType(puri))
-      }
-
-      if (isDef(obj.file)) {
-        return server.replyStream(io.readFileStream(obj.file), ow.server.httpd.getMimeType(puri))
-      }
-
-      if (obj.type == "md") {
-        return previewServer.replyOKHTML(ow.template.parseMD2HTML(obj.data, true))
-      }
-
-      if (obj.type == "json" && !obj.sourceOnly && (isUnDef(request.params.parse) || request.params.parse != "false")) {
-        return ow.server.httpd.replyJSMap(previewServer, obj.data)
-      }
-
-      const breadcrumb = p => {
-        // relative links resolve against the current URL's directory: the directory itself
-        // when the URL ends with "/", otherwise the file's parent — so a file URL is one level up
-        var parts = (p == "" ? [] : p.split("/"))
-        var depth = uri.endsWith("/") ? parts.length : parts.length - 1
-        if (depth < 0) depth = 0
-        var b = "[/](</>) [" + (options.showURI ? escapeText(options.parentURI.replace(/^\//, "")) : "") + "](<" + relDir(depth) + ">)"
-        for (var i = 0; i < parts.length; i++) {
-          if (i == parts.length - 1) {
-            b += (!options.showURI && i == 0 ? "" : " / ") + (obj.browseDetail ? "[" + escapeText(parts[i]) + "](<?>)" : escapeText(parts[i])) + " "
-          } else {
-            b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + escapeText(parts[i]) + "](<" + relDir(depth - i - 1) + ">)"
+        const breadcrumb = p => {
+          // relative links resolve against the current URL's directory: the directory itself
+          // when the URL ends with "/", otherwise the file's parent — so a file URL is one level up
+          var parts = (p == "" ? [] : p.split("/"))
+          var depth = uri.endsWith("/") ? parts.length : parts.length - 1
+          if (depth < 0) depth = 0
+          var b = "[/](</>) [" + (options.showURI ? escapeText(options.parentURI.replace(/^\//, "")) : "") + "](<" + relDir(depth) + ">)"
+          for (var i = 0; i < parts.length; i++) {
+            if (i == parts.length - 1) {
+              b += (!options.showURI && i == 0 ? "" : " / ") + (obj.browseDetail ? "[" + escapeText(parts[i]) + "](<?>)" : escapeText(parts[i])) + " "
+            } else {
+              b += " [" + (!options.showURI && i == 0 ? "" : " / ") + " " + escapeText(parts[i]) + "](<" + relDir(depth - i - 1) + ">)"
+            }
           }
+          return b
         }
-        return b
-      }
 
-      const _downloadcode = `<span><script>
+        const _downloadcode = `<span><script>
         function downloadText(aFile) {
           var selectedText = document.querySelectorAll("pre")[0].innerText
           const blob = new Blob([selectedText], { type: "text/plain" })
@@ -1715,275 +2125,276 @@ jobs:
         }
       </script></span>`
 
-      if (obj.type == "rawjson") obj.type = "json"
+        if (obj.type == "rawjson") obj.type = "json"
 
-      const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
-      var content
-      const heading = "## " + support.previewBackArrow
-      if (obj.type == "raw") {
-        content = heading + breadcrumb(puri) + "\n\n"
-        content += String(obj.data)
-        content += "\n\n"
+        const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
+        var content
+        const heading = "## " + support.previewBackArrow
+        if (obj.type == "raw") {
+          content = heading + breadcrumb(puri) + "\n\n"
+          content += String(obj.data)
+          content += "\n\n"
 
-        if (isDef(options.footer)) {
-          content += "\n" + options.footer + "\n"
+          if (isDef(options.footer)) {
+            content += "\n" + options.footer + "\n"
+          }
+        } else {
+          const filename = fileLink(puri.substring(puri.lastIndexOf("/") + 1))
+          const download = `<button type="button" onclick="downloadText(decodeURIComponent('${filename}'))" aria-label="Download" title="Download" style="float:right;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 1em">&darr;</button>`
+          content = heading + download + breadcrumb(puri) + "\n\n"
+          // Protect already escaped source from Showdown's standalone pre/code pass.
+          if (obj.sourceOnly) content += '<p><a href="' + support.jsonViewURL(request, "json") + '">Render</a></p>' + "\n\n"
+          content += "<div><pre><code class=\"language-" + escapeText(obj.type) + "\">" + ow.format.escapeHTML(isMap(obj.data) ? stringify(obj.data) : String(obj.data)) + "</code></pre></div>\n\n"
+
+          if (isDef(options.footer)) {
+            content += "\n" + options.footer + "\n"
+          }
+          content += _downloadcode
         }
-      } else {
-        const filename = fileLink(puri.substring(puri.lastIndexOf("/") + 1))
-        const download = `<button type="button" onclick="downloadText(decodeURIComponent('${filename}'))" aria-label="Download" title="Download" style="float:right;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 1em">&darr;</button>`
-        content = heading + download + breadcrumb(puri) + "\n\n"
-        // Protect already escaped source from Showdown's standalone pre/code pass.
-        if (obj.sourceOnly) content += '<p><a href="' + support.jsonViewURL(request, "json") + '">Render</a></p>' + "\n\n"
-        content += "<div><pre><code class=\"language-" + escapeText(obj.type) + "\">" + ow.format.escapeHTML(isMap(obj.data) ? stringify(obj.data) : String(obj.data)) + "</code></pre></div>\n\n"
 
-        if (isDef(options.footer)) {
-          content += "\n" + options.footer + "\n"
+
+        return server.replyOKHTML( ow.template.parseMD2HTML( content, true ) )
+      })
+      args.fns.renderEmpty = _$(args.fns.renderEmpty, "args.fns.renderEmpty").isFunction().default((request, options) => {
+        const uri = request.uri
+
+        var puri = global.__ojobHttpRelativePath(uri, options.parentURI)
+
+        var content = "# " + (options.showURI ? escapeText(options.parentURI) + "/" : "") + escapeText(puri) + "\n\n"
+        content += "*No content found.*\n"
+
+        return ow.template.parseMD2HTML( content, true )
+      })
+
+      args.fns.init = _$(args.fns.init, "args.fns.init").isFunction().default(() => {
+        // Check the templates provided
+        // args.templates.thead = _$(args.templates.thead, "templates.thead")
+        //                       .isString()
+        //                       .default("## {{{breadcrumb prefix '" + args.uri + "'}}{{extra}}\n")
+        // args.templates.tline = _$(args.templates.tline, "templates.tline")
+        //                       .isString()
+        //                       .default("{{#each this}}| {{#if isDirectory}}<span style=\"color: #a0a0a0;\">&#8600;</span>{{else}}<a href=\"{{encodeURI prefix}}{{encodeURI filepath}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI realPrefix}}{{encodeURI filepath}}{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{encodeURI realPrefix}}{{escapeMDTable filepath}}{{escapeMDTable filename}}{{escapeMDTable filename}}](<{{encodeURI realPrefix}}{{encodeURI filepath}}{{encodeURI filename}}>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI realPrefix}}{{encodeURI filepath}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
+        // args.templates.tfoot = _$(args.templates.tfoot, "templates.tfoot")
+        //                       .isString()
+        //                       .default("")
+      })
+
+      // Add basic helpers
+      ow.template.addHelper("encodeURI", encodeURI)
+      ow.template.addHelper("escapeMDTable", str => str.replace(/\|/g, "\\|"))
+
+      var _options = args.options
+      _options._fns = args.fns
+      if (isUnDef(global.__GBHTTPD)) global.__GBHTTPD = {}
+
+      _options.parentURI  = args.uri
+      _options.parentPath = args.path
+      _options.port       = args.port
+      _options.capabilities = { contract: 1, query: 1, previewFormats: 1, boundedPreview: 1, operations: 1, prefetch: 1 }
+      if (_options.query && _options.query.enabled || _options.preview || _options.operations && _options.operations.enabled) require("ojob-browse-contract.js").check(_options, _options.capabilities)
+
+      // Apply query processing once, before rendering or API serialization.
+      // Keep a few short-lived path inventories so edits to a search reuse the same walk.
+      var searchInventories = new Map(), inventoryLock = new java.lang.Object(), inventoryGeneration = 0
+      var inventoryLocks = Array.from({ length: 4 }, () => new java.lang.Object())
+      if (defaultFilesystem && isUnDef(_options._fns.search)) _options._fns.search = (request, options) => {
+        if (!options.query || !options.query.enabled) {
+          var unsupported = new Error("Search not enabled")
+          unsupported.httpStatus = 501
+          throw unsupported
         }
-        content += _downloadcode
-      }
+        var query = String((request.params || {}).q || "")
+        if (query.length > (options.query.maxQueryLength || 256)) {
+          var invalid = new Error("Query too long")
+          invalid.httpStatus = 400
+          throw invalid
+        }
+        var matches = require("ojob-browse-contract.js").searchMatcher(query, options.query.wildcards)
+        var relative = global.__ojobHttpRelativePath(request.uri, options.parentURI)
+        var start = global.__ojobHttpResolveFile(options.parentPath, relative)
+        var key = String(relative).replace(/\/+$/, "")
+        var maxScan = options.query.maxScanned || 10000
+        var timeout = options.query.timeoutMs || 5000
+        var cacheKey = JSON.stringify([key, maxScan, timeout])
+        var stripe = new java.lang.String(key).hashCode() & 3
+        var inventory = syncFn(() => {
+          var generation = syncFn(() => inventoryGeneration, inventoryLock)
+          var hit = syncFn(() => searchInventories.get(cacheKey), inventoryLock)
+          if (hit && hit.start == start && now() < hit.expires) return hit
 
-
-      return server.replyOKHTML( ow.template.parseMD2HTML( content, true ) )
-    })
-    args.fns.renderEmpty = _$(args.fns.renderEmpty, "args.fns.renderEmpty").isFunction().default((request, options) => {
-      const uri = request.uri
-
-      var puri = global.__ojobHttpRelativePath(uri, options.parentURI)
-
-      var content = "# " + (options.showURI ? escapeText(options.parentURI) + "/" : "") + escapeText(puri) + "\n\n"
-      content += "*No content found.*\n"
-
-      return ow.template.parseMD2HTML( content, true )
-    })
-
-    args.fns.init = _$(args.fns.init, "args.fns.init").isFunction().default(() => {
-      // Check the templates provided
-      // args.templates.thead = _$(args.templates.thead, "templates.thead")
-      //                       .isString()
-      //                       .default("## {{{breadcrumb prefix '" + args.uri + "'}}{{extra}}\n")
-      // args.templates.tline = _$(args.templates.tline, "templates.tline")
-      //                       .isString()
-      //                       .default("{{#each this}}| {{#if isDirectory}}<span style=\"color: #a0a0a0;\">&#8600;</span>{{else}}<a href=\"{{encodeURI prefix}}{{encodeURI filepath}}{{encodeURI filename}}?raw=true\" download=\"{{encodeURI realPrefix}}{{encodeURI filepath}}{{encodeURI filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{encodeURI realPrefix}}{{escapeMDTable filepath}}{{escapeMDTable filename}}{{escapeMDTable filename}}](<{{encodeURI realPrefix}}{{encodeURI filepath}}{{encodeURI filename}}>)__ | {{fLastModified}} | | {{else}} [{{escapeMDTable filename}}](<{{encodeURI realPrefix}}{{encodeURI filepath}}{{encodeURI filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
-      // args.templates.tfoot = _$(args.templates.tfoot, "templates.tfoot")
-      //                       .isString()
-      //                       .default("")
-    })
-  
-    // Add basic helpers
-    ow.template.addHelper("encodeURI", encodeURI)
-    ow.template.addHelper("escapeMDTable", str => str.replace(/\|/g, "\\|"))
-
-    var _options = args.options
-    _options._fns = args.fns
-    if (isUnDef(global.__GBHTTPD)) global.__GBHTTPD = {}
-
-    _options.parentURI  = args.uri
-    _options.parentPath = args.path
-    _options.port       = args.port
-    _options.capabilities = { contract: 1, query: 1, previewFormats: 1, boundedPreview: 1, operations: 1, prefetch: 1 }
-    if (_options.query && _options.query.enabled || _options.preview || _options.operations && _options.operations.enabled) require("ojob-browse-contract.js").check(_options, _options.capabilities)
-
-    // Apply query processing once, before rendering or API serialization.
-    // Keep a few short-lived path inventories so edits to a search reuse the same walk.
-    var searchInventories = new Map(), inventoryLock = new java.lang.Object(), inventoryGeneration = 0
-    var inventoryLocks = Array.from({ length: 4 }, () => new java.lang.Object())
-    if (defaultFilesystem && isUnDef(_options._fns.search)) _options._fns.search = (request, options) => {
-      if (!options.query || !options.query.enabled) {
-        var unsupported = new Error("Search not enabled")
-        unsupported.httpStatus = 501
-        throw unsupported
-      }
-      var query = String((request.params || {}).q || "")
-      if (query.length > (options.query.maxQueryLength || 256)) {
-        var invalid = new Error("Query too long")
-        invalid.httpStatus = 400
-        throw invalid
-      }
-      var matches = require("ojob-browse-contract.js").searchMatcher(query, options.query.wildcards)
-      var relative = global.__ojobHttpRelativePath(request.uri, options.parentURI)
-      var start = global.__ojobHttpResolveFile(options.parentPath, relative)
-      var key = String(relative).replace(/\/+$/, "")
-      var maxScan = options.query.maxScanned || 10000
-      var timeout = options.query.timeoutMs || 5000
-      var cacheKey = JSON.stringify([key, maxScan, timeout])
-      var stripe = new java.lang.String(key).hashCode() & 3
-      var inventory = syncFn(() => {
-        var generation = syncFn(() => inventoryGeneration, inventoryLock)
-        var hit = syncFn(() => searchInventories.get(cacheKey), inventoryLock)
-        if (hit && hit.start == start && now() < hit.expires) return hit
-
-        var startPath = new java.io.File(start).toPath()
-        var pending = [start], seen = new Set(), entries = []
-        var scanned = 0, began = now(), timedOut = false
-        while (pending.length && scanned < maxScan) {
-          if (now() - began >= timeout) { timedOut = true; break }
-          var directory = pending.pop()
-          if (seen.has(directory)) continue
-          seen.add(directory)
-          var dir = new java.io.File(directory)
-          if (!dir.isDirectory()) continue
-          var stream = java.nio.file.Files.newDirectoryStream(dir.toPath())
-          try {
-            var children = stream.iterator()
-            while (children.hasNext()) {
-              if (scanned >= maxScan || now() - began >= timeout) {
-                timedOut = now() - began >= timeout
-                pending.push(directory)
-                break
+          var startPath = new java.io.File(start).toPath()
+          var pending = [start], seen = new Set(), entries = []
+          var scanned = 0, began = now(), timedOut = false
+          while (pending.length && scanned < maxScan) {
+            if (now() - began >= timeout) { timedOut = true; break }
+            var directory = pending.pop()
+            if (seen.has(directory)) continue
+            seen.add(directory)
+            var dir = new java.io.File(directory)
+            if (!dir.isDirectory()) continue
+            var stream = java.nio.file.Files.newDirectoryStream(dir.toPath())
+            try {
+              var children = stream.iterator()
+              while (children.hasNext()) {
+                if (scanned >= maxScan || now() - began >= timeout) {
+                  timedOut = now() - began >= timeout
+                  pending.push(directory)
+                  break
+                }
+                scanned++
+                var child = children.next().toFile()
+                if (java.nio.file.Files.isSymbolicLink(child.toPath())) continue
+                var path = String(startPath.relativize(child.toPath())).replace(/\\/g, "/")
+                try { global.__ojobHttpResolveFile(options.parentPath, key ? key + "/" + path : path) } catch (e) { continue }
+                var directoryEntry = child.isDirectory()
+                if (directoryEntry) pending.push(String(child.getCanonicalPath()))
+                entries.push({ path: path, isDirectory: directoryEntry })
               }
-              scanned++
-              var child = children.next().toFile()
-              if (java.nio.file.Files.isSymbolicLink(child.toPath())) continue
-              var path = String(startPath.relativize(child.toPath())).replace(/\\/g, "/")
-              try { global.__ojobHttpResolveFile(options.parentPath, key ? key + "/" + path : path) } catch (e) { continue }
-              var directoryEntry = child.isDirectory()
-              if (directoryEntry) pending.push(String(child.getCanonicalPath()))
-              entries.push({ path: path, isDirectory: directoryEntry })
-            }
-          } finally { stream.close() }
-        }
+            } finally { stream.close() }
+          }
 
-        var result = { start: start, entries: entries, scanned: scanned, timedOut: timedOut,
-          complete: pending.length == 0 && !timedOut, expires: now() + 5000 }
-        syncFn(() => {
-          if (generation != inventoryGeneration) return
-          searchInventories.delete(cacheKey)
-          if (searchInventories.size >= 4) searchInventories.delete(searchInventories.keys().next().value)
-          searchInventories.set(cacheKey, result)
-        }, inventoryLock)
+          var result = { start: start, entries: entries, scanned: scanned, timedOut: timedOut,
+            complete: pending.length == 0 && !timedOut, expires: now() + 5000 }
+          syncFn(() => {
+            if (generation != inventoryGeneration) return
+            searchInventories.delete(cacheKey)
+            if (searchInventories.size >= 4) searchInventories.delete(searchInventories.keys().next().value)
+            searchInventories.set(cacheKey, result)
+          }, inventoryLock)
+          return result
+        }, inventoryLocks[stripe])
+
+        var rows = [], limited = false
+        var maxResults = options.query.maxResults || 1000
+        if (query) for (var entry of inventory.entries) {
+          if (!matches(entry.path)) continue
+          // Check cached matches again in case a path was replaced after the walk.
+          try {
+            var candidate = global.__ojobHttpResolveFile(options.parentPath, key ? key + "/" + entry.path : entry.path)
+            if (!new java.io.File(candidate).exists() ||
+                java.nio.file.Files.isSymbolicLink(new java.io.File(start, entry.path).toPath())) continue
+          } catch (e) { continue }
+          if (rows.length == maxResults) { limited = true; break }
+          rows.push({ isDirectory: entry.isDirectory, values: { Filename: entry.path } })
+        }
+        var complete = inventory.complete && !limited
+        return { isList: true, fields: ["Filename"], alignFields: ["left"], key: "Filename", list: rows,
+          searchInfo: { complete: complete, truncated: !complete, timedOut: inventory.timedOut,
+            scanned: inventory.scanned, totalExact: complete } }
+
+      }
+
+      // Sort and paginate query results
+      var applyQuery = (result, request, options) => {
+        if (!result.isList || !options.query || !options.query.enabled || result.queryInfo && result.queryInfo.applied) return result
+        if (result.pageInfo && result.pageInfo.pageSize > 0) throw new Error("Provider must apply enhanced queries before pagination")
+        var params = request.params || {},
+          config = options.query
+        var invalid = () => {
+          var e = new Error("Invalid browse query")
+          e.httpStatus = 400
+          throw e
+        }
+        var integer = (value, fallback, max) => {
+          if (isUnDef(value)) return fallback
+          var n = Number(value)
+          if (!isFinite(n) || n < 1 || Math.floor(n) != n || n > max) return invalid()
+          return n
+        }
+        var size = integer(params.size || params.pageSize, config.pageSize || 100, config.maxPageSize || 500)
+        var page = integer(params.page, 1, Number.MAX_SAFE_INTEGER)
+        var field = params.sort || String(result.key),
+          order = params.order || "asc"
+        if (result.fields.indexOf(field) < 0 || ["asc", "desc"].indexOf(order) < 0) invalid()
+
+        // Sort directories and field values
+        var compareValues = require("ojob-browse-contract.js").compareValues
+        var allowShort = /^(object|filename|version|tag)$/i.test(field)
+        var rows = result.list.slice()
+        rows.sort((a, b) => {
+          if (!!a.isDirectory != !!b.isDirectory) return a.isDirectory ? -1 : 1
+          var av = a.sortValues && isDef(a.sortValues[field]) ? a.sortValues[field] : a.values[field]
+          var bv = b.sortValues && isDef(b.sortValues[field]) ? b.sortValues[field] : b.values[field]
+          if (field == "Size" && isNumber(a.values["Size in bytes"]) && isNumber(b.values["Size in bytes"])) {
+            av = a.values["Size in bytes"]
+            bv = b.values["Size in bytes"]
+          }
+          var n = compareValues(av, bv, allowShort)
+          return n ? n * (order == "desc" ? -1 : 1) : (field == result.key ? 0 : String(a.values[result.key]).localeCompare(String(b.values[result.key])))
+        })
+
+        // Build pagination metadata
+        var total = rows.length,
+          pages = Math.max(1, Math.ceil(total / size))
+        page = Math.min(page, pages)
+        result.defaultPresent = !(request.params || {}).q && rows.some(row => row.values[result.key] == options.default)
+        result.list = rows.slice((page - 1) * size, page * size)
+        result.pageInfo = {
+          page: page,
+          pageSize: size,
+          total: total,
+          totalPages: pages,
+          hasPrevious: page > 1,
+          hasNext: page < pages
+        }
+        result.sortInfo = {
+          field: field,
+          order: order
+        }
+        result.queryInfo = {
+          applied: true
+        }
         return result
-      }, inventoryLocks[stripe])
+      }
 
-      var rows = [], limited = false
-      var maxResults = options.query.maxResults || 1000
-      if (query) for (var entry of inventory.entries) {
-        if (!matches(entry.path)) continue
-        // Check cached matches again in case a path was replaced after the walk.
+      // Wrap provider callbacks and validate requests
+      var originalGetList = _options._fns.getList,
+        originalSearch = _options._fns.search
+      _options._fns.getList = (request, options) => applyQuery(originalGetList(request, options), request, options)
+      if (isFunction(originalSearch)) _options._fns.search = (request, options) => applyQuery(originalSearch(request, options), request, options)
+      if (isFunction(_options._fns.validate)) {
+        var validateProvider = _options._fns.validate;
+        ["getList", "getObj", "search"].forEach(name => {
+          if (!isFunction(_options._fns[name])) return
+          var original = _options._fns[name]
+          _options._fns[name] = (request, options) => {
+            validateProvider(request, options)
+            return original(request, options)
+          }
+        })
+      }
+
+      if (defaultFilesystem && !isFunction(_options._fns.refresh)) _options._fns.refresh = (request, options) => {
+        syncFn(() => {
+          searchInventories.clear()
+          inventoryGeneration++
+        }, inventoryLock)
+        var result = _options._fns.getList(request, options)
+        if (result.isFile) {
+          var object = _options._fns.getObj(request, options)
+          if (object.stream) object.stream.close()
+        }
+      }
+      // Initialize provider operations
+      _options._fns.init(_options)
+      if (_options.operations && _options.operations.enabled) {
+        var support = require("ojob-browse-contract.js")
+        var validate = defaultFilesystem ? (request, options) => global.__ojobHttpResolveFile(options.parentPath, global.__ojobHttpRelativePath(request.uri, options.parentURI)) : _options._fns.validate
+        if (!isFunction(validate)) throw new Error("Provider operations require a validate callback")
+        support.installOperations(_options, validate)
+      }
+
+      // Warm the root cache at startup. A failed load can be retried on the first request.
+      if (defaultFilesystem && _options.browse !== false) {
         try {
-          var candidate = global.__ojobHttpResolveFile(options.parentPath, key ? key + "/" + entry.path : entry.path)
-          if (!new java.io.File(candidate).exists() ||
-              java.nio.file.Files.isSymbolicLink(new java.io.File(start, entry.path).toPath())) continue
-        } catch (e) { continue }
-        if (rows.length == maxResults) { limited = true; break }
-        rows.push({ isDirectory: entry.isDirectory, values: { Filename: entry.path } })
-      }
-      var complete = inventory.complete && !limited
-      return { isList: true, fields: ["Filename"], alignFields: ["left"], key: "Filename", list: rows,
-        searchInfo: { complete: complete, truncated: !complete, timedOut: inventory.timedOut,
-          scanned: inventory.scanned, totalExact: complete } }
-
-    }
-
-    // Sort and paginate query results
-    var applyQuery = (result, request, options) => {
-      if (!result.isList || !options.query || !options.query.enabled || result.queryInfo && result.queryInfo.applied) return result
-      if (result.pageInfo && result.pageInfo.pageSize > 0) throw new Error("Provider must apply enhanced queries before pagination")
-      var params = request.params || {},
-        config = options.query
-      var invalid = () => {
-        var e = new Error("Invalid browse query")
-        e.httpStatus = 400
-        throw e
-      }
-      var integer = (value, fallback, max) => {
-        if (isUnDef(value)) return fallback
-        var n = Number(value)
-        if (!isFinite(n) || n < 1 || Math.floor(n) != n || n > max) return invalid()
-        return n
-      }
-      var size = integer(params.size || params.pageSize, config.pageSize || 100, config.maxPageSize || 500)
-      var page = integer(params.page, 1, Number.MAX_SAFE_INTEGER)
-      var field = params.sort || String(result.key),
-        order = params.order || "asc"
-      if (result.fields.indexOf(field) < 0 || ["asc", "desc"].indexOf(order) < 0) invalid()
-
-      // Sort directories and field values
-      var compareValues = require("ojob-browse-contract.js").compareValues
-      var allowShort = /^(object|filename|version|tag)$/i.test(field)
-      var rows = result.list.slice()
-      rows.sort((a, b) => {
-        if (!!a.isDirectory != !!b.isDirectory) return a.isDirectory ? -1 : 1
-        var av = a.sortValues && isDef(a.sortValues[field]) ? a.sortValues[field] : a.values[field]
-        var bv = b.sortValues && isDef(b.sortValues[field]) ? b.sortValues[field] : b.values[field]
-        if (field == "Size" && isNumber(a.values["Size in bytes"]) && isNumber(b.values["Size in bytes"])) {
-          av = a.values["Size in bytes"]
-          bv = b.values["Size in bytes"]
+          _options._fns.getList({ uri: _options.parentURI.replace(/\/+$/, "") + "/", params: {}, method: "GET" }, _options)
+        } catch (e) {
+          logWarn("Could not warm the browse root cache")
         }
-        var n = compareValues(av, bv, allowShort)
-        return n ? n * (order == "desc" ? -1 : 1) : (field == result.key ? 0 : String(a.values[result.key]).localeCompare(String(b.values[result.key])))
-      })
-
-      // Build pagination metadata
-      var total = rows.length,
-        pages = Math.max(1, Math.ceil(total / size))
-      page = Math.min(page, pages)
-      result.defaultPresent = !(request.params || {}).q && rows.some(row => row.values[result.key] == options.default)
-      result.list = rows.slice((page - 1) * size, page * size)
-      result.pageInfo = {
-        page: page,
-        pageSize: size,
-        total: total,
-        totalPages: pages,
-        hasPrevious: page > 1,
-        hasNext: page < pages
       }
-      result.sortInfo = {
-        field: field,
-        order: order
-      }
-      result.queryInfo = {
-        applied: true
-      }
-      return result
-    }
 
-    // Wrap provider callbacks and validate requests
-    var originalGetList = _options._fns.getList,
-      originalSearch = _options._fns.search
-    _options._fns.getList = (request, options) => applyQuery(originalGetList(request, options), request, options)
-    if (isFunction(originalSearch)) _options._fns.search = (request, options) => applyQuery(originalSearch(request, options), request, options)
-    if (isFunction(_options._fns.validate)) {
-      var validateProvider = _options._fns.validate;
-      ["getList", "getObj", "search"].forEach(name => {
-        if (!isFunction(_options._fns[name])) return
-        var original = _options._fns[name]
-        _options._fns[name] = (request, options) => {
-          validateProvider(request, options)
-          return original(request, options)
-        }
-      })
+      global.__GBHTTPD[String(args.port) + args.uri] = _options
     }
-
-    if (defaultFilesystem && !isFunction(_options._fns.refresh)) _options._fns.refresh = (request, options) => {
-      syncFn(() => {
-        searchInventories.clear()
-        inventoryGeneration++
-      }, inventoryLock)
-      var result = _options._fns.getList(request, options)
-      if (result.isFile) {
-        var object = _options._fns.getObj(request, options)
-        if (object.stream) object.stream.close()
-      }
-    }
-    // Initialize provider operations
-    _options._fns.init(_options)
-    if (_options.operations && _options.operations.enabled) {
-      var support = require("ojob-browse-contract.js")
-      var validate = defaultFilesystem ? (request, options) => global.__ojobHttpResolveFile(options.parentPath, global.__ojobHttpRelativePath(request.uri, options.parentURI)) : _options._fns.validate
-      if (!isFunction(validate)) throw new Error("Provider operations require a validate callback")
-      support.installOperations(_options, validate)
-    }
-
-    // Warm the root cache at startup. A failed load can be retried on the first request.
-    if (defaultFilesystem && _options.browse !== false) {
-      try {
-        _options._fns.getList({ uri: _options.parentURI.replace(/\/+$/, "") + "/", params: {}, method: "GET" }, _options)
-      } catch (e) {
-        logWarn("Could not warm the browse root cache")
-      }
-    }
-
-    global.__GBHTTPD[String(args.port) + args.uri] = _options
 
 # ----------------------
 # http://127.0.0.1:11224/api/browse?browseUri=/test&path=a/b/destination.txt&action=obj
@@ -2036,7 +2447,7 @@ jobs:
         }
 
         // Check requested capabilities
-        if (_cfg.requiredOptions) {
+        if (_options.old !== true && _cfg.requiredOptions) {
           try {
             require("ojob-browse-contract.js").check(_cfg.requiredOptions, _options.capabilities)
           } catch (e) {
@@ -2053,9 +2464,13 @@ jobs:
         _req.uri    = (targetUri + "/" + targetPath.replace(/^\/+/, "")).replace(/\/{2,}/g, "/").replace(/\/$/, "") || "/"
 
         var action = _$(_params.action).isString().default("list")
+        var operation = ["status", "freshness", "refresh", "metrics"].indexOf(action) >= 0
+        if (_options.old === true && (operation || action == "preview")) {
+          return ow.server.httpd.reply({ error: "Action not supported" }, 501, "application/json", {})
+        }
 
         // Dispatch API operations
-        if (["status", "freshness", "refresh", "metrics"].indexOf(action) >= 0) {
+        if (operation) {
           if (!isArray(_cfg.operationsBrowseUris) || _cfg.operationsBrowseUris.indexOf(targetUri) < 0) return ow.server.httpd.reply({
             error: "Operation target not authorized"
           }, 403, "application/json", {})
@@ -2068,6 +2483,7 @@ jobs:
           if (!_options.capabilities || !_options.capabilities.previewFormats) return ow.server.httpd.reply({
             error: "Preview not supported"
           }, 501, "application/json", {})
+          _req._browsePreview = true
           return _options._fns.renderObj(_options._fns.getObj(_req, Object.assign({}, _options, {
             _api: false
           })), server, _req, _options)

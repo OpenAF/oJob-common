@@ -7,7 +7,9 @@ ow.loadFormat()
 const browse = io.readFileYAML("oJobBrowse.yaml")
 const httpd = io.readFileYAML("oJobHTTPd.yaml")
 require.cache = require.cache || {}
-require.cache["ojob-browse-contract.js"] = new Function("require", "exports", "module", browse.code["ojob-browse-contract.js"])
+Object.keys(browse.code).forEach(name => {
+  require.cache[name] = new Function("require", "exports", "module", browse.code[name])
+})
 load(getEnv("CORE_BROWSE_MODULE") || "../openaf/js/owrap.server.browse.js")
 
 const root = String(java.nio.file.Files.createTempDirectory("browse-previews-"))
@@ -26,7 +28,10 @@ function check(value, label) {
   if (!value) throw new Error(label)
 }
 function job(yaml, name) { return yaml.jobs.find(definition => definition.name == name) }
-function run(job, args) { new Function("args", job.exec)(args) }
+function run(job, args) {
+  // oJob appends the downstream service setup to the same function.
+  if (new Function("args", job.exec + "\nreturn true")(args) !== true) throw new Error(job.name + " skipped downstream setup")
+}
 function route(job) { return new Function("request", "server", "port", "uri", job.args.execURI) }
 function checkSource(response, language, expected, label) {
   const html = response.data
@@ -58,8 +63,64 @@ try {
   io.writeFileString(root + "/sample.xml", source)
   io.writeFileString(root + "/sample.html", source)
   io.writeFileString(root + "/sample.json", JSON.stringify({ title:"O'Reilly", entity:"&#x27;" }) + "\n")
-  io.writeFileString(root + "/sample.md", "# Preview heading\n\nParagraph with 'quoted text'.\n")
+  const markdown = "# Preview heading\n\nParagraph with 'quoted text'.\n"
+  io.writeFileString(root + "/sample.md", markdown)
   io.writeFileString(root + "/sample.adoc", "= Preview heading\n\nParagraph with 'quoted text'.\n")
+
+  run(generic, { port:port, uri:"/markdown", path:root, templates:{}, fns:{},
+    options:{browse:true, default:"sample.md", preview:{maxBytes:1}} })
+  const serveMarkdown = (file, params) => route(generic)({uri:"/markdown/"+file, params:params||{}, method:"GET"}, server, port, "/markdown")
+  for (let file of ["sample.md", ""]) {
+    const page = serveMarkdown(file)
+    check(page.status === 200 && /<h1[^>]*>.*Preview heading<\/h1>/.test(page.data) &&
+      page.data.includes("'quoted text'") && !page.data.includes('aria-label="Back"') &&
+      !page.data.includes("Preview truncated"), "Browse renders complete Markdown at /markdown/"+file)
+  }
+  check(serveMarkdown("sample.md", {raw:"true"}).data === markdown, "Browse streams raw Markdown unchanged")
+  const api = job(browse, "HTTP Browse API")
+  run(api, { port:port, uri:"/api", browseUri:"/markdown" })
+  const servePreview = () => route(api)({uri:"/api", params:{action:"preview", path:"sample.md"}, method:"GET"}, server, port, "/api")
+  check(servePreview().data.includes("Preview truncated"), "Explicit Markdown preview respects the byte limit")
+  const markdownOptions = global.__GBHTTPD[String(port) + "/markdown"]
+  markdownOptions.preview = {formats:{}}
+  check(serveMarkdown("sample.md").data.includes("'quoted text'"), "Browse renders Markdown with an empty preview format map")
+  markdownOptions.preview = {}
+  checkBack(servePreview(), "Explicit Markdown preview")
+
+  const oldOptions = {old:true, preview:{maxBytes:0, formats:{}}, query:{enabled:true, pageSize:0},
+    operations:{enabled:true}, prefetch:true, fullWidth:true, web:{enabled:true}}
+  let searchCalls = 0
+  run(generic, { port:port, uri:"/old", path:root, options:oldOptions, fns:{search:() => {
+    searchCalls++
+    return {isList:true, list:[]}
+  }} })
+  const oldBrowser = job(browse, "HTTP Browser")
+  run(oldBrowser, { port:port, uri:"/old-files", type:"files", options:Object.assign({path:root},oldOptions) })
+  for (let [jobDefinition, mount] of [[generic,"/old"], [oldBrowser,"/old-files"]]) {
+    const serveOld = (file, params, header) => route(jobDefinition)({uri:mount+"/"+file, params:params||{},
+      header:header||{}, method:"GET"}, server, port, mount)
+    const oldMarkdown = serveOld("sample.md").data
+    check(oldMarkdown === ow.template.parseMD2HTML(markdown, true), mount+" renders Markdown directly with browse omitted")
+    check(serveOld("sample.md", {raw:"true"}).data === markdown, mount+" streams original Markdown")
+    const oldJSON = serveOld("sample.json").data
+    check(oldJSON.includes("nJSMap") && !oldJSON.includes("data-json-render") && !oldJSON.includes('aria-label="Back"'),
+      mount+" renders JSON on the server without the preview viewer")
+    const oldListing = serveOld("", {q:"unknown", page:2, _browsePrefetch:"1"}, {"x-openaf-browse-prefetch":"1"}).data
+    check(oldListing.includes("sample.md") && oldListing.includes("sample.xml") && !oldListing.includes('id="browse-listing"'),
+      mount+" serves the whole legacy listing without query or prefetch handling")
+    const addedFile = mount.substring(1)+".txt"
+    io.writeFileString(root + "/" + addedFile, "new")
+    check(serveOld("").data.includes(addedFile), mount+" lists newly created files immediately")
+    check(serveOld("@@/status").data.includes("No content found"), mount+" has no operations route")
+  }
+  check(searchCalls === 0, "Legacy listing does not call provider search")
+  run(api, {port:port, uri:"/api", browseUri:"/old", operationsBrowseUris:["/old"], options:{preview:{maxBytes:1}}})
+  const serveOldAPI = params => route(api)({uri:"/api", params:params, method:"GET"}, server, port, "/api")
+  for (let action of ["preview", "status", "freshness", "metrics", "refresh"]) {
+    check(serveOldAPI({action:action}).status === 501, "Legacy API disables "+action)
+  }
+  check(serveOldAPI({action:"obj", raw:"true", path:"sample.md"}).data === markdown, "Legacy API still serves raw objects")
+  check(serveOldAPI({action:"search"}).status === 200 && searchCalls === 1, "Legacy API keeps a supplied search callback")
 
   for (let name of Object.keys(serve)) {
     for (let ext of Object.keys(formats)) {

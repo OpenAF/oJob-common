@@ -1165,6 +1165,13 @@ Generic HTTP browse service with customizable templates and functions.
 | fns | Map | No | Callbacks: getList, getObj, renderList, renderObj, renderEmpty, init; optional search, validate, getStatus, getFreshness, refresh |
 | options | Map | No | Browse/render options plus optional query, preview, and operations maps described below |
 
+Set `options.old: true` on a browse mount to use the rendering and file handling
+from before PR #77. Markdown renders as a complete page, JSON renders on the
+server, and directory listings use the previous layout and sorting. This mode
+disables the new query controls, bounded previews, root cache, prefetch, and
+operations. The Browse API still supports `list`, `obj`, and any custom `search`
+callback supplied by the mount.
+
 Pagination:
 - `renderList` will render pager controls when the list metadata includes `pageInfo` with `page`, `pageSize`, and `total`.
 - Built-in filesystem pagination requires `options.query.enabled`; custom providers can return their own `pageInfo`. Merely supplying a page parameter does not paginate an unpaged legacy callback.
@@ -1223,6 +1230,9 @@ dot, exact filename keys start with `name:`, and values select `markdown`, `json
 an explicit limit from 1 through 16777216 bytes.
 Truncated content is escaped text. These controls apply to the built-in generic
 filesystem HTML previews; API object responses and raw streams remain complete.
+With `options.browse: true`, opening a `.md` file in the generic browser renders
+the complete Markdown document. The Browse API's `action=preview` still uses
+the configured preview formats and byte limit.
 JSON previews open a small viewer and stream the original bytes in a separate
 request. The browser renders up to 16 MiB with nJSMap. **{…}** and **[…]** mark
 expandable entries. Use **+ / −** for a single branch or the double chevron for all expandable
@@ -1300,6 +1310,8 @@ HTTP browser service based on existing types (e.g., ow.server.httpd.browse.files
 | uri | String | No | The URI where the HTTP Browser will be available (defaults to "/") |
 | type | String | No | The type of HTTP Browser services (defaults to "files") |
 | options | Map | No | Map with options to be passed to the browser type |
+
+`options.old: true` also enables the legacy mode for the `files` browser type.
 
 ## oJobCh
 

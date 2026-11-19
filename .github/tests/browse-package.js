@@ -15,5 +15,9 @@ try {
   new Function('args',browse.jobs.filter(j=>j.name=='HTTP Browse generic')[0].exec)(args)
   var options=global.__GBHTTPD['19845/package']
   if(!options._fns.getObj({uri:'/package/sample.xml',params:{}},options).truncated)throw new Error('Packaged preview did not run')
+  args.uri='/package-old';args.fns={};args.options={old:true,preview:{maxBytes:1}}
+  new Function('args',browse.jobs.filter(j=>j.name=='HTTP Browse generic')[0].exec)(args)
+  var old=global.__GBHTTPD['19845/package-old']
+  if(!old._fns.getObj({uri:'/package-old/sample.xml',params:{}},old).file)throw new Error('Packaged legacy browser did not run')
   print('PASS manifest-copy loading and preview from unrelated cwd')
 } finally {io.rm(temp)}

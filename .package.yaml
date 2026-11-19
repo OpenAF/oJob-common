@@ -71,9 +71,9 @@ files:
 - oJobs.yaml
 filesHash:
   LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
-  README.md: 6a80957255156453fef809fb8bda0626a1439967
+  README.md: f067b372365a3b5d3ada37f8f945eb3bae7fd32c
   oJobBasics.yaml: cbabe5043fcddbac9bf78770331cecb2c6ea7e55
-  oJobBrowse.yaml: 6f167cb60dca32b94c989f1260ea3ed6db4b4c21
+  oJobBrowse.yaml: 2ae0d8711ba64805fe6eb8b414cc045c09b86c60
   oJobCh.yaml: 405c0dd5d8fe4fa8ceb06e691af1e9f23791687e
   oJobDebug.yaml: bfb5debec954e3b524ae4ce103d6ea8e780448e9
   oJobDirector.yaml: ec87282023bd8ed30170d330e17ddf6fbb1e3618
