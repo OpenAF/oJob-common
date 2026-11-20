@@ -1546,6 +1546,7 @@ jobs:
           var paths = {
             refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 7a7 7 0 0 1 11-2l3 3M4 16l3 3a7 7 0 0 0 11-2"/>',
             status: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
+            wildcard: '<path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/>',
             clear: '<circle cx="12" cy="12" r="8"/><path d="m9 9 6 6M9 15l6-6"/>',
             close: '<path d="m6 6 12 12M6 18 18 6"/>'
           }
@@ -1588,6 +1589,7 @@ jobs:
             '.browse-apply{padding:0.25em 0.4em;border:0;border-radius:4px;background:transparent;color:var(--browse-hover);font:inherit;cursor:pointer}.browse-apply:hover{background:var(--browse-soft)}',
             '.browse-icon{position:relative;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:26px;height:26px;padding:4px;border:0;border-radius:4px;background:transparent;color:var(--browse-fg,#747d86);font:inherit;vertical-align:middle;cursor:pointer;text-decoration:none}',
             '.browse-icon svg{display:block;flex:none}.browse-icon:hover,.browse-icon[aria-expanded=true]{color:var(--browse-hover);background:var(--browse-soft)}.browse-icon:disabled{opacity:0.45;cursor:wait}',
+            '.browse-icon[aria-pressed=true]{background:var(--browse-soft);color:var(--browse-hover);box-shadow:inset 0 0 0 1px currentColor}',
             '#browse-clear-search:disabled{cursor:default;opacity:0.3}',
             '#browse-options-toggle{width:24px;height:24px;font-size:18px;line-height:1}.browse-filtered::after{content:"";position:absolute;right:3px;top:3px;width:4px;height:4px;border-radius:50%;background:currentColor}',
             '.browse-icon:focus-visible,.browse-controls input:focus-visible,.browse-apply:focus-visible,.browse-status:focus-visible{outline:2px solid var(--browse-fg);outline-offset:2px}',
@@ -1601,7 +1603,15 @@ jobs:
           content += '<div id="browse-options" class="browse-options" popover="auto" role="dialog" aria-label="Table options">'
           if (hasQuery) {
             var sortInputs = '<input type="hidden" name="sort" value="' + escapeText(lst.sortInfo ? lst.sortInfo.field : String(lst.key)) + '"><input type="hidden" name="order" value="' + (lst.sortInfo && lst.sortInfo.order == 'desc' ? 'desc' : 'asc') + '">'
-            content += '<form id="browse-search-form" class="browse-controls" method="get"><div class="browse-search"><label for="browse-search-input">Search</label><div class="browse-search-row"><input id="browse-search-input" type="search" name="q" aria-describedby="browse-search-help" autofocus value="' + escapeText((request.params||{}).q || '') + '"><button id="browse-clear-search" class="browse-icon" type="button" title="Clear search" aria-label="Clear search"' + (hasSearch ? '' : ' disabled') + '>' + icon('clear') + '</button></div></div>' + sortInputs
+            var params = request.params || {}
+            var wildcardControl = ''
+            if (options.query.wildcards === true) {
+              var active = isDef(params.wildcards) ? params.wildcards == "1" : hasSearch
+              wildcardControl = '<input type="hidden" name="wildcards" value="' + (active ? '1' : '0') + '"><button id="browse-wildcards" class="browse-icon" type="button" aria-label="Use wildcards" aria-pressed="' + active + '" title="Use wildcards (* matches zero or more characters, ? matches one)">' + icon('wildcard') + '</button>'
+            }
+            var recursive = params.recursive != "0"
+            content += '<form id="browse-search-form" class="browse-controls" method="get"><div class="browse-search"><label for="browse-search-input">Search</label><div class="browse-search-row"><input id="browse-search-input" type="search" name="q" aria-describedby="browse-search-help" autofocus value="' + escapeText((request.params||{}).q || '') + '">' + wildcardControl + '<button id="browse-clear-search" class="browse-icon" type="button" title="Clear search" aria-label="Clear search"' + (hasSearch ? '' : ' disabled') + '>' + icon('clear') + '</button></div></div>' + sortInputs
+            content += '<label><input id="browse-recursive" type="checkbox"' + (recursive ? ' checked' : '') + '> Include subfolders</label><input type="hidden" name="recursive" value="' + (recursive ? '1' : '0') + '">'
             content += '<div class="browse-options-row"><label>Per page <input type="number" name="size" min="1" max="' + (options.query.maxPageSize || 500) + '" value="' + pageSize + '"></label><button class="browse-apply" type="submit">Apply</button></div><span class="browse-live-status" role="status"></span><span id="browse-search-help" class="browse-search-help">Enter: apply &middot; Shift+Enter: clear</span></form>'
             content += '<label class="browse-shortcut-setting"><input id="browse-shortcut-enabled" type="checkbox" checked> Enable / shortcut to search</label>'
           }
@@ -1926,6 +1936,17 @@ jobs:
               var revision = searchRevision
               searchTimer = setTimeout(function() { previewSearch(revision) }, 180)
             }
+            var wildcardButton = document.getElementById('browse-wildcards')
+            if (wildcardButton) wildcardButton.addEventListener('click', function() {
+              var enabled = this.getAttribute('aria-pressed') != 'true'
+              this.setAttribute('aria-pressed', String(enabled))
+              searchForm.elements.wildcards.value = enabled ? '1' : '0'
+              queueSearch()
+            })
+            document.getElementById('browse-recursive').addEventListener('change', function() {
+              searchForm.elements.recursive.value = this.checked ? '1' : '0'
+              queueSearch()
+            })
             searchInput.addEventListener('input', queueSearch)
             searchInput.addEventListener('compositionstart', cancelLiveSearch)
             searchInput.addEventListener('compositionend', queueSearch)
@@ -2222,13 +2243,14 @@ jobs:
           invalid.httpStatus = 400
           throw invalid
         }
-        var matches = require("ojob-browse-contract.js").searchMatcher(query, options.query.wildcards)
+        var matches = require("ojob-browse-contract.js").searchMatcher(query, options.query.wildcards === true && (request.params || {}).wildcards != "0")
+        var recursive = (request.params || {}).recursive != "0"
         var relative = global.__ojobHttpRelativePath(request.uri, options.parentURI)
         var start = global.__ojobHttpResolveFile(options.parentPath, relative)
         var key = String(relative).replace(/\/+$/, "")
         var maxScan = options.query.maxScanned || 10000
         var timeout = options.query.timeoutMs || 5000
-        var cacheKey = JSON.stringify([key, maxScan, timeout])
+        var cacheKey = JSON.stringify([key, maxScan, timeout, recursive])
         var stripe = new java.lang.String(key).hashCode() & 3
         var inventory = syncFn(() => {
           var generation = syncFn(() => inventoryGeneration, inventoryLock)
@@ -2260,7 +2282,7 @@ jobs:
                 var path = String(startPath.relativize(child.toPath())).replace(/\\/g, "/")
                 try { global.__ojobHttpResolveFile(options.parentPath, key ? key + "/" + path : path) } catch (e) { continue }
                 var directoryEntry = child.isDirectory()
-                if (directoryEntry) pending.push(String(child.getCanonicalPath()))
+                if (directoryEntry && recursive) pending.push(String(child.getCanonicalPath()))
                 entries.push({ path: path, isDirectory: directoryEntry })
               }
             } finally { stream.close() }

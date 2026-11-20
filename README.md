@@ -1210,7 +1210,13 @@ options:
 
 With query processing enabled, `page`, `size` (or `pageSize`), `sort` (a displayed
 field name), and `order=asc|desc` sort before pagination. Folders stay first.
-Set `options.query.wildcards: true` to enable `*` (zero or more characters)
+The search popup starts in literal mode with **Include subfolders** checked.
+Uncheck it to match immediate files and folders by name, including virtual
+folders in ECR, CodeArtifact and S3. Set `options.query.wildcards: true` to
+show the **Use wildcards** button. The search URL records these choices as
+`wildcards=0|1` and `recursive=0|1`, including for Browse API searches.
+Omitting the parameters keeps recursive search and the mount’s configured
+wildcard behavior. Enabling the wildcard button activates `*` (zero or more characters)
 and `?` (one character) in search. A wildcard pattern matches the whole name
 or path examined by the provider. For example, `*.zip` matches ZIP files,
 and `*release-?.zip` matches names ending in `release-1.zip` or
