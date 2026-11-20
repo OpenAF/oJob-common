@@ -202,6 +202,8 @@ code:
                 content += "|"
                 if (r.isDirectory) {
                     content += " <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8600;</span> |"
+                } else if (options.browse === true) {
+                    content += " |"
                 } else {
                     content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + fileLink(r.values[lst.key]) + "?raw=true\" download=\"" + escapeText(r.values[lst.key]) + "\">&darr;</a></span> |"
                 }
@@ -391,6 +393,13 @@ code:
     }
 
   ojob-browse-contract.js: |
+    exports.browseRequest = function(request, options) {
+      if (options.browse !== true || (request.params || {}).raw != "true") return request
+      var params = Object.assign({}, request.params)
+      delete params.raw
+      return Object.assign({}, request, { params: params })
+    }
+
 
     // Declare supported browse capabilities
     exports.capabilities = {
@@ -1237,6 +1246,7 @@ jobs:
     execURI: | #js
       try {
         var _options = global.__GBHTTPD[String(port) + uri]
+        request = require("ojob-browse-contract.js").browseRequest(request, _options)
         if (_options.old === true) return require("ojob-browse-legacy.js").reply(server, request, _options)
         return ow.server.httpd.replyBrowse(server, request, _options)
       } catch(e) {
@@ -1308,6 +1318,7 @@ jobs:
     execURI: | #js
       try {
         var _options = global.__GBHTTPD[String(port) + uri]
+        request = require("ojob-browse-contract.js").browseRequest(request, _options)
         if (_options.old === true) return require("ojob-browse-legacy.js").reply(server, request, _options)
         var _out = ""
         var relative = global.__ojobHttpRelativePath(request.uri, _options.parentURI)
@@ -1439,7 +1450,7 @@ jobs:
           if (format == "html") return { stream: io.readFileStream(file), streamType: "text/html", streamHeaders: {} }
           if (format == "json" && (params.view == "json" || params.view == "json-data" ||
               (params.parse != "false" && params.view != "source"))) {
-            return support.jsonPreview(request, options, () => io.readFileStream(file))
+            return support.jsonPreview(request, options, () => io.readFileStream(file), options.browse !== true)
           }
           if (format == "json") {
             var source = support.readPreview(io.readFileStream(file), "text", preview.maxBytes)
@@ -1708,6 +1719,8 @@ jobs:
                     content += " |"
                 } else if (r.isDirectory) {
                     content += " <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8600;</span> |"
+                } else if (options.browse === true) {
+                    content += " |"
                 } else {
                     content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + fileLink(r.values[lst.key]) + "?raw=true\" download=\"" + escapeText(r.values[lst.key]) + "\">&darr;</a></span> |"
                 }
@@ -2483,6 +2496,7 @@ jobs:
           if (!_options.capabilities || !_options.capabilities.previewFormats) return ow.server.httpd.reply({
             error: "Preview not supported"
           }, 501, "application/json", {})
+          _req = require("ojob-browse-contract.js").browseRequest(_req, _options)
           _req._browsePreview = true
           return _options._fns.renderObj(_options._fns.getObj(_req, Object.assign({}, _options, {
             _api: false
