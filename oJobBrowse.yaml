@@ -161,22 +161,7 @@ code:
           if (_totalPages > 1 || _page > 1) {
             var _prev = _page > 1 ? ("?page=" + (_page - 1)) : __
             var _next = (_page < _totalPages) ? ("?page=" + (_page + 1)) : __
-            var _pager = "<div style=\"margin: 0.25em 0 0.75em 0; padding-left: 0.5em; font-family: -apple-system, Calibri, DejaVu Sans;\">"
-            if (isDef(_prev) && String(_prev).length > 0) {
-              _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _prev + "\">&#8592;</a>"
-            } else {
-              _pager += "<span style=\"color: #a0a0a0;\">&#8592;</span>"
-            }
-            _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
-            _pager += "<span style=\"color: #a0a0a0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 0.95em;\">" + _page + " / " + _totalPages + "</span>"
-            _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
-            if (isDef(_next) && String(_next).length > 0) {
-              _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _next + "\">&#8594;</a>"
-            } else {
-              _pager += "<span style=\"color: #a0a0a0;\">&#8594;</span>"
-            }
-            _pager += "</div>\n"
-            content += _pager
+            content += global.__ojobHttpBrowsePager(_page, _totalPages, _prev, _next)
           }
         }
 
@@ -195,17 +180,17 @@ code:
             content += "|\n"
 
             if (puri != "/" && puri != "") {
-              content += "| <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8598;</span> | __[..](<../>)__ | | |\n"
+              content += "| " + global.__ojobHttpBrowseArrow("parent", true) + " | __[..](<../>)__ | | |\n"
             }
 
             $from(lst.list).sort("-isDirectory", "values." + lst.key).select(r => {
                 content += "|"
                 if (r.isDirectory) {
-                    content += " <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8600;</span> |"
+                    content += " " + global.__ojobHttpBrowseArrow("directory", true) + " |"
                 } else if (options.noRaw === true) {
                     content += " |"
                 } else {
-                    content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + fileLink(r.values[lst.key]) + "?raw=true\" download=\"" + escapeText(r.values[lst.key]) + "\">&darr;</a></span> |"
+                    content += " <a href=\"" + fileLink(r.values[lst.key]) + "?raw=true\" download=\"" + escapeText(r.values[lst.key]) + "\" aria-label=\"Download\">" + global.__ojobHttpBrowseArrow("down") + "</a> |"
                 }
                 lst.fields.forEach((f, i) => {
                   if (r.isDirectory) {
@@ -333,7 +318,7 @@ code:
         const logo = prefixURL(_$(options.logo, "logo").isString().default("/fonts/openaf_small.png"))
         var content
         if (obj.type == "raw") {
-          content = "## <span style=\"display: flex; justify-content: space-between\"><span>" + breadcrumb( puri ) + "</span><span style=\"display: inline-flex; justify-content: space-between; float: inline-end; align-items: start\"><span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:history.back()\">&larr;</a></span></span></span>\n\n"
+          content = "## <span style=\"display: flex; justify-content: space-between\"><span>" + breadcrumb( puri ) + "</span><span style=\"display: inline-flex; justify-content: space-between; float: inline-end; align-items: start\"><span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:history.back()\" aria-label=\"Back\">" + global.__ojobHttpBrowseArrow("left") + "</a></span></span></span>\n\n"
           content += coreFiles && options.useMDTemplate ? $t(String(obj.data), { request: request }) : String(obj.data)
           content += "\n\n"
 
@@ -341,7 +326,7 @@ code:
             content += "\n" + options.footer + "\n"
           }
         } else {
-          content = "## <span style=\"display: flex; justify-content: space-between\"><span>" + breadcrumb( puri ) + "</span><span style=\"display: inline-flex; justify-content: space-between; float: inline-end; align-items: start\"><span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:history.back()\">&larr;</a></span><span onclick=\"downloadText(decodeURIComponent('" + fileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:downloadText(decodeURIComponent('" + fileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\">&darr;</a></span></span></span>\n\n"
+          content = "## <span style=\"display: flex; justify-content: space-between\"><span>" + breadcrumb( puri ) + "</span><span style=\"display: inline-flex; justify-content: space-between; float: inline-end; align-items: start\"><span onclick=\"history.back()\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:history.back()\" aria-label=\"Back\">" + global.__ojobHttpBrowseArrow("left") + "</a></span><span onclick=\"downloadText(decodeURIComponent('" + fileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer; font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"javascript:downloadText(decodeURIComponent('" + fileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" aria-label=\"Download\">" + global.__ojobHttpBrowseArrow("down") + "</a></span></span></span>\n\n"
           content += "<pre><code class=\"language-" + escapeText(obj.type) + "\">" + ow.format.escapeHTML(isMap(obj.data) ? stringify(obj.data) : String(obj.data)) + "</code></pre>\n\n"
 
           if (isDef(options.footer)) {
@@ -643,8 +628,10 @@ code:
     }
 
     // Load JSON in the browser while keeping the server on the streaming path.
-    exports.previewBackArrow = '<button type="button" onclick="history.back()" aria-label="Back" title="Back" ' +
-      'style="float:right;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 1em">&larr;</button>'
+    Object.defineProperty(exports, "previewBackArrow", {
+      enumerable: true,
+      get: () => global.__ojobHttpPreviewBackArrow
+    })
 
     exports.jsonViewURL = function(request, view) {
       var params = request.params || {}
@@ -1646,22 +1633,7 @@ jobs:
           }
           var _prev = _page > 1 ? pageURL(_page - 1) : __
           var _next = (_page < _totalPages) ? pageURL(_page + 1) : __
-          var _pager = "<div style=\"margin: 0.25em 0 0.75em 0; padding-left: 0.5em; font-family: -apple-system, Calibri, DejaVu Sans;\">"
-          if (isDef(_prev) && String(_prev).length > 0) {
-            _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _prev + "\">&#8592;</a>"
-          } else {
-            _pager += "<span style=\"color: #a0a0a0;\">&#8592;</span>"
-          }
-          _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
-          _pager += "<span style=\"color: #a0a0a0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; font-size: 0.95em;\">" + _page + " / " + _totalPages + "</span>"
-          _pager += "<span style=\"color: #a0a0a0; padding: 0 0.6em;\">|</span>"
-          if (isDef(_next) && String(_next).length > 0) {
-            _pager += "<a style=\"text-decoration: none; font-weight: 600; color: #a0a0a0;\" onmouseover=\"this.style.color='#707070'\" onmouseout=\"this.style.color='#a0a0a0'\" href=\"" + _next + "\">&#8594;</a>"
-          } else {
-            _pager += "<span style=\"color: #a0a0a0;\">&#8594;</span>"
-          }
-          _pager += "</div>\n"
-          content += _pager
+          content += global.__ojobHttpBrowsePager(_page, _totalPages, _prev, _next)
           }
         }
 
@@ -1719,7 +1691,7 @@ jobs:
             content += "|\n"
 
             if (puri != "/" && puri != "") {
-              content += "| <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8598;</span> | __[..](<../>)__ | | |\n"
+              content += "| " + global.__ojobHttpBrowseArrow("parent", true) + " | __[..](<../>)__ | | |\n"
             }
 
             var rows = lst.sortInfo || lst.queryInfo && lst.queryInfo.applied ? lst.list : $from(lst.list).sort("-isDirectory", "values." + lst.key).select()
@@ -1728,11 +1700,11 @@ jobs:
                 if (r.imageDigest && /^sha256:[a-f0-9]{64}$/.test(r.imageDigest)) {
                     content += " |"
                 } else if (r.isDirectory) {
-                    content += " <span style=\"color: #a0a0a0; font-family: -apple-system, Calibri, DejaVu Sans;\">&#8600;</span> |"
+                    content += " " + global.__ojobHttpBrowseArrow("directory", true) + " |"
                 } else if (options.noRaw === true) {
                     content += " |"
                 } else {
-                    content += " <span style=\"font-family: -apple-system, Calibri, DejaVu Sans;\"><a href=\"" + fileLink(r.values[lst.key]) + "?raw=true\" download=\"" + escapeText(r.values[lst.key]) + "\">&darr;</a></span> |"
+                    content += " <a href=\"" + fileLink(r.values[lst.key]) + "?raw=true\" download=\"" + escapeText(r.values[lst.key]) + "\" aria-label=\"Download\">" + global.__ojobHttpBrowseArrow("down") + "</a> |"
                 }
                 lst.fields.forEach((f, i) => {
                   if (r.isDirectory) {
@@ -2174,7 +2146,7 @@ jobs:
           }
         } else {
           const filename = fileLink(puri.substring(puri.lastIndexOf("/") + 1))
-          const download = `<button type="button" onclick="downloadText(decodeURIComponent('${filename}'))" aria-label="Download" title="Download" style="float:right;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 1em">&darr;</button>`
+          const download = `<button type="button" onclick="downloadText(decodeURIComponent('${filename}'))" aria-label="Download" title="Download" style="float:right;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 1em">${global.__ojobHttpBrowseArrow("down")}</button>`
           content = heading + download + breadcrumb(puri) + "\n\n"
           // Protect already escaped source from Showdown's standalone pre/code pass.
           if (obj.sourceOnly) content += '<p><a href="' + support.jsonViewURL(request, "json") + '">Render</a></p>' + "\n\n"

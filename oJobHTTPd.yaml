@@ -66,8 +66,45 @@ jobs:
       }
       global.__ojobHttpEscapeText = value => String(value).replace(/[&<>"'`\\\[\]()*_{}|#!]/g, c => "&#" + c.charCodeAt(0) + ";")
       global.__ojobHttpFileLink = value => encodeURIComponent(String(value)).replace(/[!'()*]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase())
+      // Draw font-independent arrows in the surrounding text or link color.
+      global.__ojobHttpBrowseArrow = (() => {
+        const paths = {
+          left: "M20 12H4m6-6-6 6 6 6",
+          right: "M4 12h16m-6-6 6 6-6 6",
+          down: "M12 4v16m-6-6 6 6 6-6",
+          parent: "M18 18 6 6m0 9V6h9",
+          directory: "M6 6l12 12m0-9v9H9"
+        }
+        return (direction, muted) => '<svg class="browse-arrow" viewBox="0 0 24 24" width="16" height="16" fill="none" ' +
+          'stroke="currentColor" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round" ' +
+          'aria-hidden="true" focusable="false" style="width:1em;height:1em;vertical-align:-.125em' +
+          (muted ? ';opacity:.45' : '') + '"><path d="' + paths[direction] + '"/></svg>'
+      })()
+
+      // Keep the pager muted in either theme and label its icon-only links.
+      global.__ojobHttpBrowsePager = (page, totalPages, previous, next) => {
+        const control = (url, direction, label) => {
+          const arrow = global.__ojobHttpBrowseArrow(direction)
+          return isDef(url) && String(url).length > 0
+            ? '<a href="' + url + '" aria-label="' + label + '">' + arrow + '</a>'
+            : '<span>' + arrow + '</span>'
+        }
+        const separator = '<span class="browse-page-divider" aria-hidden="true">|</span>'
+        return '<style>.browse-pager{margin:.25em 0 .75em;padding-left:.5em}' +
+          '.markdown-body-dark .browse-pager{--browse-pager-muted:.65;--browse-pager-link:.72}' +
+          '.browse-pager > span,.browse-pager > a{color:inherit;opacity:var(--browse-pager-muted,.45)}' +
+          '.browse-pager > a{opacity:var(--browse-pager-link,.55)}' +
+          '.browse-pager > a:hover,.browse-pager > a:focus-visible{opacity:.8;text-decoration:none}' +
+          '.browse-page-divider{padding:0 .6em}' +
+          '.browse-page-count{font: .95em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}</style>' +
+          '<div class="browse-pager" role="navigation" aria-label="Pagination">' +
+          control(previous, "left", "Previous page") + separator +
+          '<span class="browse-page-count">' + page + ' / ' + totalPages + '</span>' + separator +
+          control(next, "right", "Next page") + '</div>\n'
+      }
+
       global.__ojobHttpPreviewBackArrow = '<button type="button" onclick="history.back()" aria-label="Back" title="Back" ' +
-        'style="float:right;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 1em">&larr;</button>'
+        'style="float:right;border:0;background:none;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 1em">' + global.__ojobHttpBrowseArrow("left") + '</button>'
       global.__ojobHttpPreviewDocument = (server, arrow) => ({
         getPort: () => server.getPort(),
         reply: (data, type, status, headers) => server.reply(data, type, status, headers),
@@ -655,7 +692,7 @@ jobs:
               content += "|   | Filename | Last modified | Size | Size in bytes |\n"
               content += "|---|----------|:-------------:|-----:|--------------:|\n"
               if (puri != "/" && puri != "") 
-                content += "| <span style=\"color: #a0a0a0;\">&#8598;</span> | __[..](<../>)__ | | |\n"
+                content += "| " + global.__ojobHttpBrowseArrow("parent", true) + " | __[..](<../>)__ | | |\n"
 
               var theList = $from(io.listFiles(furi).files.filter(f => {
                 try { global.__ojobHttpResolveFile(path, puri + f.filename, restrict); return true }
@@ -697,7 +734,7 @@ jobs:
             var fnLang = lang => {
                ow.loadTemplate()
                var _displayURI = puri
-               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs path route incURI false}}}", { path: _displayURI, route: uri, incURI: incURI }) + backArrow + "<span onclick=\"downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\">&darr;</a></span>\n\n<div><pre><code class=\"language-" + lang + "\">" + ow.format.escapeHTML(io.readFileString(furi)) + "</code></pre></div>\n\n" + _downloadcode, true, true), "text/html", 200)
+               return server.reply( ow.template.parseMD2HTML("## " + $t("{{{ojh-buildBreadcrumbs path route incURI false}}}", { path: _displayURI, route: uri, incURI: incURI }) + backArrow + "<span onclick=\"downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" onmouseout=\"this.style.textDecoration='none';\" onmouseover=\"this.style.textDecoration='underline';\" style=\"padding-left: 1em; float: right; text-decoration: none; cursor: pointer;\"><a href=\"javascript:downloadText(decodeURIComponent('" + global.__ojobHttpFileLink(puri.replace(/\/?$/,"").substr(puri.replace(/\/?$/,"").lastIndexOf("/")+1)) + "'))\" aria-label=\"Download\">" + global.__ojobHttpBrowseArrow("down") + "</a></span>\n\n<div><pre><code class=\"language-" + lang + "\">" + ow.format.escapeHTML(io.readFileString(furi)) + "</code></pre></div>\n\n" + _downloadcode, true, true), "text/html", 200)
             }
             switch(ext) {
             case "md"  : return fn()
@@ -796,7 +833,7 @@ jobs:
       args.logo = prefixURL(_$(args.logo, "logo").isString().default("/fonts/openaf_small.png"))
 
       var temph = _$(args.templateHead).isString().default("## {{{ojh-buildBreadcrumbs puri '" + args.uri + "' " + args.incURI + " true}}}<img style=\"padding-left: 1em;\" align=\"right\" src=\"" + args.logo + "\">\n")
-      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}<span style=\"color: #a0a0a0;\">&#8600;</span>{{else}}<a href=\"{{ojh-fileLink filename}}?raw=true\" download=\"{{ojh-fileLink filename}}\">&darr;</a>{{/if}} | {{#if isDirectory}}__[{{ojh-fileText filename}}](<{{ojh-fileLink filename}}/>)__ | {{fLastModified}} | | {{else}} [{{ojh-fileText filename}}](<{{ojh-fileLink filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
+      var templ = _$(args.template).isString().default("{{#each this}}| {{#if isDirectory}}" + global.__ojobHttpBrowseArrow("directory", true) + "{{else}}<a href=\"{{ojh-fileLink filename}}?raw=true\" download=\"{{ojh-fileLink filename}}\" aria-label=\"Download\">" + global.__ojobHttpBrowseArrow("down") + "</a>{{/if}} | {{#if isDirectory}}__[{{ojh-fileText filename}}](<{{ojh-fileLink filename}}/>)__ | {{fLastModified}} | | {{else}} [{{ojh-fileText filename}}](<{{ojh-fileLink filename}}>) | {{fLastModified}} {{/if}} | {{fSize}} | {{size}} | \n{{/each}}")
 
       global.__MHTTPD = _$(global.__MHTTPD).isMap().default({})
       global.__MHTTPD[String(args.port) + args.uri] = {

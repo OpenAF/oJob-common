@@ -60,6 +60,11 @@ try {
   equal(html.indexOf('&#9660;') >= 0 || html.indexOf('▼') >= 0, true)
   equal(html.indexOf('q=a%26b&amp;size=1&amp;sort=Filename&amp;order=asc&amp;page=1') >= 0, true)
   equal(html.indexOf('href="?q=a%26b&amp;size=1&amp;page=1"') >= 0, true)
+  var pager = html.match(/<div class="browse-pager"[^>]*>(.*?)<\/div>/)[1]
+  equal((pager.match(/<svg class="browse-arrow"/g) || []).length, 2)
+  equal(/aria-label="Next page"><svg class="browse-arrow"/.test(pager), true)
+  equal(/aria-label="Previous page"/.test(pager), false)
+  equal(/href="b\.json\?raw=true" download="b\.json" aria-label="Download"><svg class="browse-arrow"[^>]*stroke="currentColor"/.test(html), true)
   equal(html.indexOf('<select name="sort">') < 0, true)
   equal(html.indexOf('name="sort" value="Filename"') >= 0, true)
   equal(html.indexOf('/js/mdtablesort.js') < 0, true)
