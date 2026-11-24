@@ -19,7 +19,7 @@ const server = {
   replyOKHTML: data => ({ data: String(data), status: 200 }),
   replyStream: (stream, type, status, headers) => type && type.startsWith("image/") ?
     { base64: String(java.util.Base64.getEncoder().encodeToString(stream.readAllBytes())), type, headers } :
-    { data: String(af.fromInputStream2String(stream)), type, status: 200 },
+    { data: String(af.fromInputStream2String(stream)), type, status: 200, headers },
   reply: (data, mime, status) => ({ data: String(data), status: status })
 }
 var checks = 0
@@ -86,6 +86,50 @@ try {
   check(serveMarkdown("sample.md").data.includes("'quoted text'"), "Browse renders Markdown with an empty preview format map")
   markdownOptions.preview = {}
   checkBack(servePreview(), "Explicit Markdown preview")
+
+  io.mkdir(root + "/nested")
+  io.writeFileString(root + "/nested/a #.JSON", '{"value":1}')
+  io.writeFileString(root + "/report.json", '{"value":2}')
+  run(generic, { port:port, uri:"/actions", path:root, templates:{}, fns:{},
+    options:{browse:true, web:{enabled:true, fileActions:{
+      json:"preview", md:"inline", "name:report.json":"download"
+    }}, query:{enabled:true}, preview:{maxBytes:8}} })
+  const actions = global.__GBHTTPD[String(port) + "/actions"]
+  const serveAction = (file, params, header) => route(generic)({uri:"/actions/"+file,
+    params:params||{}, header:header||{}, method:"GET"}, server, port, "/actions")
+  const listing = serveAction("").data
+  check(listing.includes('href="sample.json?action=preview"'), "Listing selects the JSON viewer")
+  check(listing.includes('href="sample.md?action=inline"'), "Listing selects the inline action")
+  check(listing.includes('<a href="report.json?raw=true">report.json</a>'), "Exact name overrides extension")
+  check(listing.includes('href="sample.html"') && listing.includes('href="nested/"'), "Unmatched files and directories use ordinary links")
+  const fragment = serveAction("", {q:".json"}, {"x-openaf-browse-fragment":"1"})
+  check(fragment.data.includes('href="nested/a%20%23.JSON?action=preview"'), "Live search escapes nested uppercase JSON results")
+  check(serveAction("", {q:".json"}).data.includes('href="nested/a%20%23.JSON?action=preview"'), "Full search uses the same links")
+  check(serveAction("nested/a #.JSON", {action:"preview"}).data.includes('data-json-render'), "Preview opens the viewer")
+  check(serveAction("nested/a #.JSON", {action:"preview", view:"json-data"}).data === '{"value":1}', "Viewer fetches original JSON")
+  check(serveAction("nested/a #.JSON", {action:"preview", view:"source"}).data.includes('action=preview&amp;view=json'),
+    "Source keeps the preview action when linking back to the viewer")
+  check(serveAction("sample.md", {action:"inline"}).data === markdown, "Inline bypasses Markdown rendering")
+  check(serveAction("sample.md").data.includes("Preview heading") && serveAction("sample.md").data !== markdown,
+    "The plain object URL keeps Markdown rendering")
+  check(serveAction("sample.md", {action:"preview"}).data.includes("Preview truncated"), "Explicit preview uses the preview limit")
+  check(serveAction("sample.json", {action:"inline"}).data.includes('data-json-render'), "Inline requires a matching rule")
+  const download = serveAction("report.json", {raw:"true"})
+  check(download.data === '{"value":2}' && download.headers["Content-Disposition"].startsWith("attachment;"), "Download streams an attachment")
+  check(serveAction("../report.json", {action:"preview"}).status === 403, "Preview preserves path validation")
+  actions.noRaw = true
+  check(serveAction("").data.includes('<a href="report.json">report.json</a>') && !serveAction("").data.includes("?raw=true"),
+    "Disabling raw overrides the download rule and hides download arrows")
+  check(serveAction("report.json", {raw:"true"}).data.includes("data-json-render"), "Disabling raw also applies to direct requests")
+  actions.web.enabled = false
+  check(serveAction("").data.includes('<a href="sample.json">sample.json</a>'), "Disabled web serving ignores file actions")
+  try {
+    run(generic, { port:port, uri:"/bad-actions", path:root, templates:{}, fns:{},
+      options:{web:{enabled:true, fileActions:{json:"invalid"}}} })
+    check(false, "Reject unknown actions")
+  } catch (e) {
+    check(e.httpStatus === 400 && String(e.message).includes("web.fileActions"), "Reject unknown actions")
+  }
 
   const oldOptions = {old:true, preview:{maxBytes:0, formats:{}}, query:{enabled:true, pageSize:0},
     operations:{enabled:true}, prefetch:true, fullWidth:true, web:{enabled:true}}

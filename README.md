@@ -1248,6 +1248,35 @@ with more than 200 entries. Large JSON starts collapsed and the expandable
 view requires updated OpenAF browser assets. For files above 16 MiB or invalid
 JSON, use **View source** for a bounded preview or **Download raw** for the entire file.
 Custom provider callbacks remain responsible for their own preview handling.
+
+With web serving enabled, use `options.web.fileActions` to choose what happens
+when a file name is clicked in a generic Browse listing or search result:
+
+```yaml
+options:
+  web:
+    enabled: true
+    fileActions:
+      json: preview
+      js: inline
+      zip: download
+      "name:report.json": download
+```
+
+An exact, case-sensitive `name:` rule takes precedence over an extension rule.
+Extension keys are lowercase without the dot and match filenames regardless of
+extension case. Unmatched files keep their usual links. `preview` opens the
+configured viewer or the provider's default, `inline` serves the original bytes
+with their MIME type, and `download` requests the original bytes as an
+attachment. With `noRaw: true`, download rules use the usual file link.
+Plain object URLs and Browse API requests keep their existing behavior.
+
+This option applies to generic filesystem browsing and providers that use the
+shared renderer, such as `S3Browse`. Custom providers are responsible for the
+object response. The generic route sets `request._browsePreview` for
+`action=preview` and `request._browseInline` for matching `action=inline`
+requests. Legacy browsing (`options.old: true`) and standalone
+`httpdS3Browse` do not apply these rules.
 The coordinated S3/ECR/CodeArtifact jobs use the same contract. Enhanced options
 require the updated oJob-common definitions; legacy provider configuration still
 works with the previous definitions. The `HTTP Browser` job checks the effective

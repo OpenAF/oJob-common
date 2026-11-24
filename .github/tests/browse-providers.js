@@ -137,6 +137,20 @@ try {
   equal(inline.streamType.split(';')[0],'text/html')
   equal(isUnDef(inline.streamHeaders['Content-Disposition']),true)
   equal(String(af.fromInputStream2String(inline.stream)),site)
+  var configuredSite = run(s3,'HTTP Browse - s3',{url:'http://example.invalid',bucket:'b',port:18,uri:'/configured',path:'',
+    options:{browse:true,web:{enabled:true,fileActions:{md:'inline',json:'preview'}}}})
+  var configuredOptions = options(configuredSite)
+  var markdownRequest = {uri:'/configured/file.md',params:{}}
+  equal(configuredSite.fns.getObj(markdownRequest,configuredOptions).type,'md')
+  var inlineMarkdown = configuredSite.fns.getObj(Object.assign({},markdownRequest,{_browseInline:true}),configuredOptions)
+  equal(String(af.fromInputStream2String(inlineMarkdown.stream)),'# Heading\n\n**Formatted**\n\n<form>Removed</form>')
+  var previewRequest = {uri:'/configured/file.json',params:{action:'preview'}}
+  equal(configuredSite.fns.getObj(previewRequest,configuredOptions).jsonViewer,true)
+  var originalJSON = configuredSite.fns.getObj({uri:previewRequest.uri,params:{}},configuredOptions)
+  equal(String(af.fromInputStream2String(originalJSON.stream)),'{"complete":true}')
+  var downloadJSON = configuredSite.fns.getObj({uri:previewRequest.uri,params:{raw:'true'}},configuredOptions)
+  equal(downloadJSON.streamHeaders['Content-Disposition'].startsWith('attachment'),true)
+  equal(String(af.fromInputStream2String(downloadJSON.stream)),'{"complete":true}')
   var opens = opened.length
   var jsonViewer = oldS3._fns.getObj({uri:'/legacys3/file.json',params:{}},oldS3)
   equal(jsonViewer.jsonViewer,true)

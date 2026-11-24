@@ -392,6 +392,7 @@ code:
       query: 1,
       previewFormats: 1,
       boundedPreview: 1,
+      fileActions: 1,
       operations: 1,
       prefetch: 1
     }
@@ -412,6 +413,15 @@ code:
       if (options.preview && isMap(options.preview.formats)) required.push("previewFormats")
       if (options.preview && isDef(options.preview.maxBytes)) required.push("boundedPreview")
       if (options.operations && options.operations.enabled) required.push("operations")
+      var fileActions = options.web ? options.web.fileActions : __
+      if (isDef(fileActions)) {
+        required.push("fileActions")
+        if (!isMap(fileActions)) exports.error(400, "Invalid web.fileActions")
+        Object.keys(fileActions).forEach(function(key) {
+          if (!/^(name:.+|[a-z0-9]+)$/.test(key) || ["preview", "inline", "download"].indexOf(fileActions[key]) < 0)
+            exports.error(400, "Invalid web.fileActions rule: " + key)
+        })
+      }
       required.forEach(function(key) {
         if (!capabilities || capabilities[key] !== 1) throw new Error("Browse capability " + key + " requires an updated browse implementation")
       })
@@ -593,14 +603,23 @@ code:
       })
     }
 
+    // Match exact filenames before extensions, without reading inherited keys.
+    var fileRule = function(name, rules) {
+      var ext = name.indexOf(".") < 0 ? "" : name.substring(name.lastIndexOf(".") + 1).toLowerCase()
+      var own = key => Object.prototype.hasOwnProperty.call(rules, key)
+      return own("name:" + name) ? rules["name:" + name] : (own(ext) ? rules[ext] : __)
+    }
+
+    exports.fileAction = function(path, options) {
+      var web = options.web
+      if (web && web.enabled === true && isMap(web.fileActions)) {
+        return fileRule(path.substring(path.lastIndexOf("/") + 1), web.fileActions)
+      }
+    }
+
     // Resolve preview formats
     exports.format = function(name, preview, defaults) {
-      var formats = isMap(preview.formats) ? preview.formats : defaults
-      var ext = name.indexOf(".") < 0 ? "" : name.substring(name.lastIndexOf(".") + 1).toLowerCase()
-      var own = function(k) {
-        return Object.prototype.hasOwnProperty.call(formats, k)
-      }
-      var type = own("name:" + name) ? formats["name:" + name] : (own(ext) ? formats[ext] : __)
+      var type = fileRule(name, isMap(preview.formats) ? preview.formats : defaults)
       if (isDef(type) && (!isString(type) || !/^[a-z][a-z0-9-]*$/.test(type))) exports.error(400, "Invalid preview format")
       return type
     }
@@ -1329,6 +1348,11 @@ jobs:
             if (isMap(_out)) return _out
         } else {
             if (_lst.isFile) {
+              if (request.params.raw != "true") {
+                if (request.params.action == "preview") request._browsePreview = true
+                if (request.params.action == "inline" &&
+                    require("ojob-browse-contract.js").fileAction(relative, _options) == "inline") request._browseInline = true
+              }
               var _obj = _options._fns.getObj(request, _options)
               return _options._fns.renderObj(_obj, server, request, _options)
             } else {
@@ -1359,6 +1383,7 @@ jobs:
 
       const escapeText = global.__ojobHttpEscapeText
       const fileLink = global.__ojobHttpFileLink
+      const browseContract = require("ojob-browse-contract.js")
       var defaultFilesystem = !isFunction(args.fns.getList) && !isFunction(args.fns.getObj)
 
       // Keep one short-lived root snapshot per browser.
@@ -1422,6 +1447,8 @@ jobs:
         var puri = global.__ojobHttpRelativePath(uri, options.parentURI)
         var file = global.__ojobHttpResolveFile(options.parentPath, puri)
 
+        if (!options._api && request._browseInline) return { file: file }
+
         // Preview settings affect HTML only; API object reads remain complete.
         if (!options._api && (request.params || {}).raw != "true") {
           if (options.browse === true && !request._browsePreview && /\.md$/i.test(file)) {
@@ -1449,7 +1476,12 @@ jobs:
         }
 
         if (request.params.raw == "true") {
-          return { stream: io.readFileStream(file) }
+          var stream = io.readFileStream(file)
+          if (!options._api && browseContract.fileAction(puri, options) == "download") {
+            return { stream: stream, streamType: ow.server.httpd.getMimeType(puri),
+              streamHeaders: { "Content-Disposition": "attachment; filename*=UTF-8''" + fileLink(puri.substring(puri.lastIndexOf("/") + 1)) } }
+          }
+          return { stream: stream }
         }
 
         var ext = String(puri).replace(/^.*\./, "")
@@ -1710,7 +1742,19 @@ jobs:
                   if (r.isDirectory) {
                       content += " " + (i == 0 ? "__[" + escapeText(r.values[f]) + "](<" + fileLink(r.values[lst.key]) + "/>)__" : escapeText(r.values[f])) + " |"
                   } else {
-                      content += " " + (i == 0 ? "[" + escapeText(r.values[f]) + "](<" + (/^sha256:[a-f0-9]{64}$/.test(r.imageDigest || "") ? "?image=" + encodeURIComponent(r.imageDigest) : fileLink(r.values[lst.key])) + ">)" : escapeText(r.values[f])) + " |"
+                      if (i > 0) {
+                        content += " " + escapeText(r.values[f]) + " |"
+                      } else {
+                        var target = fileLink(r.values[lst.key])
+                        if (/^sha256:[a-f0-9]{64}$/.test(r.imageDigest || "")) {
+                          target = "?image=" + encodeURIComponent(r.imageDigest)
+                        } else {
+                          var action = browseContract.fileAction(String(r.values[lst.key]), options)
+                          if (action == "preview" || action == "inline") target += "?action=" + action
+                          if (action == "download" && options.noRaw !== true) target += "?raw=true"
+                        }
+                        content += " [" + escapeText(r.values[f]) + "](<" + target + ">) |"
+                      }
                   }
                 })
                 content += "\n"
@@ -2196,8 +2240,9 @@ jobs:
       _options.parentURI  = args.uri
       _options.parentPath = args.path
       _options.port       = args.port
-      _options.capabilities = { contract: 1, query: 1, previewFormats: 1, boundedPreview: 1, operations: 1, prefetch: 1 }
-      if (_options.query && _options.query.enabled || _options.preview || _options.operations && _options.operations.enabled) require("ojob-browse-contract.js").check(_options, _options.capabilities)
+      _options.capabilities = Object.assign({}, browseContract.capabilities)
+      if (_options.query && _options.query.enabled || _options.preview || _options.operations && _options.operations.enabled ||
+          _options.web && isDef(_options.web.fileActions)) browseContract.check(_options, _options.capabilities)
 
       // Apply query processing once, before rendering or API serialization.
       // Keep a few short-lived path inventories so edits to a search reuse the same walk.
