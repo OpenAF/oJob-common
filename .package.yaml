@@ -71,7 +71,7 @@ files:
 - oJobs.yaml
 filesHash:
   LICENSE: 92170cdc034b2ff819323ff670d3b7266c8bffcd
-  README.md: 16cfb4767fdd3501aa3f003b9d791449fc8fff6c
+  README.md: 68da7deb723fda8ab22e947f70ac76176ddb178d
   oJobBasics.yaml: cbabe5043fcddbac9bf78770331cecb2c6ea7e55
   oJobBrowse.yaml: ea2b1d5c1a2bda1db608837ecd01baba7087af9c
   oJobCh.yaml: 405c0dd5d8fe4fa8ceb06e691af1e9f23791687e
@@ -83,7 +83,7 @@ filesHash:
   oJobHBS.yaml: ab15b0efd31f95ee770c77dace146035e0781661
   oJobHTTPd.yaml: b0faee8255c4d54d4f29a929b8fcfd9f7e79e65c
   oJobIO.yaml: 18891af0aad39057a19e4f41b15c44ac537c5958
-  oJobMCP.yaml: 95bcc1e8afaa8741914729cf59b05cae80ff1c07
+  oJobMCP.yaml: 5313f8673eb3995348e2daafc552559eb2fe226b
   oJobManager.yaml: 5ad9ecf276bbee8b6503d0e3b40b007f2724507d
   oJobNet.yaml: 4413085d38724249587f6a790d7e1952a4d9c138
   oJobOPack.yaml: 1c7938fed215545a9721c2251dd43e659858fca7
