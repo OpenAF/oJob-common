@@ -1100,6 +1100,63 @@ Starts a MCP stdio server to handle requests with execution of jobs.
 
 For both transports, `OJOB_MCP_TOOLS_INCLUDE` and `OJOB_MCP_TOOLS_EXCLUDE` are optional environment variables parsed as JSON/SLON arrays of exact, unprefixed `fns` keys. An unset or empty include list allows all tools; exclusions take precedence. For example, `OJOB_MCP_TOOLS_INCLUDE='["ping", "echo"]' OJOB_MCP_TOOLS_EXCLUDE='["echo"]' ojob my-mcp.yaml` exposes only `ping`. Tool prefixes affect only the MCP wire name, not filtering.
 
+### Skills over MCP
+
+Set `modern: true` and supply `skills` to publish Agent Skills over HTTP or
+stdio. Each skill has a `SKILL.md` with YAML frontmatter containing a name and
+description. Clients discover the manifest, then read instructions and supporting
+files by URI. OpenAF clients can use `$mcp({ ..., protocolVersion: "auto" })`
+and call `listSkills()`, `getSkill(uri)` and `readResource(uri)`.
+
+```yaml
+include:
+- oJobMCP.yaml
+
+ojob:
+  logToConsole: false
+
+todo:
+- (stdioMCP):
+    serverInfo:
+      name: team-skills
+  ((modern)): true
+  ((skills)):
+  - ./skills/review-deployment
+  - name: release-notes
+    files:
+      SKILL.md: |
+        ---
+        name: release-notes
+        description: Draft release notes from a change list.
+        ---
+        Group changes by their effect on users.
+  - s3:
+      connection:
+        url: https://s3.amazonaws.com
+        region: eu-west-1
+      bucket: team-automation
+      prefix: published/skills/
+```
+
+Relative directories resolve from the launch YAML. The directory name must match
+the skill name. For S3, install the S3 oPack and use
+`<prefix>/<skill-name>/SKILL.md`. An empty prefix selects the bucket root.
+The connection accepts the S3 oPack's `url`, `accessKey`, `secret`, `region`,
+`useversion1` and `ignorecertcheck` options. S3 needs permission to list the
+prefix and read its objects. At startup the server lists the prefix and hashes
+the files of each skill. It then fetches individual files on demand and verifies
+their hashes. Restart the server to publish changed objects.
+
+For a custom store, add an entry with `catalog` and `read`. Each can name an oJob
+that writes its output to `args.result` or be a JavaScript function that returns
+the output directly. `catalog` may also be a literal array. It describes skills
+with `name`, `frontmatter` and `files`. Each file entry has a relative `path`,
+byte `size`, `digest` in `sha256:<hex>` form, and an optional private `ref` such
+as an object version. The read provider receives `{ skill, path, ref? }` and
+returns UTF-8 text or `{ bytes, mimeType }`. Generated skills can use
+`files: dynamic` and return `null` for unknown relative paths. A manifest can
+include up to 512 files and 16 MiB per skill.
+
 ### Asynchronous tool audit webhooks
 
 HTTP (including streaming) and STDIO MCP support optional JSON HTTP POST notifications:

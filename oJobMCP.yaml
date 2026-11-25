@@ -7,6 +7,91 @@ include:
 
 jobs:
 # -------------------------
+- name    : Prepare MCP Skills
+  typeArgs:
+    noLog: true
+  exec    : | #js
+    if (!args.modern) throw new Error("Skills require modern MCP")
+    ow.loadServer()
+    var mcp = ow.server.mcp
+    if (!isFunction(mcp.createSkillCatalog)) throw new Error("This OpenAF version does not support MCP skills")
+    var clients = []
+    var closeClients = () => clients.splice(0).forEach(client => {
+      try { client.close() } catch (ignore) {}
+    })
+
+    // Adapt named oJobs to the same contract as JavaScript providers.
+    var invoke = (provider, input) => {
+      var output = $job(provider, input)
+      if (!isMap(output) || isDef(output._err) || !Object.prototype.hasOwnProperty.call(output, "result"))
+        throw new Error("MCP skill provider did not return args.result")
+      return output.result
+    }
+
+    // Discover S3 skills by their SKILL.md object and hash every included file once.
+    var s3Provider = config => {
+      if (!isMap(config) || !isMap(config.connection) || !isString(config.bucket) ||
+          config.bucket.trim() == "" || !isString(config.prefix)) throw new Error("Expected S3 connection, bucket and prefix")
+      var pack = getOPackPath("S3")
+      if (isUnDef(pack)) throw new Error("Install the S3 oPack to publish S3 skills")
+      if (isUnDef(global.S3)) load(pack + "/s3.js")
+      var connection = config.connection
+      var client = new S3(connection.url, connection.accessKey, connection.secret, connection.region,
+                          connection.useversion1, connection.ignorecertcheck)
+      clients.push(client)
+
+      var bucket = config.bucket, prefix = config.prefix === "" ? "" : config.prefix.replace(/\/+$/, "") + "/"
+      var objects = client.listObjects(bucket, prefix, false, true)
+      var groups = Object.create(null), entries = Object.create(null)
+      objects.forEach(object => {
+        if (!object.isFile || !object.filename.startsWith(prefix)) return
+        var relative = object.filename.substring(prefix.length)
+        var separator = relative.indexOf("/")
+        if (separator <= 0) return
+        var name = relative.substring(0, separator), path = relative.substring(separator + 1)
+        if (isUnDef(groups[name])) groups[name] = []
+        groups[name].push({ path: path, key: object.filename })
+        if (path === "SKILL.md") entries[name] = true
+      })
+
+      var read = (key, limit) => mcp.readSkillBytes(client.getObjectStream(bucket, key), limit)
+      var catalog = Object.keys(entries).sort().map(name => {
+        var group = groups[name], frontmatter, remaining = mcp.skillFileLimit
+        if (group.length > 512) throw new Error("S3 skill exceeds the file limit")
+        var files = group.map(file => {
+          var bytes = read(file.key, remaining)
+          remaining -= bytes.length
+          if (file.path === "SKILL.md") frontmatter = mcp.parseSkillFrontmatter(bytes, name)
+          return { path: file.path, ref: { key: file.key, size: bytes.length }, size: bytes.length, digest: "sha256:" + sha256(bytes) }
+        })
+        return { name: name, frontmatter: frontmatter, files: files }
+      })
+      return { catalog: catalog, read: request => ({ bytes: read(request.ref.key, request.ref.size) }) }
+    }
+
+    // Publish only a fully validated catalog. Close owned clients on failure or shutdown.
+    try {
+      var sources = args.skills.map(source => {
+        if (!isMap(source)) return source
+        if (isDef(source.s3)) return s3Provider(source.s3)
+        if (isUnDef(source.catalog)) return source
+        return {
+          catalog: isString(source.catalog) ? () => invoke(source.catalog, {}) : source.catalog,
+          read: isString(source.read) ? request => invoke(source.read, request) : source.read
+        }
+      })
+      var base = new java.io.File(String(ow.oJob.__file)).getAbsoluteFile().getParent()
+      args.result = mcp.createSkillCatalog(sources, String(base))
+      if (clients.length > 0) {
+        args.result.close = closeClients
+        addOnOpenAFShutdown(closeClients)
+      }
+    } catch (e) {
+      closeClients()
+      throw e
+    }
+
+# -------------------------
 - name    : HTTP MCP Server
   typeArgs:
     noLog   : false 
@@ -34,6 +119,7 @@ jobs:
         authapicachemax: authapicachemax
         audit          : audit
         modern         : modern
+        skills         : skills
   help    :
     text: Starts a MCP server to handle requests with execution of jobs.
     expects:
@@ -77,6 +163,8 @@ jobs:
       desc: (Boolean) If true (or env OJOB_MCP_AUDIT), logs every tool call (tool name, arguments, User-Agent and, when available, client IP) via OpenAF's log() function. The IP is best-effort, read from the X-Forwarded-For/X-Real-IP request headers, since OpenAF's HTTP server does not expose the raw socket address -- it is only populated when a reverse proxy sets one of those headers. Default false (no auditing).
     - name: modern
       desc: (Boolean) If true (or env OJOB_MCP_MODERN), also serves the 2026-07-28 stateless/per-request MCP protocol era (server/discover, per-request protocol version negotiation, resultType/ttlMs/cacheScope on results) side-by-side with the legacy initialize-handshake era, for any request that declares a modern protocol version. Default is false, so previous (legacy-only) behavior is unchanged unless explicitly opted in.
+    - name: skills
+      desc: (Array) Agent Skill directories, inline skills, custom providers or S3 sources. Requires modern MCP.
   check   :
     in:
       description  : isMap.default(__)
@@ -100,6 +188,7 @@ jobs:
       authapicachemax: default(__)
       audit          : default(__)
       modern         : default(__)
+      skills         : isArray.default(__)
   deps    :
   - HTTP Start Server
   exec    : | #js
@@ -164,6 +253,16 @@ jobs:
     // Opt-in support for the 2026-07-28 stateless/per-request MCP protocol era, side-by-side with the legacy
     // initialize-handshake era above (which stays the default and is left fully unchanged when modern is false).
     args.modern = toBoolean(_$(args.modern).default(getEnv("OJOB_MCP_MODERN") || "false"))
+
+    var _skillCatalog
+    if (isDef(args.skills) && args.skills.length > 0) {
+      var _preparedSkills = $job("Prepare MCP Skills", { modern: args.modern, skills: args.skills })
+      if (!isMap(_preparedSkills) || !isMap(_preparedSkills.result))
+        throw new Error("Could not prepare MCP skills")
+      _skillCatalog = _preparedSkills.result
+    }
+
+    if (isDef(_skillCatalog)) args.description = ow.server.mcp.withSkills(args.description, _skillCatalog)
 
     // Optional bearer-token authentication for this HTTP MCP endpoint (opt-in; fails open when unconfigured)
     var _authToken     = _$(args.authtoken).default(getEnv("OJOB_MCP_AUTH_TOKEN"))
@@ -579,6 +678,7 @@ jobs:
               "prompts/list": params => ({})
           }
           if (args.modern) _rpcFns["server/discover"] = params => ow.server.mcp.discoverResult(args.description)
+          if (isDef(_skillCatalog)) Object.assign(_rpcFns, _skillCatalog.methods)
 
           // Process the JSON-RPC request
           var _rpcRes = ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) }, { modern: args.modern, serverInfo: args.description.serverInfo })
@@ -753,6 +853,7 @@ jobs:
             "prompts/list": params => ({})
         }
         if (args.modern) _rpcFns["server/discover"] = params => ow.server.mcp.discoverResult(args.description)
+        if (isDef(_skillCatalog)) Object.assign(_rpcFns, _skillCatalog.methods)
 
         return ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) }, { modern: args.modern, serverInfo: args.description.serverInfo })
       }
@@ -815,6 +916,7 @@ jobs:
         fns        : fns
         audit      : audit
         modern     : modern
+        skills     : skills
   help    :
     text: Starts a MCP stdio to handle requests with execution of jobs.
     expects:
@@ -832,6 +934,8 @@ jobs:
       desc: (Boolean) If true (or env OJOB_MCP_AUDIT), logs every tool call (tool name and arguments) via OpenAF's log() function. Default false (no auditing).
     - name: modern
       desc: (Boolean) If true (or env OJOB_MCP_MODERN), also serves the 2026-07-28 stateless/per-request MCP protocol era side-by-side with the legacy initialize-handshake era. Default is false, so previous (legacy-only) behavior is unchanged unless explicitly opted in.
+    - name: skills
+      desc: (Array) Agent Skill directories, inline skills, custom providers or S3 sources. Requires modern MCP.
   check   :
     in:
       description: isMap.default(__)
@@ -842,6 +946,7 @@ jobs:
       fns        : isMap.default({})
       audit      : default(__)
       modern     : default(__)
+      skills     : isArray.default(__)
   exec    : | #js
     // Copy JSON tool data without invoking prototype setters or deep-merging it.
     var _toolArguments = value => {
@@ -898,6 +1003,14 @@ jobs:
     // Opt-in support for the 2026-07-28 stateless/per-request MCP protocol era, side-by-side with the legacy
     // initialize-handshake era above (which stays the default and is left fully unchanged when modern is false).
     args.modern = toBoolean(_$(args.modern).default(getEnv("OJOB_MCP_MODERN") || "false"))
+
+    var _skillCatalog
+    if (isDef(args.skills) && args.skills.length > 0) {
+      var _preparedSkills = $job("Prepare MCP Skills", { modern: args.modern, skills: args.skills })
+      if (!isMap(_preparedSkills) || !isMap(_preparedSkills.result))
+        throw new Error("Could not prepare MCP skills")
+      _skillCatalog = _preparedSkills.result
+    }
 
     var _readToolsEnv = envName => isDef(getEnv(envName)) ? af.fromJSSLON('{"tools":' + getEnv(envName) + '}').tools : []
     var _toolsInclude = _readToolsEnv("OJOB_MCP_TOOLS_INCLUDE")
@@ -1107,14 +1220,16 @@ jobs:
       }
     })
 
-    ow.server.mcpStdio(args.description, Object.keys(args.fns).filter(_isToolEnabled).map(f => _toToolMeta(f)),
-      fs,
-      (type, msg) => {
-      if (args.debug) {
-        io.writeLineNDJSON(args.debug, { type: type, msg: msg })
-      }
-    },
-    { modern: args.modern })
+    try {
+      ow.server.mcpStdio(args.description, Object.keys(args.fns).filter(_isToolEnabled).map(f => _toToolMeta(f)),
+        fs,
+        (type, msg) => {
+          if (args.debug) io.writeLineNDJSON(args.debug, { type: type, msg: msg })
+        },
+        { modern: args.modern, skillCatalog: _skillCatalog })
+    } finally {
+      if (isDef(_skillCatalog) && isFunction(_skillCatalog.close)) _skillCatalog.close()
+    }
 
 
 # - name: ping
