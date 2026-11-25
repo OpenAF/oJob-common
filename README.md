@@ -1157,6 +1157,119 @@ returns UTF-8 text or `{ bytes, mimeType }`. Generated skills can use
 `files: dynamic` and return `null` for unknown relative paths. A manifest can
 include up to 512 files and 16 MiB per skill.
 
+### MCP Tasks and form elicitation
+
+For HTTP or stdio, set `modern: true`, supply a private `taskStore` file, and
+add a `workflows` entry for each tool that needs asynchronous work or a form.
+Names in `workflows` match the unprefixed names in `fns`. The file path is
+relative to the launch YAML. Use a separate file for each endpoint and restrict
+access to the account running OpenAF. On POSIX systems its mode must be `0600`.
+
+This example exposes the same approval flow as an inline call and as an MCP
+task. The third tool demonstrates the external callback contract with a
+simulated service.
+
+```yaml
+include:
+- oJobMCP.yaml
+
+ojob:
+  logToConsole: false
+
+todo:
+- (stdioMCP):
+    serverInfo:
+      name: workflow-example
+  ((modern)): true
+  ((taskStore)): workflow-example.mv
+  ((fns)):
+    review: Review
+    review-task: Review
+    external-task: External Status
+  ((workflows)):
+    review: { mode: inline, elicitation: true, resume: Complete Review }
+    review-task: { mode: managed, elicitation: true, resume: Complete Review }
+    external-task:
+      mode: external
+      start: External Submit
+      status: External Status
+
+jobs:
+- name: Review
+  exec: |
+    args.mcpResult = {
+      status: "input_required",
+      state: { item: args.item || "example" },
+      form: {
+        message: "Approve the review?",
+        requestedSchema: {
+          type: "object", properties: { approve: { type: "boolean" } },
+          required: ["approve"]
+        }
+      }
+    }
+
+- name: Complete Review
+  exec: |
+    var answer = Object.values(args.mcp.inputResponses)[0]
+    args.text = answer.action === "accept" && answer.content.approve
+      ? "Approved " + args.mcp.state.item
+      : "Review skipped"
+
+- name: External Submit
+  exec: |
+    // Replace this with submission to your service. Use taskId for correlation.
+    args.mcpResult = { ref: "example-" + args.mcp.taskId }
+
+- name: External Status
+  exec: |
+    args.mcpResult = {
+      status: "completed",
+      result: { content: [{ type: "text", text: "Finished " + args.mcp.ref }] }
+    }
+```
+
+- Inline workflows return an elicitation form and resume when the client
+  repeats the original call with its answers and the server-issued state
+  token. Managed tasks use `tasks/update` to resume a paused job. When
+  `resume` is omitted, inline and managed workflows invoke the original
+  job again with the validated answers. Author any action that requires
+  approval in the resume step.
+- Managed steps receive `args.mcp.taskId`, `progress(message)`, and
+  `isCancelled()`. Check for cancellation before irreversible steps.
+  Form answers arrive as keyed `args.mcp.inputResponses` with actions
+  `accept`, `decline`, or `cancel`. The form and stored state can contain
+  application data. Use a separate credential flow for passwords, tokens,
+  and payment credentials.
+- For external tasks, `status` can return `working` with a `statusMessage`,
+  `input_required` with a form and state, `completed` with a tool result,
+  `failed` with a JSON-RPC error, or `cancelled`. A configured `resume` job
+  receives the external ref and validated answers. An optional `cancel` job
+  receives the ref. Give external requests their own I/O timeouts. The server
+  marks callbacks overdue after 30 seconds and retains their worker slots
+  until they return.
+- The server has four worker slots, a 64-entry queue, and a one-second
+  polling hint. Tasks expire after one hour, with a new one-hour window
+  for terminal results. On restart, OpenAF reattaches to external jobs with
+  saved refs and recovers queued work and pending forms. An interrupted
+  step with a durable execution claim is failed. Use the MCP task ID when
+  reconciling external submissions that may have reached their service.
+- To support clients without Tasks, explicitly set `fallback: sync` on a
+  task-enabled tool. This calls its `fns` job through the ordinary synchronous
+  tool path. Select fallback only for jobs that can complete in that path.
+- HTTP workflows require `authapiurl`. The validator must return a successful
+  status and an `X-OJob-MCP-Principal` response header. Use a stable identity
+  per caller and return it for every credential that represents that caller.
+  Clients can use a rotated credential to resume a task owned by that
+  principal. The validator response supplies the identity.
+
+OpenAF clients opt in with `$mcp({ ..., protocolVersion: "auto", tasks: true })`.
+Use `getTask(taskId)` to poll and `cancelTask(taskId)` to request cancellation.
+Register a UI callback with `onElicitationRequest()`, then use
+`continueRequest("tools/call", originalParams, result)` for an inline form
+or `continueTask(task)` for a paused task. `updateTask(taskId, inputResponses)`
+accepts answers collected by the application itself.
+
 ### Asynchronous tool audit webhooks
 
 HTTP (including streaming) and STDIO MCP support optional JSON HTTP POST notifications:

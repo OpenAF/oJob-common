@@ -92,6 +92,76 @@ jobs:
     }
 
 # -------------------------
+- name    : Prepare MCP Workflows
+  typeArgs:
+    noLog: true
+  exec    : | #js
+    if (!args.modern) throw new Error("MCP workflows require modern MCP")
+    if (!isString(args.taskStore) || !args.taskStore.trim()) throw new Error("MCP workflows require taskStore")
+    if (args.http && !args.validator) throw new Error("HTTP MCP workflows require authapiurl with a trusted principal")
+    ow.loadServer()
+    if (!isFunction(ow.server.mcp.openWorkflows)) throw new Error("This OpenAF version does not support MCP workflows")
+
+    // Give jobs server-owned workflow context and normalize their tool results.
+    var bind = (jobName, raw) => {
+      if (!isString(jobName) || !ow.oJob.getJob(jobName)) throw new Error("Unknown MCP workflow job " + jobName)
+      return (input, context) => {
+        var parameters = Object.assign({}, input)
+        delete parameters.mcpResult
+        delete parameters._httprequest
+        parameters.mcp = context
+        var output = $job(jobName, parameters)
+        if (!isMap(output)) throw new Error("MCP workflow oJob did not return arguments")
+        if (isDef(output._err)) {
+          if (raw) throw new Error("MCP workflow adapter failed")
+          return { content: [{ type: "text", text: String(output._err) }], isError: true }
+        }
+        if (isDef(output.mcpResult)) return output.mcpResult
+        if (raw) return
+        if (isMap(output.result) && isArray(output.result.content)) return output.result
+        delete output.objId
+        delete output.execid
+        delete output.mcp
+        delete output._httprequest
+        return { content: [{ type: "text", text: isString(output.text) ? output.text : stringify(output, __, "") }], isError: false }
+      }
+    }
+
+    // Each configured name refers to a registered tool, including its prefix on the wire.
+    var definitions = Object.create(null)
+    Object.keys(args.workflows).forEach(name => {
+      var config = args.workflows[name]
+      if (!isMap(config) || ["inline", "managed", "external"].indexOf(config.mode) < 0 ||
+          (isDef(config.fallback) && (config.fallback !== "sync" || config.mode === "inline")) ||
+          (isDef(config.elicitation) && !isBoolean(config.elicitation))) throw new Error("Invalid MCP workflow " + name)
+      if (!Object.prototype.hasOwnProperty.call(args.fns, name)) throw new Error("MCP workflow requires an fns entry for " + name)
+      if (args.excluded.indexOf(name) >= 0 || (args.included.length > 0 && args.included.indexOf(name) < 0)) return
+      var external = config.mode === "external"
+      if (config.fallback === "sync" && (!isString(args.fns[name]) || !ow.oJob.getJob(args.fns[name])))
+        throw new Error("MCP workflow fallback requires a synchronous oJob for " + name)
+      var definition = {
+        mode: config.mode, fallback: config.fallback, elicitation: config.elicitation === true,
+        start: bind(external ? config.start : args.fns[name], external)
+      }
+      if (external) {
+        definition.status = bind(config.status, true)
+        if (isDef(config.cancel)) definition.cancel = bind(config.cancel, true)
+      }
+      if (isDef(config.resume)) definition.resume = bind(config.resume, external)
+      else if (!external) definition.resume = definition.start
+      else if (definition.elicitation) throw new Error("External elicitation requires a resume job")
+      definitions[args.prefix + name] = definition
+    })
+    if (Object.keys(definitions).length > 0) {
+      var base = new java.io.File(String(ow.oJob.__file)).getAbsoluteFile().getParentFile()
+      var file = new java.io.File(args.taskStore)
+      if (!file.isAbsolute()) file = new java.io.File(base, args.taskStore)
+      args.result = ow.server.mcp.openWorkflows(definitions, { file: String(file), namespace: args.namespace })
+    } else {
+      args.result = null
+    }
+
+# -------------------------
 - name    : HTTP MCP Server
   typeArgs:
     noLog   : false 
@@ -120,6 +190,8 @@ jobs:
         audit          : audit
         modern         : modern
         skills         : skills
+        workflows      : workflows
+        taskStore      : taskStore
   help    :
     text: Starts a MCP server to handle requests with execution of jobs.
     expects:
@@ -165,6 +237,10 @@ jobs:
       desc: (Boolean) If true (or env OJOB_MCP_MODERN), also serves the 2026-07-28 stateless/per-request MCP protocol era (server/discover, per-request protocol version negotiation, resultType/ttlMs/cacheScope on results) side-by-side with the legacy initialize-handshake era, for any request that declares a modern protocol version. Default is false, so previous (legacy-only) behavior is unchanged unless explicitly opted in.
     - name: skills
       desc: (Array) Agent Skill directories, inline skills, custom providers or S3 sources. Requires modern MCP.
+    - name: workflows
+      desc: (Map) Opt-in inline, managed or external workflow definitions keyed by the corresponding fns tool name.
+    - name: taskStore
+      desc: (String) Private file for task and continuation state. Required when workflows are configured.
   check   :
     in:
       description  : isMap.default(__)
@@ -189,6 +265,8 @@ jobs:
       audit          : default(__)
       modern         : default(__)
       skills         : isArray.default(__)
+      workflows      : isMap.default(__)
+      taskStore      : isString.default(__)
   deps    :
   - HTTP Start Server
   exec    : | #js
@@ -282,7 +360,7 @@ jobs:
     var _authApiCacheMax = Number(_$(args.authapicachemax).default(getEnv("OJOB_MCP_AUTH_API_CACHE_MAX") || 1000))
     if (!isFinite(_authApiCacheMax) || _authApiCacheMax <= 0) _authApiCacheMax = 1000
     var _authApiCache    = {}
-    var _authApiCachePut = (key, ok) => {
+    var _authApiCachePut = (key, auth) => {
       if (_authApiCacheTTL <= 0) return
       var _keys = Object.keys(_authApiCache)
       if (_keys.length >= _authApiCacheMax) {
@@ -295,7 +373,7 @@ jobs:
           delete _authApiCache[_drop]
         }
       }
-      _authApiCache[key] = { ok: ok, exp: now() + _authApiCacheTTL }
+      _authApiCache[key] = { auth: auth, exp: now() + _authApiCacheTTL }
     }
     var _authApiMcpHeaders = {
       "X-OJob-MCP-URI"             : String(args.uri),
@@ -320,31 +398,39 @@ jobs:
     // Validates the credential by forwarding it, unchanged, and identifying this MCP to an external HTTP service; a 2xx response means valid.
     // Fails closed: any non-2xx response, request error, or timeout is treated as invalid.
     var _authCheckExternal = headerValue => {
-      if (!isString(headerValue)) return false
+      if (!isString(headerValue)) return { ok: false }
       var _m = headerValue.match(new RegExp("^" + _authScheme + "\\s+(.+)$", "i"))
-      if (isNull(_m)) return false
+      if (isNull(_m)) return { ok: false }
 
       var _key = sha512(headerValue)
       if (_authApiCacheTTL > 0 && isDef(_authApiCache[_key]) && _authApiCache[_key].exp > now()) {
-        return _authApiCache[_key].ok
+        return _authApiCache[_key].auth
       }
 
-      var _ok = false
+      var _auth = { ok: false }
       try {
         ow.loadObj()
         var _hdrs = merge({}, _authApiMcpHeaders)
         _hdrs[_authHeader] = headerValue
         // arg 6 only sets the connect timeout; options.timeout is what bounds the whole call, so a
         // validator that accepts the connection and never replies cannot hang the request thread
-        var _res = (new ow.obj.http()).exec(_authApiUrl, _authApiMethod, "", _hdrs, false, _authApiTimeout, false, { timeout: _authApiTimeout })
-        _ok = isMap(_res) && _res.responseCode >= 200 && _res.responseCode < 300
+        var _http = new ow.obj.http()
+        var _res = _http.exec(_authApiUrl, _authApiMethod, "", _hdrs, false, _authApiTimeout, false, { timeout: _authApiTimeout })
+        _auth.ok = isMap(_res) && _res.responseCode >= 200 && _res.responseCode < 300
+        if (_auth.ok && isDef(_workflows)) {
+          var _headers = _http.responseHeaders() || {}
+          var _keys = Object.keys(_headers).filter(key => key.toLowerCase() === "x-ojob-mcp-principal")
+          var _principal = _keys.length === 1 ? _headers[_keys[0]] : __
+          if (isString(_principal) && _principal.trim().length > 0 && _principal.trim().length <= 256 &&
+              !/[\x00-\x1f\x7f]/.test(_principal)) _auth.principal = _principal.trim()
+        }
       } catch(e) {
         if (args.debug) logErr("MCP auth API validation error: " + e.message)
-        _ok = false
+        _auth = { ok: false }
       }
 
-      _authApiCachePut(_key, _ok)
-      return _ok
+      _authApiCachePut(_key, _auth)
+      return _auth
     }
 
     var _authReject = () => {
@@ -555,6 +641,18 @@ jobs:
       return n
     }
     var _isToolEnabled = f => (_toolsInclude.length == 0 || _toolsInclude.indexOf(f) >= 0) && _toolsExclude.indexOf(f) < 0
+
+    var _workflows
+    if (isDef(args.workflows) && Object.keys(args.workflows).length > 0) {
+      var _prepared = $job("Prepare MCP Workflows", {
+        modern: args.modern, workflows: args.workflows, taskStore: args.taskStore, fns: args.fns,
+        prefix: args.toolPrefix, included: _toolsInclude, excluded: _toolsExclude,
+        http: true, validator: _authApiEnabled, namespace: JSON.stringify(["http", args.uri, args.description.serverInfo.name, _authApiUrl])
+      })
+      if (!isMap(_prepared) || !Object.prototype.hasOwnProperty.call(_prepared, "result"))
+        throw new Error("Could not prepare MCP workflows")
+      if (!isNull(_prepared.result)) _workflows = _prepared.result
+    }
     var _toToolMeta = f => {
       var _meta
       if (isDef(args.fnsMeta[f])) {
@@ -572,7 +670,7 @@ jobs:
     }
 
     if (args.usestream) {
-      fns[args.uri] = req => {
+      fns[args.uri] = (req, principal) => {
         try {
           var _rpcFns = {
               initialize                 : params => {
@@ -677,11 +775,11 @@ jobs:
               },
               "prompts/list": params => ({})
           }
-          if (args.modern) _rpcFns["server/discover"] = params => ow.server.mcp.discoverResult(args.description)
+          if (args.modern) _rpcFns["server/discover"] = params => ow.server.mcp.discoverResult(isDef(_workflows) ? _workflows.describe(args.description) : args.description)
           if (isDef(_skillCatalog)) Object.assign(_rpcFns, _skillCatalog.methods)
 
           // Process the JSON-RPC request
-          var _rpcRes = ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) }, { modern: args.modern, serverInfo: args.description.serverInfo })
+          var _rpcRes = ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) }, { modern: args.modern, serverInfo: args.description.serverInfo, workflows: _workflows, workflowOwner: principal })
           
           // Parse request to check if it's a notification
           var body = (isDef(req.files) && isDef(req.files.postData)) ? req.files.postData : __
@@ -748,7 +846,7 @@ jobs:
         }
       }
     } else {
-      fns[args.uri] = req => {
+      fns[args.uri] = (req, principal) => {
         var _rpcFns = {
             initialize                 : params => {
                 if (args.debug) log(`initialize -- ${af.toCSLON(params)}`)
@@ -852,10 +950,10 @@ jobs:
             },
             "prompts/list": params => ({})
         }
-        if (args.modern) _rpcFns["server/discover"] = params => ow.server.mcp.discoverResult(args.description)
+        if (args.modern) _rpcFns["server/discover"] = params => ow.server.mcp.discoverResult(isDef(_workflows) ? _workflows.describe(args.description) : args.description)
         if (isDef(_skillCatalog)) Object.assign(_rpcFns, _skillCatalog.methods)
 
-        return ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) }, { modern: args.modern, serverInfo: args.description.serverInfo })
+        return ow.server.httpd.replyJSONRPC(global.__ojobHttp[args.port], req, _rpcFns, log, m => { if (args.debug) print(ansiColor("BG(230),BLACK", m)) }, { modern: args.modern, serverInfo: args.description.serverInfo, workflows: _workflows, workflowOwner: principal })
       }
     }
 
@@ -865,7 +963,7 @@ jobs:
     // Keep this opt-in, including for legacy-handshake clients connecting with modern=true.
     if (args.modern) {
       var _notificationInnerFn = fns[args.uri]
-      fns[args.uri] = req => {
+      fns[args.uri] = (req, principal) => {
         if (req.method == "POST") {
           var _body = (isDef(req.files) && isDef(req.files.postData)) ? req.files.postData : req.data
           var _notification
@@ -878,7 +976,7 @@ jobs:
             return { data: "", mimetype: "text/plain", status: 202, header: {} }
           }
         }
-        return _notificationInnerFn(req)
+        return _notificationInnerFn(req, principal)
       }
     }
 
@@ -887,9 +985,9 @@ jobs:
       var _innerFn = fns[args.uri]
       fns[args.uri] = req => {
         var _hdr = isMap(req) && isMap(req.header) ? req.header[_authHeader] : __
-        var _valid = _authApiEnabled ? _authCheckExternal(_hdr) : _authCheck(_hdr)
-        if (!_valid) return _authReject()
-        return _innerFn(req)
+        var _auth = _authApiEnabled ? _authCheckExternal(_hdr) : { ok: _authCheck(_hdr) }
+        if (!_auth.ok) return _authReject()
+        return _innerFn(req, _auth.principal)
       }
     }
 
@@ -917,6 +1015,8 @@ jobs:
         audit      : audit
         modern     : modern
         skills     : skills
+        workflows  : workflows
+        taskStore  : taskStore
   help    :
     text: Starts a MCP stdio to handle requests with execution of jobs.
     expects:
@@ -936,6 +1036,10 @@ jobs:
       desc: (Boolean) If true (or env OJOB_MCP_MODERN), also serves the 2026-07-28 stateless/per-request MCP protocol era side-by-side with the legacy initialize-handshake era. Default is false, so previous (legacy-only) behavior is unchanged unless explicitly opted in.
     - name: skills
       desc: (Array) Agent Skill directories, inline skills, custom providers or S3 sources. Requires modern MCP.
+    - name: workflows
+      desc: (Map) Opt-in inline, managed or external workflow definitions keyed by the corresponding fns tool name.
+    - name: taskStore
+      desc: (String) Private file for task and continuation state. Required when workflows are configured.
   check   :
     in:
       description: isMap.default(__)
@@ -947,6 +1051,8 @@ jobs:
       audit      : default(__)
       modern     : default(__)
       skills     : isArray.default(__)
+      workflows  : isMap.default(__)
+      taskStore  : isString.default(__)
   exec    : | #js
     // Copy JSON tool data without invoking prototype setters or deep-merging it.
     var _toolArguments = value => {
@@ -1177,6 +1283,18 @@ jobs:
       return n
     }
     var _isToolEnabled = f => (_toolsInclude.length == 0 || _toolsInclude.indexOf(f) >= 0) && _toolsExclude.indexOf(f) < 0
+
+    var _workflows
+    if (isDef(args.workflows) && Object.keys(args.workflows).length > 0) {
+      var _prepared = $job("Prepare MCP Workflows", {
+        modern: args.modern, workflows: args.workflows, taskStore: args.taskStore, fns: args.fns,
+        prefix: args.toolPrefix, included: _toolsInclude, excluded: _toolsExclude,
+        http: false, validator: false, namespace: JSON.stringify(["stdio", args.description.serverInfo.name])
+      })
+      if (!isMap(_prepared) || !Object.prototype.hasOwnProperty.call(_prepared, "result"))
+        throw new Error("Could not prepare MCP workflows")
+      if (!isNull(_prepared.result)) _workflows = _prepared.result
+    }
     var _toToolMeta = f => {
       var _meta
       if (isDef(args.fnsMeta[f])) {
@@ -1226,8 +1344,9 @@ jobs:
         (type, msg) => {
           if (args.debug) io.writeLineNDJSON(args.debug, { type: type, msg: msg })
         },
-        { modern: args.modern, skillCatalog: _skillCatalog })
+        { modern: args.modern, skillCatalog: _skillCatalog, workflows: _workflows, workflowOwner: "local" })
     } finally {
+      if (isDef(_workflows)) _workflows.close()
       if (isDef(_skillCatalog) && isFunction(_skillCatalog.close)) _skillCatalog.close()
     }
 
